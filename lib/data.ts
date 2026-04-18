@@ -1,5 +1,6 @@
 export type LifecycleStatus = "active" | "retired" | "lost" | "in_repair";
 export type CheckoutStatus = "in" | "out" | "flagged";
+export type ExpertiseLevel = "novice" | "familiar" | "proficient" | "master";
 
 export interface Asset {
   id: string;
@@ -49,75 +50,64 @@ export interface Alert {
   detail: string;
 }
 
-// ── KITS (from Kit Composition sheet) ─────────────────────────
+export interface HistoryEntry {
+  id: string;
+  date: string;
+  shoot: string;
+  client: string;
+  durationHours: number;
+  kitIds: string[];
+  conditionOnReturn: "excellent" | "good" | "fair" | "damaged" | "none";
+  notesAdded: boolean;
+  incident: { severity: "minor" | "major"; note: string } | null;
+}
+
+export interface Expertise {
+  category: string;
+  level: ExpertiseLevel;
+  checkoutCount: number;
+  rank: number;
+  signatureAsset: string | null;
+  hoursLogged: number;
+  lastUsed: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  role: string;
+  joinedAt: string;
+  email: string;
+  badgeCount: number;
+  isGuest?: boolean;
+  department: string;
+  location: string;
+  totalCheckouts: number;
+  totalHours: number;
+  shootsWorkedThisYear: number;
+  conditionScore: number;
+  reliabilityScore: number;
+  driftIncidents: number;
+  sopsContributed: number;
+  expertise: Expertise[];
+  history: HistoryEntry[];
+  frequentCollaborators: { name: string; initials: string; color: string; sharedShoots: number }[];
+  certifications: { name: string; issuedAt: string; expiresAt: string | null }[];
+}
+
 export const KITS: Kit[] = [
-  {
-    id: "MMG-0000576",
-    name: "Venice Cinema Kit",
-    barcode: "MMG-0000576",
-    status: "out",
-    location: "LMG05",
-    componentIds: ["MMG-0000001", "MMG-0000002"],
-  },
-  {
-    id: "MMG-0000575",
-    name: "Lens Kit",
-    barcode: "MMG-0000575",
-    status: "out",
-    location: "LMG05",
-    componentIds: ["MMG-0000003","MMG-0000004","MMG-0000005","MMG-0000006","MMG-0000007","MMG-0000008"],
-  },
-  {
-    id: "MMG-0000577",
-    name: "Shure ULXD Wireless Kit",
-    barcode: "MMG-0000577",
-    status: "available",
-    location: "Cellar",
-    componentIds: ["MMG-0000023","MMG-0000024","MMG-0000025","MMG-0000026","MMG-0000027","MMG-0000028","MMG-0000029","MMG-0000030"],
-  },
-  {
-    id: "MMG-0000578",
-    name: "Sony PXW-450 Kit #1",
-    barcode: "MMG-0000578",
-    status: "available",
-    location: "LMG05",
-    componentIds: ["MMG-0000033","MMG-0000034","MMG-0000035","MMG-0000036","MMG-0000037"],
-  },
-  {
-    id: "MMG-0000579",
-    name: "Sony PXW-450 Kit #2",
-    barcode: "MMG-0000579",
-    status: "available",
-    location: "LMG05",
-    componentIds: ["MMG-0000038","MMG-0000039","MMG-0000040","MMG-0000041","MMG-0000042"],
-  },
-  {
-    id: "MMG-0000580",
-    name: "Sony FX6 Kit #1",
-    barcode: "MMG-0000580",
-    status: "available",
-    location: "LMG05",
-    componentIds: ["MMG-0000043","MMG-0000044","MMG-0000045"],
-  },
-  {
-    id: "MMG-0000581",
-    name: "Sony FX6 Kit #2",
-    barcode: "MMG-0000581",
-    status: "available",
-    location: "LMG05",
-    componentIds: ["MMG-0000046","MMG-0000047","MMG-0000048"],
-  },
-  {
-    id: "MMG-0000584",
-    name: "Astra 6X Light Kit A",
-    barcode: "MMG-0000584",
-    status: "available",
-    location: "Adams",
-    componentIds: ["MMG-0000064","MMG-0000065","MMG-0000066"],
-  },
+  { id:"MMG-0000576", name:"Venice Cinema Kit", barcode:"MMG-0000576", status:"out", location:"LMG05", componentIds:["MMG-0000001","MMG-0000002"] },
+  { id:"MMG-0000575", name:"Lens Kit", barcode:"MMG-0000575", status:"out", location:"LMG05", componentIds:["MMG-0000003","MMG-0000004","MMG-0000005","MMG-0000006","MMG-0000007","MMG-0000008"] },
+  { id:"MMG-0000577", name:"Shure ULXD Wireless Kit", barcode:"MMG-0000577", status:"available", location:"Cellar", componentIds:["MMG-0000023","MMG-0000024","MMG-0000025","MMG-0000026","MMG-0000027","MMG-0000028","MMG-0000029","MMG-0000030"] },
+  { id:"MMG-0000578", name:"Sony PXW-450 Kit #1", barcode:"MMG-0000578", status:"available", location:"LMG05", componentIds:["MMG-0000033","MMG-0000034","MMG-0000035","MMG-0000036","MMG-0000037"] },
+  { id:"MMG-0000579", name:"Sony PXW-450 Kit #2", barcode:"MMG-0000579", status:"available", location:"LMG05", componentIds:["MMG-0000038","MMG-0000039","MMG-0000040","MMG-0000041","MMG-0000042"] },
+  { id:"MMG-0000580", name:"Sony FX6 Kit #1", barcode:"MMG-0000580", status:"available", location:"LMG05", componentIds:["MMG-0000043","MMG-0000044","MMG-0000045"] },
+  { id:"MMG-0000581", name:"Sony FX6 Kit #2", barcode:"MMG-0000581", status:"available", location:"LMG05", componentIds:["MMG-0000046","MMG-0000047","MMG-0000048"] },
+  { id:"MMG-0000584", name:"Astra 6X Light Kit A", barcode:"MMG-0000584", status:"available", location:"Adams", componentIds:["MMG-0000064","MMG-0000065","MMG-0000066"] },
 ];
 
-// ── ASSETS (representative sample from Master Inventory) ──────
 export const ASSETS: Asset[] = [
   { id:"MMG-0000001", name:"Venice MPC-3610", barcode:"MMG-0000001", category:"Video", make:"Sony", model:"MPC-3610", location:"LMG05", kitId:"MMG-0000576", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:40000, eolDate:"2035", serialNumber:"12057", serviceFlag:null },
   { id:"MMG-0000002", name:"SmallHD Monitor", barcode:"MMG-0000002", category:"Video", make:"Small HD", model:"703", location:"LMG05", kitId:"MMG-0000576", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
@@ -144,14 +134,12 @@ export const ASSETS: Asset[] = [
   { id:"MMG-0000230", name:"Lilliput 8K Monitor #2", barcode:"MMG-0000230", category:"Video", make:"Lilliput", model:"8K", location:"LMG05", kitId:null, status:"out", lifecycle:"active", lastUser:"Marcus Reynolds", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
 ];
 
-// ── LIVE CHECKOUTS ────────────────────────────────────────────
 export const CHECKOUTS: CheckoutRecord[] = [
   { id:"co-001", user:"Dennis Colon Jr.", initials:"DC", color:"#60a5fa", shoot:"DOI Interview B-Roll", kits:["Venice Cinema Kit","Lens Kit (5 items)"], checkedOutAt:"9:14 AM", dueBack:"6:00 PM", status:"active" },
   { id:"co-002", user:"Marcus Reynolds", initials:"MR", color:"#f59e0b", shoot:"Capitol Event Coverage", kits:["ECLProfile CT+ ×2","Lilliput 8K Monitor ×2"], checkedOutAt:"8:52 AM", dueBack:"8:00 PM", status:"active" },
   { id:"co-003", user:"Jamie Lee (Guest)", initials:"JL", color:"#a78bfa", shoot:"Adams Portrait Session", kits:["4Ch XLR Extender ×2","iPad Pro"], checkedOutAt:"8:31 AM", dueBack:"8:00 AM", status:"overdue", isGuest:true },
 ];
 
-// ── ALERTS ────────────────────────────────────────────────────
 export const ALERTS: Alert[] = [
   { id:"al-001", type:"critical", title:"Sigma 85MM — critical flag", detail:"Returned damaged · A. Fuentes · Yesterday" },
   { id:"al-002", type:"critical", title:"4Ch XLR Extender — overdue", detail:"J. Lee guest token · Due 8:00 AM today" },
@@ -160,7 +148,6 @@ export const ALERTS: Alert[] = [
   { id:"al-005", type:"info", title:"220 assets past estimated EOL", detail:"Review replacement schedule in admin" },
 ];
 
-// ── STATS ─────────────────────────────────────────────────────
 export const STATS = {
   totalAssets: 600,
   checkedIn: 593,
@@ -171,7 +158,6 @@ export const STATS = {
   knownInventoryValue: 53824,
 };
 
-// ── SHOOTS (for kiosk selection) ─────────────────────────────
 export const SHOOTS = [
   { id:"sh-001", title:"DOI Interview B-Roll", client:"Dept of Interior", when:"Today 10AM – 4PM" },
   { id:"sh-002", title:"Capitol Event Coverage", client:"Capitol Hill", when:"Today 2PM – 7PM" },
@@ -179,10 +165,205 @@ export const SHOOTS = [
   { id:"sh-004", title:"General use / no shoot", client:"Ad hoc", when:"" },
 ];
 
-// ── DEMO USERS (for kiosk) ────────────────────────────────────
 export const DEMO_USERS = [
   { name:"Dennis Colon Jr.", role:"Broadcast Engineer", initials:"DC", color:"#60a5fa" },
   { name:"Marcus Reynolds", role:"Camera Operator", initials:"MR", color:"#f59e0b" },
   { name:"Tanya Okafor", role:"Audio Technician", initials:"TO", color:"#4ade80" },
   { name:"Jamie Lee", role:"Freelance DP · Guest token", initials:"JL", color:"#a78bfa", isGuest:true },
 ];
+
+export const PROFILES: UserProfile[] = [
+  {
+    id: "u-001",
+    name: "Dennis Colon Jr.",
+    initials: "DC",
+    color: "#60a5fa",
+    role: "Broadcast Engineer",
+    department: "Production",
+    location: "Washington DC",
+    email: "dennis@mmg.prod",
+    joinedAt: "Aug 2019",
+    badgeCount: 2,
+    totalCheckouts: 284,
+    totalHours: 1847,
+    shootsWorkedThisYear: 42,
+    conditionScore: 98,
+    reliabilityScore: 96,
+    driftIncidents: 1,
+    sopsContributed: 12,
+    expertise: [
+      { category: "Cinema Cameras", level: "master", checkoutCount: 87, rank: 1, signatureAsset: "Sony Venice MPC-3610", hoursLogged: 612, lastUsed: "9:14 AM today" },
+      { category: "Broadcast Switching", level: "master", checkoutCount: 61, rank: 1, signatureAsset: "Extreme Networks Switch", hoursLogged: 482, lastUsed: "3 days ago" },
+      { category: "Lens Systems", level: "proficient", checkoutCount: 74, rank: 2, signatureAsset: "Fujinon 35-150", hoursLogged: 434, lastUsed: "9:14 AM today" },
+      { category: "Wireless Audio", level: "proficient", checkoutCount: 43, rank: 3, signatureAsset: "Shure ULXD2", hoursLogged: 231, lastUsed: "Last week" },
+      { category: "Lighting", level: "familiar", checkoutCount: 19, rank: 7, signatureAsset: "Astra 6X", hoursLogged: 88, lastUsed: "2 weeks ago" },
+    ],
+    history: [
+      { id: "h-001", date: "Apr 17, 2026", shoot: "DOI Interview B-Roll", client: "Dept of Interior", durationHours: 8, kitIds: ["MMG-0000576","MMG-0000575"], conditionOnReturn: "none", notesAdded: false, incident: null },
+      { id: "h-002", date: "Apr 14, 2026", shoot: "LOC Exhibition Walkthrough", client: "Library of Congress", durationHours: 6, kitIds: ["MMG-0000576"], conditionOnReturn: "good", notesAdded: true, incident: null },
+      { id: "h-003", date: "Apr 10, 2026", shoot: "Smithsonian Artifact Series", client: "Smithsonian", durationHours: 12, kitIds: ["MMG-0000576","MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-004", date: "Apr 3, 2026", shoot: "Senate Documentary Pilot", client: "Advance Local", durationHours: 10, kitIds: ["MMG-0000578"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-005", date: "Mar 28, 2026", shoot: "NFL Films Behind-the-Scenes", client: "NFL Films", durationHours: 14, kitIds: ["MMG-0000576","MMG-0000580"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-006", date: "Mar 22, 2026", shoot: "Corporate AV Install", client: "Kenvue", durationHours: 9, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-007", date: "Mar 15, 2026", shoot: "Capitol Hearing Feed", client: "Capitol Hill", durationHours: 7, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-008", date: "Mar 8, 2026", shoot: "Library Portrait Series", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+    ],
+    frequentCollaborators: [
+      { name: "Tanya Okafor", initials: "TO", color: "#4ade80", sharedShoots: 27 },
+      { name: "Marcus Reynolds", initials: "MR", color: "#f59e0b", sharedShoots: 19 },
+      { name: "A. Fuentes", initials: "AF", color: "#a78bfa", sharedShoots: 8 },
+    ],
+    certifications: [
+      { name: "Sony Cinema Line Certified Operator", issuedAt: "Mar 2023", expiresAt: "Mar 2026" },
+      { name: "Shure Wireless Systems — Advanced", issuedAt: "Jun 2024", expiresAt: null },
+      { name: "Dante Level 2", issuedAt: "Jan 2025", expiresAt: "Jan 2028" },
+    ],
+  },
+  {
+    id: "u-002",
+    name: "Marcus Reynolds",
+    initials: "MR",
+    color: "#f59e0b",
+    role: "Camera Operator",
+    department: "Production",
+    location: "Washington DC",
+    email: "marcus@mmg.prod",
+    joinedAt: "Feb 2022",
+    badgeCount: 1,
+    totalCheckouts: 156,
+    totalHours: 892,
+    shootsWorkedThisYear: 31,
+    conditionScore: 92,
+    reliabilityScore: 88,
+    driftIncidents: 2,
+    sopsContributed: 4,
+    expertise: [
+      { category: "ENG Cameras", level: "master", checkoutCount: 78, rank: 1, signatureAsset: "Sony PXW-Z450", hoursLogged: 487, lastUsed: "Yesterday" },
+      { category: "Lighting", level: "proficient", checkoutCount: 42, rank: 2, signatureAsset: "ECLProfile CT+", hoursLogged: 261, lastUsed: "8:52 AM today" },
+      { category: "Monitors & Displays", level: "proficient", checkoutCount: 29, rank: 3, signatureAsset: "Lilliput 8K Monitor", hoursLogged: 144, lastUsed: "8:52 AM today" },
+      { category: "Cinema Cameras", level: "familiar", checkoutCount: 12, rank: 8, signatureAsset: "Sony FX6", hoursLogged: 72, lastUsed: "Last month" },
+    ],
+    history: [
+      { id: "h-101", date: "Apr 17, 2026", shoot: "Capitol Event Coverage", client: "Capitol Hill", durationHours: 6, kitIds: ["MMG-0000227","MMG-0000229"], conditionOnReturn: "none", notesAdded: false, incident: null },
+      { id: "h-102", date: "Apr 12, 2026", shoot: "Network Live Event", client: "Advance Local", durationHours: 11, kitIds: ["MMG-0000578"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-103", date: "Apr 5, 2026", shoot: "Arena Sports Coverage", client: "NFL Films", durationHours: 16, kitIds: ["MMG-0000578","MMG-0000579"], conditionOnReturn: "fair", notesAdded: false, incident: { severity: "minor", note: "Minor scuff on PXW-450 case, reported at return" } },
+      { id: "h-104", date: "Mar 30, 2026", shoot: "Corporate Offsite", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000580"], conditionOnReturn: "good", notesAdded: true, incident: null },
+      { id: "h-105", date: "Mar 24, 2026", shoot: "Theater Preshow", client: "Coolidge", durationHours: 5, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-106", date: "Mar 18, 2026", shoot: "Documentary Interview", client: "Dept of Interior", durationHours: 9, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+    ],
+    frequentCollaborators: [
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 19 },
+      { name: "Tanya Okafor", initials: "TO", color: "#4ade80", sharedShoots: 14 },
+    ],
+    certifications: [
+      { name: "ETC Lighting Console — Level 1", issuedAt: "Oct 2023", expiresAt: null },
+    ],
+  },
+  {
+    id: "u-003",
+    name: "Tanya Okafor",
+    initials: "TO",
+    color: "#4ade80",
+    role: "Audio Technician",
+    department: "Production",
+    location: "Washington DC",
+    email: "tanya@mmg.prod",
+    joinedAt: "Jul 2021",
+    badgeCount: 1,
+    totalCheckouts: 198,
+    totalHours: 1243,
+    shootsWorkedThisYear: 38,
+    conditionScore: 99,
+    reliabilityScore: 99,
+    driftIncidents: 0,
+    sopsContributed: 9,
+    expertise: [
+      { category: "Wireless Audio", level: "master", checkoutCount: 121, rank: 1, signatureAsset: "Shure ULXD System", hoursLogged: 812, lastUsed: "7:58 AM today" },
+      { category: "Studio Mics", level: "master", checkoutCount: 56, rank: 1, signatureAsset: "Neumann Stereo Pair", hoursLogged: 278, lastUsed: "Last week" },
+      { category: "Audio Networking (Dante)", level: "proficient", checkoutCount: 34, rank: 2, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 187, lastUsed: "2 weeks ago" },
+      { category: "DI & Preamps", level: "proficient", checkoutCount: 41, rank: 2, signatureAsset: "Radial DI Box", hoursLogged: 162, lastUsed: "3 days ago" },
+    ],
+    history: [
+      { id: "h-201", date: "Apr 17, 2026", shoot: "Studio A Recording", client: "Internal", durationHours: 4, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-202", date: "Apr 15, 2026", shoot: "Press Conference Coverage", client: "Capitol Hill", durationHours: 6, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-203", date: "Apr 11, 2026", shoot: "Panel Discussion", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-204", date: "Apr 8, 2026", shoot: "Concert Broadcast", client: "Kennedy Center", durationHours: 10, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: true, incident: null },
+      { id: "h-205", date: "Apr 2, 2026", shoot: "Podcast Series Launch", client: "Internal", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+    ],
+    frequentCollaborators: [
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 27 },
+      { name: "Marcus Reynolds", initials: "MR", color: "#f59e0b", sharedShoots: 14 },
+    ],
+    certifications: [
+      { name: "Shure Wireless Mastery", issuedAt: "May 2023", expiresAt: null },
+      { name: "Dante Level 3 (Advanced)", issuedAt: "Sep 2024", expiresAt: "Sep 2027" },
+      { name: "AES67 Audio Networking", issuedAt: "Jan 2025", expiresAt: null },
+    ],
+  },
+  {
+    id: "u-004",
+    name: "A. Fuentes",
+    initials: "AF",
+    color: "#a78bfa",
+    role: "Lighting Technician",
+    department: "Production",
+    location: "Washington DC",
+    email: "afuentes@mmg.prod",
+    joinedAt: "Nov 2023",
+    badgeCount: 1,
+    totalCheckouts: 67,
+    totalHours: 384,
+    shootsWorkedThisYear: 18,
+    conditionScore: 78,
+    reliabilityScore: 82,
+    driftIncidents: 3,
+    sopsContributed: 1,
+    expertise: [
+      { category: "Lighting", level: "proficient", checkoutCount: 41, rank: 3, signatureAsset: "ECLProfile CT+", hoursLogged: 248, lastUsed: "Yesterday" },
+      { category: "Lens Systems", level: "familiar", checkoutCount: 14, rank: 6, signatureAsset: "Sigma 85MM", hoursLogged: 62, lastUsed: "Yesterday" },
+      { category: "Cinema Cameras", level: "novice", checkoutCount: 4, rank: 12, signatureAsset: "Sony FX6", hoursLogged: 22, lastUsed: "Last month" },
+    ],
+    history: [
+      { id: "h-301", date: "Apr 16, 2026", shoot: "Product Photography Day", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000575","MMG-0000584"], conditionOnReturn: "damaged", notesAdded: false, incident: { severity: "major", note: "Sigma 85MM returned with scratched front element — flagged critical" } },
+      { id: "h-302", date: "Apr 9, 2026", shoot: "Interview Setup", client: "Dept of Interior", durationHours: 5, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-303", date: "Apr 1, 2026", shoot: "Theater Event Lighting", client: "Coolidge", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "fair", notesAdded: false, incident: null },
+    ],
+    frequentCollaborators: [
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 8 },
+    ],
+    certifications: [],
+  },
+  {
+    id: "u-005",
+    name: "Jamie Lee",
+    initials: "JL",
+    color: "#a78bfa",
+    role: "Freelance DP",
+    department: "Guest",
+    location: "External",
+    email: "jamie@leefilms.com",
+    joinedAt: "Mar 2026",
+    badgeCount: 0,
+    isGuest: true,
+    totalCheckouts: 3,
+    totalHours: 22,
+    shootsWorkedThisYear: 3,
+    conditionScore: 85,
+    reliabilityScore: 67,
+    driftIncidents: 1,
+    sopsContributed: 0,
+    expertise: [
+      { category: "Audio Networking", level: "novice", checkoutCount: 2, rank: 14, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 12, lastUsed: "Today (overdue)" },
+      { category: "Misc Prod Gear", level: "novice", checkoutCount: 1, rank: 19, signatureAsset: "iPad Pro", hoursLogged: 4, lastUsed: "Today" },
+    ],
+    history: [
+      { id: "h-401", date: "Apr 17, 2026", shoot: "Adams Portrait Session", client: "Private", durationHours: 4, kitIds: ["MMG-0000224","MMG-0000225","MMG-0000226"], conditionOnReturn: "none", notesAdded: false, incident: { severity: "major", note: "Currently overdue — gear due back 8:00 AM, not returned" } },
+    ],
+    frequentCollaborators: [],
+    certifications: [],
+  },
+];
+
+export function getProfile(initials: string): UserProfile | undefined {
+  return PROFILES.find(p => p.initials === initials);
+}

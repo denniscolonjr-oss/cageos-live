@@ -161,22 +161,26 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   {CHECKOUTS.map((co) => (
-                    <div key={co.id} style={{ padding: "11px 16px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", gap: 11, opacity: co.status === "overdue" ? 0.75 : 1 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 6, background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: co.color, flexShrink: 0 }}>{co.initials}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                          {co.user}
-                          {co.isGuest && <Badge variant="purple" style={{ fontSize: 9 }}>GUEST</Badge>}
+                    <Link key={co.id} href={`/profile/${co.initials}`} style={{ textDecoration: "none", color: "inherit" }}>
+                      <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", gap: 11, opacity: co.status === "overdue" ? 0.75 : 1, cursor: "pointer", transition: "background 0.1s" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--s2)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                        <div style={{ width: 30, height: 30, borderRadius: 6, background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: co.color, flexShrink: 0 }}>{co.initials}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                            {co.user}
+                            {co.isGuest && <Badge variant="purple" style={{ fontSize: 9 }}>GUEST</Badge>}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {co.kits.join(" · ")} → {co.shoot}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {co.kits.join(" · ")} → {co.shoot}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: co.status === "overdue" ? "var(--red)" : "var(--t3)" }}>{co.checkedOutAt}</span>
+                          {co.status === "overdue" && <Badge variant="red" style={{ fontSize: 9 }}>overdue</Badge>}
                         </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                        <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: co.status === "overdue" ? "var(--red)" : "var(--t3)" }}>{co.checkedOutAt}</span>
-                        {co.status === "overdue" && <Badge variant="red" style={{ fontSize: 9 }}>overdue</Badge>}
-                      </div>
-                    </div>
+                    </Link>
                   ))}
                 </Card>
 
