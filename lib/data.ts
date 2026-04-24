@@ -341,7 +341,7 @@ export const PROFILES: UserProfile[] = [
     name: "Alejandro Badani",
     initials: "AB",
     color: "#f59e0b",
-    role: "Gaffer / Lighting Lead",
+    role: "Audio Engineer",
     department: "Production",
     location: "Washington DC",
     email: "alejandro@mmg.prod",
@@ -355,25 +355,25 @@ export const PROFILES: UserProfile[] = [
     driftIncidents: 1,
     sopsContributed: 8,
     expertise: [
-      { category: "Lighting", level: "master", checkoutCount: 134, rank: 1, signatureAsset: "ECLProfile CT+", hoursLogged: 892, lastUsed: "Last week" },
-      { category: "Grip Gear", level: "master", checkoutCount: 58, rank: 1, signatureAsset: "Matthews C-Stand Kit", hoursLogged: 342, lastUsed: "3 days ago" },
-      { category: "Power Distribution", level: "proficient", checkoutCount: 29, rank: 2, signatureAsset: "Middle Atlantic UPS", hoursLogged: 178, lastUsed: "Last week" },
-      { category: "Monitors & Displays", level: "familiar", checkoutCount: 14, rank: 9, signatureAsset: "SmallHD 703", hoursLogged: 67, lastUsed: "2 weeks ago" }
+      { category: "Studio Recording", level: "master", checkoutCount: 92, rank: 1, signatureAsset: "Apogee Symphony", hoursLogged: 624, lastUsed: "Today" },
+      { category: "Wireless Audio", level: "proficient", checkoutCount: 58, rank: 2, signatureAsset: "Shure ULXD System", hoursLogged: 342, lastUsed: "Yesterday" },
+      { category: "Audio Networking (Dante)", level: "proficient", checkoutCount: 41, rank: 3, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 226, lastUsed: "Last week" },
+      { category: "Mixing Consoles", level: "familiar", checkoutCount: 18, rank: 5, signatureAsset: "Yamaha QL5", hoursLogged: 124, lastUsed: "2 weeks ago" }
     ],
     history: [
-      { id: "h-501", date: "Apr 13, 2026", shoot: "Kennedy Center Gala", client: "Kennedy Center", durationHours: 14, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-502", date: "Apr 6, 2026", shoot: "Capitol Hearing Lighting", client: "Capitol Hill", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
-      { id: "h-503", date: "Mar 29, 2026", shoot: "Smithsonian Night Gallery", client: "Smithsonian", durationHours: 11, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-504", date: "Mar 21, 2026", shoot: "Corporate Keynote", client: "Kenvue", durationHours: 7, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
+      { id: "h-501", date: "Apr 13, 2026", shoot: "Kennedy Center Gala", client: "Kennedy Center", durationHours: 14, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-502", date: "Apr 6, 2026", shoot: "Capitol Hearing Audio", client: "Capitol Hill", durationHours: 9, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-503", date: "Mar 29, 2026", shoot: "Smithsonian Audio Booth", client: "Smithsonian", durationHours: 11, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-504", date: "Mar 21, 2026", shoot: "Corporate Keynote", client: "Kenvue", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 22 },
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 15 },
-      { name: "Clay Foltz", initials: "CF", color: "#a78bfa", sharedShoots: 6 }
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 22 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 18 },
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 12 }
     ],
     certifications: [
-      { name: "ETC Lighting Console — Level 2", issuedAt: "Jan 2022", expiresAt: null },
-      { name: "Electrical Safety (OSHA 10)", issuedAt: "Mar 2024", expiresAt: "Mar 2027" }
+      { name: "Dante Level 2", issuedAt: "Jan 2022", expiresAt: null },
+      { name: "Pro Tools Certified Operator", issuedAt: "Mar 2024", expiresAt: "Mar 2027" }
     ]
   },
   {
@@ -381,37 +381,39 @@ export const PROFILES: UserProfile[] = [
     name: "Chris Kilcullen",
     initials: "CK",
     color: "#5aa0f0",
-    role: "Post-Production Engineer",
-    department: "Post",
+    role: "Audio Engineer",
+    department: "Production",
     location: "Washington DC",
     email: "chris@mmg.prod",
     joinedAt: "Sep 2018",
     badgeCount: 2,
-    totalCheckouts: 89,
-    totalHours: 612,
-    shootsWorkedThisYear: 12,
+    totalCheckouts: 134,
+    totalHours: 962,
+    shootsWorkedThisYear: 27,
     conditionScore: 97,
     reliabilityScore: 98,
     driftIncidents: 0,
     sopsContributed: 18,
     expertise: [
-      { category: "Storage Systems", level: "master", checkoutCount: 47, rank: 1, signatureAsset: "Quantum StorNext", hoursLogged: 389, lastUsed: "Today" },
-      { category: "Color Management", level: "master", checkoutCount: 32, rank: 1, signatureAsset: "Flanders Scientific OLED", hoursLogged: 221, lastUsed: "Yesterday" },
-      { category: "Post-Production Workflows", level: "master", checkoutCount: 41, rank: 1, signatureAsset: "Avid Interplay", hoursLogged: 456, lastUsed: "Today" }
+      { category: "Mixing Consoles", level: "master", checkoutCount: 64, rank: 2, signatureAsset: "Yamaha QL5", hoursLogged: 478, lastUsed: "Today" },
+      { category: "Studio Recording", level: "proficient", checkoutCount: 38, rank: 2, signatureAsset: "Apogee Symphony", hoursLogged: 264, lastUsed: "Yesterday" },
+      { category: "Audio Networking (Dante)", level: "proficient", checkoutCount: 32, rank: 4, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 178, lastUsed: "Today" },
+      { category: "DI & Preamps", level: "proficient", checkoutCount: 28, rank: 3, signatureAsset: "Radial DI Box", hoursLogged: 142, lastUsed: "Last week" }
     ],
     history: [
-      { id: "h-601", date: "Apr 15, 2026", shoot: "Venice Color Session", client: "Internal Post", durationHours: 9, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-602", date: "Apr 8, 2026", shoot: "Senate Doc Color Finish", client: "Advance Local", durationHours: 12, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-603", date: "Mar 25, 2026", shoot: "Smithsonian Master Export", client: "Smithsonian", durationHours: 8, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null }
+      { id: "h-601", date: "Apr 15, 2026", shoot: "Live Concert Mix", client: "Kennedy Center", durationHours: 9, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-602", date: "Apr 8, 2026", shoot: "Senate Hearing A1", client: "Advance Local", durationHours: 12, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-603", date: "Mar 25, 2026", shoot: "Smithsonian Audio Booth", client: "Smithsonian", durationHours: 8, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 7 },
-      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 5 }
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 19 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 14 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 12 }
     ],
     certifications: [
-      { name: "Avid Certified Support Representative", issuedAt: "Feb 2020", expiresAt: null },
-      { name: "DaVinci Resolve Certified Colorist", issuedAt: "Jun 2023", expiresAt: null },
-      { name: "Quantum StorNext Administrator", issuedAt: "Oct 2024", expiresAt: "Oct 2027" }
+      { name: "Yamaha Digital Mixer Certified", issuedAt: "Feb 2020", expiresAt: null },
+      { name: "Pro Tools Certified Operator", issuedAt: "Jun 2023", expiresAt: null },
+      { name: "Dante Level 3 (Advanced)", issuedAt: "Oct 2024", expiresAt: "Oct 2027" }
     ]
   },
   {
@@ -419,35 +421,37 @@ export const PROFILES: UserProfile[] = [
     name: "Joon Yi",
     initials: "JY",
     color: "#5aa0f0",
-    role: "Producer / Director",
-    department: "Creative",
+    role: "Video Editor",
+    department: "Post",
     location: "Washington DC",
     email: "joon@mmg.prod",
     joinedAt: "Jun 2020",
     badgeCount: 1,
-    totalCheckouts: 72,
-    totalHours: 498,
-    shootsWorkedThisYear: 28,
-    conditionScore: 94,
-    reliabilityScore: 91,
-    driftIncidents: 1,
-    sopsContributed: 6,
+    totalCheckouts: 96,
+    totalHours: 824,
+    shootsWorkedThisYear: 14,
+    conditionScore: 96,
+    reliabilityScore: 95,
+    driftIncidents: 0,
+    sopsContributed: 11,
     expertise: [
-      { category: "Cinema Cameras", level: "proficient", checkoutCount: 34, rank: 4, signatureAsset: "Sony FX6", hoursLogged: 198, lastUsed: "Last week" },
-      { category: "Monitors & Displays", level: "proficient", checkoutCount: 26, rank: 4, signatureAsset: "SmallHD 703", hoursLogged: 112, lastUsed: "Last week" },
-      { category: "Lens Systems", level: "familiar", checkoutCount: 18, rank: 5, signatureAsset: "Fujinon 18-55", hoursLogged: 84, lastUsed: "2 weeks ago" }
+      { category: "Edit Workflows", level: "master", checkoutCount: 52, rank: 1, signatureAsset: "Avid Media Composer", hoursLogged: 487, lastUsed: "Today" },
+      { category: "Color Management", level: "proficient", checkoutCount: 28, rank: 2, signatureAsset: "Flanders Scientific OLED", hoursLogged: 184, lastUsed: "Yesterday" },
+      { category: "Storage Systems", level: "proficient", checkoutCount: 24, rank: 3, signatureAsset: "Quantum StorNext", hoursLogged: 142, lastUsed: "Last week" },
+      { category: "Monitors & Displays", level: "familiar", checkoutCount: 16, rank: 6, signatureAsset: "SmallHD 703", hoursLogged: 78, lastUsed: "2 weeks ago" }
     ],
     history: [
-      { id: "h-701", date: "Apr 10, 2026", shoot: "Director Interview Series", client: "Internal Creative", durationHours: 6, kitIds: ["MMG-0000580"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-702", date: "Apr 4, 2026", shoot: "Brand Pitch Video", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000580","MMG-0000581"], conditionOnReturn: "good", notesAdded: false, incident: null },
-      { id: "h-703", date: "Mar 27, 2026", shoot: "Documentary Prep Shoot", client: "NFL Films", durationHours: 5, kitIds: ["MMG-0000581"], conditionOnReturn: "good", notesAdded: true, incident: null }
+      { id: "h-701", date: "Apr 16, 2026", shoot: "Senate Doc Final Cut", client: "Advance Local", durationHours: 11, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-702", date: "Apr 4, 2026", shoot: "Brand Pitch Edit", client: "Kenvue", durationHours: 8, kitIds: [], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-703", date: "Mar 27, 2026", shoot: "Documentary Rough Cut", client: "NFL Films", durationHours: 12, kitIds: [], conditionOnReturn: "good", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 11 },
-      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 9 }
+      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 18 },
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 11 }
     ],
     certifications: [
-      { name: "DGA Director Training", issuedAt: "Jul 2022", expiresAt: null }
+      { name: "Avid Media Composer — Editor", issuedAt: "Jul 2022", expiresAt: null },
+      { name: "DaVinci Resolve Certified", issuedAt: "Mar 2024", expiresAt: null }
     ]
   },
   {
@@ -455,36 +459,39 @@ export const PROFILES: UserProfile[] = [
     name: "Tom Nauer",
     initials: "TN",
     color: "#a78bfa",
-    role: "Audio Mixer / A1",
-    department: "Production",
+    role: "Branch Chief",
+    department: "Leadership",
     location: "Washington DC",
     email: "tom@mmg.prod",
     joinedAt: "Jan 2021",
-    badgeCount: 1,
-    totalCheckouts: 167,
-    totalHours: 1089,
-    shootsWorkedThisYear: 33,
-    conditionScore: 96,
-    reliabilityScore: 97,
+    badgeCount: 2,
+    totalCheckouts: 47,
+    totalHours: 312,
+    shootsWorkedThisYear: 9,
+    conditionScore: 99,
+    reliabilityScore: 100,
     driftIncidents: 0,
-    sopsContributed: 11,
+    sopsContributed: 31,
     expertise: [
-      { category: "Mixing Consoles", level: "master", checkoutCount: 82, rank: 1, signatureAsset: "Yamaha QL5", hoursLogged: 624, lastUsed: "Yesterday" },
-      { category: "Wireless Audio", level: "proficient", checkoutCount: 48, rank: 2, signatureAsset: "Shure ULXD System", hoursLogged: 287, lastUsed: "Today" },
-      { category: "Studio Mics", level: "proficient", checkoutCount: 37, rank: 3, signatureAsset: "Sennheiser MKH Pair", hoursLogged: 178, lastUsed: "Last week" }
+      { category: "Operations Oversight", level: "master", checkoutCount: 0, rank: 1, signatureAsset: null, hoursLogged: 0, lastUsed: "—" },
+      { category: "Mixing Consoles", level: "proficient", checkoutCount: 18, rank: 4, signatureAsset: "Yamaha QL5", hoursLogged: 124, lastUsed: "Last week" },
+      { category: "Broadcast Switching", level: "proficient", checkoutCount: 14, rank: 3, signatureAsset: "Extreme Networks Switch", hoursLogged: 98, lastUsed: "2 weeks ago" },
+      { category: "Wireless Audio", level: "familiar", checkoutCount: 11, rank: 8, signatureAsset: "Shure ULXD System", hoursLogged: 64, lastUsed: "Last month" }
     ],
     history: [
-      { id: "h-801", date: "Apr 16, 2026", shoot: "Live Broadcast — Concert", client: "Kennedy Center", durationHours: 10, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
-      { id: "h-802", date: "Apr 11, 2026", shoot: "Panel Discussion Audio", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
-      { id: "h-803", date: "Apr 5, 2026", shoot: "Sports Arena Mix", client: "NFL Films", durationHours: 14, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: true, incident: null }
+      { id: "h-801", date: "Apr 16, 2026", shoot: "Branch QBR — Operational Review", client: "Internal", durationHours: 6, kitIds: [], conditionOnReturn: "none", notesAdded: true, incident: null },
+      { id: "h-802", date: "Apr 11, 2026", shoot: "Vendor Walkthrough — Sony", client: "Internal", durationHours: 4, kitIds: [], conditionOnReturn: "none", notesAdded: true, incident: null },
+      { id: "h-803", date: "Apr 5, 2026", shoot: "Capitol Hill Coverage Lead", client: "Capitol Hill", durationHours: 8, kitIds: ["MMG-0000578"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 16 },
-      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 12 }
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 22 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 22 },
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 19 }
     ],
     certifications: [
-      { name: "Yamaha Digital Mixer Certified", issuedAt: "Mar 2022", expiresAt: null },
-      { name: "Dante Level 2", issuedAt: "Aug 2023", expiresAt: "Aug 2026" }
+      { name: "PMP — Project Management Professional", issuedAt: "Mar 2022", expiresAt: "Mar 2027" },
+      { name: "Federal Acquisition Certification (FAC-COR III)", issuedAt: "Aug 2023", expiresAt: "Aug 2026" },
+      { name: "Yamaha Digital Mixer Certified", issuedAt: "Aug 2023", expiresAt: null }
     ]
   },
   {
