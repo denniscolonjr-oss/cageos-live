@@ -113,36 +113,36 @@ export const ASSETS: Asset[] = [
   { id:"MMG-0000002", name:"SmallHD Monitor", barcode:"MMG-0000002", category:"Video", make:"Small HD", model:"703", location:"LMG05", kitId:"MMG-0000576", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000003", name:"Sigma 20MM", barcode:"MMG-0000003", category:"Video", make:"Sigma", model:"20MM", location:"LMG05", kitId:"MMG-0000575", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000004", name:"Sigma 50MM", barcode:"MMG-0000004", category:"Video", make:"Sigma", model:"50MM", location:"LMG05", kitId:"MMG-0000575", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000005", name:"Sigma 85MM", barcode:"MMG-0000005", category:"Video", make:"Sigma", model:"85MM", location:"LMG05", kitId:"MMG-0000575", status:"flagged", lifecycle:"in_repair", lastUser:"A. Fuentes", lastUpdated:"Yesterday", cost:null, eolDate:null, serialNumber:null, serviceFlag:{ severity:"critical", reason:"Returned damaged — front element scratched" } },
+  { id:"MMG-0000005", name:"Sigma 85MM", barcode:"MMG-0000005", category:"Video", make:"Sigma", model:"85MM", location:"LMG05", kitId:"MMG-0000575", status:"flagged", lifecycle:"in_repair", lastUser:"C. Foltz", lastUpdated:"Yesterday", cost:null, eolDate:null, serialNumber:null, serviceFlag:{ severity:"critical", reason:"Returned damaged — front element scratched" } },
   { id:"MMG-0000006", name:"Fujinon 35-150", barcode:"MMG-0000006", category:"Video", make:"Fujinon", model:"35-150", location:"LMG05", kitId:"MMG-0000575", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000007", name:"Fujinon 18-55", barcode:"MMG-0000007", category:"Video", make:"Fujinon", model:"18-55", location:"LMG05", kitId:"MMG-0000575", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000008", name:"Kenko Color Meter", barcode:"MMG-0000008", category:"Video", make:"Kenko", model:"Color Meter", location:"LMG05", kitId:"MMG-0000575", status:"out", lifecycle:"active", lastUser:"Dennis Colon Jr.", lastUpdated:"9:14 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000009", name:"DJI Wireless Lavs", barcode:"MMG-0000009", category:"Audio", make:"DJI", model:"Mic 2", location:"LMG05", kitId:null, status:"in", lifecycle:"active", lastUser:"T. Okafor", lastUpdated:"7:58 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000009", name:"DJI Wireless Lavs", barcode:"MMG-0000009", category:"Audio", make:"DJI", model:"Mic 2", location:"LMG05", kitId:null, status:"in", lifecycle:"active", lastUser:"B. Smith", lastUpdated:"7:58 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000023", name:"ULXD2 Handheld #1", barcode:"MMG-0000023", category:"Audio", make:"Shure", model:"ULXD2", location:"Cellar", kitId:"MMG-0000577", status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000024", name:"ULXD2 Handheld #2", barcode:"MMG-0000024", category:"Audio", make:"Shure", model:"ULXD2", location:"Cellar", kitId:"MMG-0000577", status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000026", name:"Shure Lav Belt Pack", barcode:"MMG-0000026", category:"Audio", make:"Shure", model:"ULXD1", location:"Cellar", kitId:"MMG-0000577", status:"in", lifecycle:"active", lastUser:"T. Okafor", lastUpdated:"7:58 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000026", name:"Shure Lav Belt Pack", barcode:"MMG-0000026", category:"Audio", make:"Shure", model:"ULXD1", location:"Cellar", kitId:"MMG-0000577", status:"in", lifecycle:"active", lastUser:"B. Smith", lastUpdated:"7:58 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000033", name:"Sony PXW-450 #1", barcode:"MMG-0000033", category:"Video", make:"Sony", model:"PXW-Z450", location:"LMG05", kitId:"MMG-0000578", status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000043", name:"Sony FX6 #1", barcode:"MMG-0000043", category:"Video", make:"Sony", model:"FX6", location:"LMG05", kitId:"MMG-0000580", status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000064", name:"Astra 6X Panel #1", barcode:"MMG-0000064", category:"Lighting", make:"Litepanels", model:"Astra 6X", location:"Adams", kitId:"MMG-0000584", status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
   { id:"MMG-0000202", name:"Middle Atlantic UPS", barcode:"MMG-0000202", category:"Misc Prod", make:"Middle Atlantic", model:"UPS", location:"LMG05", kitId:null, status:"in", lifecycle:"active", lastUser:null, lastUpdated:null, cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000224", name:"4Ch XLR Network Extender #1", barcode:"MMG-0000224", category:"Audio", make:"", model:"", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Jamie Lee (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000225", name:"4Ch XLR Network Extender #2", barcode:"MMG-0000225", category:"Audio", make:"", model:"", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Jamie Lee (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000226", name:"iPad Pro (case)", barcode:"MMG-0000226", category:"Misc Prod", make:"Apple", model:"iPad Pro", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Jamie Lee (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000227", name:"ECLProfile CT+ #1", barcode:"MMG-0000227", category:"Lighting", make:"ETC", model:"ECLProfile CT+", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Marcus Reynolds", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000228", name:"ECLProfile CT+ #2", barcode:"MMG-0000228", category:"Lighting", make:"ETC", model:"ECLProfile CT+", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Marcus Reynolds", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000229", name:"Lilliput 8K Monitor #1", barcode:"MMG-0000229", category:"Video", make:"Lilliput", model:"8K", location:"LMG05", kitId:null, status:"out", lifecycle:"active", lastUser:"Marcus Reynolds", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
-  { id:"MMG-0000230", name:"Lilliput 8K Monitor #2", barcode:"MMG-0000230", category:"Video", make:"Lilliput", model:"8K", location:"LMG05", kitId:null, status:"out", lifecycle:"active", lastUser:"Marcus Reynolds", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000224", name:"4Ch XLR Network Extender #1", barcode:"MMG-0000224", category:"Audio", make:"", model:"", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"David Lopez (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000225", name:"4Ch XLR Network Extender #2", barcode:"MMG-0000225", category:"Audio", make:"", model:"", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"David Lopez (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000226", name:"iPad Pro (case)", barcode:"MMG-0000226", category:"Misc Prod", make:"Apple", model:"iPad Pro", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"David Lopez (Guest)", lastUpdated:"8:31 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000227", name:"ECLProfile CT+ #1", barcode:"MMG-0000227", category:"Lighting", make:"ETC", model:"ECLProfile CT+", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Kevin Silverman", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000228", name:"ECLProfile CT+ #2", barcode:"MMG-0000228", category:"Lighting", make:"ETC", model:"ECLProfile CT+", location:"Adams", kitId:null, status:"out", lifecycle:"active", lastUser:"Kevin Silverman", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000229", name:"Lilliput 8K Monitor #1", barcode:"MMG-0000229", category:"Video", make:"Lilliput", model:"8K", location:"LMG05", kitId:null, status:"out", lifecycle:"active", lastUser:"Kevin Silverman", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
+  { id:"MMG-0000230", name:"Lilliput 8K Monitor #2", barcode:"MMG-0000230", category:"Video", make:"Lilliput", model:"8K", location:"LMG05", kitId:null, status:"out", lifecycle:"active", lastUser:"Kevin Silverman", lastUpdated:"8:52 AM", cost:null, eolDate:null, serialNumber:null, serviceFlag:null },
 ];
 
 export const CHECKOUTS: CheckoutRecord[] = [
   { id:"co-001", user:"Dennis Colon Jr.", initials:"DC", color:"#60a5fa", shoot:"DOI Interview B-Roll", kits:["Venice Cinema Kit","Lens Kit (5 items)"], checkedOutAt:"9:14 AM", dueBack:"6:00 PM", status:"active" },
-  { id:"co-002", user:"Marcus Reynolds", initials:"MR", color:"#f59e0b", shoot:"Capitol Event Coverage", kits:["ECLProfile CT+ ×2","Lilliput 8K Monitor ×2"], checkedOutAt:"8:52 AM", dueBack:"8:00 PM", status:"active" },
-  { id:"co-003", user:"Jamie Lee (Guest)", initials:"JL", color:"#a78bfa", shoot:"Adams Portrait Session", kits:["4Ch XLR Extender ×2","iPad Pro"], checkedOutAt:"8:31 AM", dueBack:"8:00 AM", status:"overdue", isGuest:true },
+  { id:"co-002", user:"Kevin Silverman", initials:"KS", color:"#f59e0b", shoot:"Capitol Event Coverage", kits:["ECLProfile CT+ ×2","Lilliput 8K Monitor ×2"], checkedOutAt:"8:52 AM", dueBack:"8:00 PM", status:"active" },
+  { id:"co-003", user:"David Lopez (Guest)", initials:"DL", color:"#a78bfa", shoot:"Adams Portrait Session", kits:["4Ch XLR Extender ×2","iPad Pro"], checkedOutAt:"8:31 AM", dueBack:"8:00 AM", status:"overdue", isGuest:true },
 ];
 
 export const ALERTS: Alert[] = [
-  { id:"al-001", type:"critical", title:"Sigma 85MM — critical flag", detail:"Returned damaged · A. Fuentes · Yesterday" },
-  { id:"al-002", type:"critical", title:"4Ch XLR Extender — overdue", detail:"J. Lee guest token · Due 8:00 AM today" },
+  { id:"al-001", type:"critical", title:"Sigma 85MM — critical flag", detail:"Returned damaged · C. Foltz · Yesterday" },
+  { id:"al-002", type:"critical", title:"4Ch XLR Extender — overdue", detail:"D. Lopez guest token · Due 8:00 AM today" },
   { id:"al-003", type:"warning", title:"Kit drift — Venice kit MMG-0000576", detail:"SmallHD monitor missing on return · 2 days ago" },
   { id:"al-004", type:"warning", title:"Kit drift — Shure ULXD kit", detail:"ULXD1 beltpack not returned · Today" },
   { id:"al-005", type:"info", title:"220 assets past estimated EOL", detail:"Review replacement schedule in admin" },
@@ -167,9 +167,9 @@ export const SHOOTS = [
 
 export const DEMO_USERS = [
   { name:"Dennis Colon Jr.", role:"Broadcast Engineer", initials:"DC", color:"#60a5fa" },
-  { name:"Marcus Reynolds", role:"Camera Operator", initials:"MR", color:"#f59e0b" },
-  { name:"Tanya Okafor", role:"Audio Technician", initials:"TO", color:"#4ade80" },
-  { name:"Jamie Lee", role:"Freelance DP · Guest token", initials:"JL", color:"#a78bfa", isGuest:true },
+  { name:"Kevin Silverman", role:"Camera Operator", initials:"KS", color:"#f59e0b" },
+  { name:"Brittany Smith", role:"Audio Technician", initials:"BS", color:"#4ade80" },
+  { name:"David Lopez", role:"Freelance DP · Guest token", initials:"DL", color:"#a78bfa", isGuest:true },
 ];
 
 export const PROFILES: UserProfile[] = [
@@ -196,7 +196,7 @@ export const PROFILES: UserProfile[] = [
       { category: "Broadcast Switching", level: "master", checkoutCount: 61, rank: 1, signatureAsset: "Extreme Networks Switch", hoursLogged: 482, lastUsed: "3 days ago" },
       { category: "Lens Systems", level: "proficient", checkoutCount: 74, rank: 2, signatureAsset: "Fujinon 35-150", hoursLogged: 434, lastUsed: "9:14 AM today" },
       { category: "Wireless Audio", level: "proficient", checkoutCount: 43, rank: 3, signatureAsset: "Shure ULXD2", hoursLogged: 231, lastUsed: "Last week" },
-      { category: "Lighting", level: "familiar", checkoutCount: 19, rank: 7, signatureAsset: "Astra 6X", hoursLogged: 88, lastUsed: "2 weeks ago" },
+      { category: "Lighting", level: "familiar", checkoutCount: 19, rank: 7, signatureAsset: "Astra 6X", hoursLogged: 88, lastUsed: "2 weeks ago" }
     ],
     history: [
       { id: "h-001", date: "Apr 17, 2026", shoot: "DOI Interview B-Roll", client: "Dept of Interior", durationHours: 8, kitIds: ["MMG-0000576","MMG-0000575"], conditionOnReturn: "none", notesAdded: false, incident: null },
@@ -206,28 +206,28 @@ export const PROFILES: UserProfile[] = [
       { id: "h-005", date: "Mar 28, 2026", shoot: "NFL Films Behind-the-Scenes", client: "NFL Films", durationHours: 14, kitIds: ["MMG-0000576","MMG-0000580"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
       { id: "h-006", date: "Mar 22, 2026", shoot: "Corporate AV Install", client: "Kenvue", durationHours: 9, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: false, incident: null },
       { id: "h-007", date: "Mar 15, 2026", shoot: "Capitol Hearing Feed", client: "Capitol Hill", durationHours: 7, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "good", notesAdded: false, incident: null },
-      { id: "h-008", date: "Mar 8, 2026", shoot: "Library Portrait Series", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-008", date: "Mar 8, 2026", shoot: "Library Portrait Series", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Tanya Okafor", initials: "TO", color: "#4ade80", sharedShoots: 27 },
-      { name: "Marcus Reynolds", initials: "MR", color: "#f59e0b", sharedShoots: 19 },
-      { name: "A. Fuentes", initials: "AF", color: "#a78bfa", sharedShoots: 8 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 27 },
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 19 },
+      { name: "Clay Foltz", initials: "CF", color: "#a78bfa", sharedShoots: 8 }
     ],
     certifications: [
       { name: "Sony Cinema Line Certified Operator", issuedAt: "Mar 2023", expiresAt: "Mar 2026" },
       { name: "Shure Wireless Systems — Advanced", issuedAt: "Jun 2024", expiresAt: null },
-      { name: "Dante Level 2", issuedAt: "Jan 2025", expiresAt: "Jan 2028" },
-    ],
+      { name: "Dante Level 2", issuedAt: "Jan 2025", expiresAt: "Jan 2028" }
+    ]
   },
   {
     id: "u-002",
-    name: "Marcus Reynolds",
-    initials: "MR",
+    name: "Kevin Silverman",
+    initials: "KS",
     color: "#f59e0b",
     role: "Camera Operator",
     department: "Production",
     location: "Washington DC",
-    email: "marcus@mmg.prod",
+    email: "kevin@mmg.prod",
     joinedAt: "Feb 2022",
     badgeCount: 1,
     totalCheckouts: 156,
@@ -241,7 +241,7 @@ export const PROFILES: UserProfile[] = [
       { category: "ENG Cameras", level: "master", checkoutCount: 78, rank: 1, signatureAsset: "Sony PXW-Z450", hoursLogged: 487, lastUsed: "Yesterday" },
       { category: "Lighting", level: "proficient", checkoutCount: 42, rank: 2, signatureAsset: "ECLProfile CT+", hoursLogged: 261, lastUsed: "8:52 AM today" },
       { category: "Monitors & Displays", level: "proficient", checkoutCount: 29, rank: 3, signatureAsset: "Lilliput 8K Monitor", hoursLogged: 144, lastUsed: "8:52 AM today" },
-      { category: "Cinema Cameras", level: "familiar", checkoutCount: 12, rank: 8, signatureAsset: "Sony FX6", hoursLogged: 72, lastUsed: "Last month" },
+      { category: "Cinema Cameras", level: "familiar", checkoutCount: 12, rank: 8, signatureAsset: "Sony FX6", hoursLogged: 72, lastUsed: "Last month" }
     ],
     history: [
       { id: "h-101", date: "Apr 17, 2026", shoot: "Capitol Event Coverage", client: "Capitol Hill", durationHours: 6, kitIds: ["MMG-0000227","MMG-0000229"], conditionOnReturn: "none", notesAdded: false, incident: null },
@@ -249,25 +249,26 @@ export const PROFILES: UserProfile[] = [
       { id: "h-103", date: "Apr 5, 2026", shoot: "Arena Sports Coverage", client: "NFL Films", durationHours: 16, kitIds: ["MMG-0000578","MMG-0000579"], conditionOnReturn: "fair", notesAdded: false, incident: { severity: "minor", note: "Minor scuff on PXW-450 case, reported at return" } },
       { id: "h-104", date: "Mar 30, 2026", shoot: "Corporate Offsite", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000580"], conditionOnReturn: "good", notesAdded: true, incident: null },
       { id: "h-105", date: "Mar 24, 2026", shoot: "Theater Preshow", client: "Coolidge", durationHours: 5, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
-      { id: "h-106", date: "Mar 18, 2026", shoot: "Documentary Interview", client: "Dept of Interior", durationHours: 9, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-106", date: "Mar 18, 2026", shoot: "Documentary Interview", client: "Dept of Interior", durationHours: 9, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
       { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 19 },
-      { name: "Tanya Okafor", initials: "TO", color: "#4ade80", sharedShoots: 14 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 14 },
+      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedShoots: 11 }
     ],
     certifications: [
-      { name: "ETC Lighting Console — Level 1", issuedAt: "Oct 2023", expiresAt: null },
-    ],
+      { name: "ETC Lighting Console — Level 1", issuedAt: "Oct 2023", expiresAt: null }
+    ]
   },
   {
     id: "u-003",
-    name: "Tanya Okafor",
-    initials: "TO",
+    name: "Brittany Smith",
+    initials: "BS",
     color: "#4ade80",
     role: "Audio Technician",
     department: "Production",
     location: "Washington DC",
-    email: "tanya@mmg.prod",
+    email: "brittany@mmg.prod",
     joinedAt: "Jul 2021",
     badgeCount: 1,
     totalCheckouts: 198,
@@ -281,34 +282,35 @@ export const PROFILES: UserProfile[] = [
       { category: "Wireless Audio", level: "master", checkoutCount: 121, rank: 1, signatureAsset: "Shure ULXD System", hoursLogged: 812, lastUsed: "7:58 AM today" },
       { category: "Studio Mics", level: "master", checkoutCount: 56, rank: 1, signatureAsset: "Neumann Stereo Pair", hoursLogged: 278, lastUsed: "Last week" },
       { category: "Audio Networking (Dante)", level: "proficient", checkoutCount: 34, rank: 2, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 187, lastUsed: "2 weeks ago" },
-      { category: "DI & Preamps", level: "proficient", checkoutCount: 41, rank: 2, signatureAsset: "Radial DI Box", hoursLogged: 162, lastUsed: "3 days ago" },
+      { category: "DI & Preamps", level: "proficient", checkoutCount: 41, rank: 2, signatureAsset: "Radial DI Box", hoursLogged: 162, lastUsed: "3 days ago" }
     ],
     history: [
       { id: "h-201", date: "Apr 17, 2026", shoot: "Studio A Recording", client: "Internal", durationHours: 4, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
       { id: "h-202", date: "Apr 15, 2026", shoot: "Press Conference Coverage", client: "Capitol Hill", durationHours: 6, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
       { id: "h-203", date: "Apr 11, 2026", shoot: "Panel Discussion", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
       { id: "h-204", date: "Apr 8, 2026", shoot: "Concert Broadcast", client: "Kennedy Center", durationHours: 10, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: true, incident: null },
-      { id: "h-205", date: "Apr 2, 2026", shoot: "Podcast Series Launch", client: "Internal", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-205", date: "Apr 2, 2026", shoot: "Podcast Series Launch", client: "Internal", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
       { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 27 },
-      { name: "Marcus Reynolds", initials: "MR", color: "#f59e0b", sharedShoots: 14 },
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 16 },
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 14 }
     ],
     certifications: [
       { name: "Shure Wireless Mastery", issuedAt: "May 2023", expiresAt: null },
       { name: "Dante Level 3 (Advanced)", issuedAt: "Sep 2024", expiresAt: "Sep 2027" },
-      { name: "AES67 Audio Networking", issuedAt: "Jan 2025", expiresAt: null },
-    ],
+      { name: "AES67 Audio Networking", issuedAt: "Jan 2025", expiresAt: null }
+    ]
   },
   {
     id: "u-004",
-    name: "A. Fuentes",
-    initials: "AF",
+    name: "Clay Foltz",
+    initials: "CF",
     color: "#a78bfa",
     role: "Lighting Technician",
     department: "Production",
     location: "Washington DC",
-    email: "afuentes@mmg.prod",
+    email: "clay@mmg.prod",
     joinedAt: "Nov 2023",
     badgeCount: 1,
     totalCheckouts: 67,
@@ -321,27 +323,216 @@ export const PROFILES: UserProfile[] = [
     expertise: [
       { category: "Lighting", level: "proficient", checkoutCount: 41, rank: 3, signatureAsset: "ECLProfile CT+", hoursLogged: 248, lastUsed: "Yesterday" },
       { category: "Lens Systems", level: "familiar", checkoutCount: 14, rank: 6, signatureAsset: "Sigma 85MM", hoursLogged: 62, lastUsed: "Yesterday" },
-      { category: "Cinema Cameras", level: "novice", checkoutCount: 4, rank: 12, signatureAsset: "Sony FX6", hoursLogged: 22, lastUsed: "Last month" },
+      { category: "Cinema Cameras", level: "novice", checkoutCount: 4, rank: 12, signatureAsset: "Sony FX6", hoursLogged: 22, lastUsed: "Last month" }
     ],
     history: [
       { id: "h-301", date: "Apr 16, 2026", shoot: "Product Photography Day", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000575","MMG-0000584"], conditionOnReturn: "damaged", notesAdded: false, incident: { severity: "major", note: "Sigma 85MM returned with scratched front element — flagged critical" } },
       { id: "h-302", date: "Apr 9, 2026", shoot: "Interview Setup", client: "Dept of Interior", durationHours: 5, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
-      { id: "h-303", date: "Apr 1, 2026", shoot: "Theater Event Lighting", client: "Coolidge", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "fair", notesAdded: false, incident: null },
+      { id: "h-303", date: "Apr 1, 2026", shoot: "Theater Event Lighting", client: "Coolidge", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "fair", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
       { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 8 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 6 }
     ],
-    certifications: [],
+    certifications: []
   },
   {
     id: "u-005",
-    name: "Jamie Lee",
-    initials: "JL",
+    name: "Alejandro Badani",
+    initials: "AB",
+    color: "#f59e0b",
+    role: "Gaffer / Lighting Lead",
+    department: "Production",
+    location: "Washington DC",
+    email: "alejandro@mmg.prod",
+    joinedAt: "Apr 2020",
+    badgeCount: 1,
+    totalCheckouts: 221,
+    totalHours: 1534,
+    shootsWorkedThisYear: 36,
+    conditionScore: 95,
+    reliabilityScore: 94,
+    driftIncidents: 1,
+    sopsContributed: 8,
+    expertise: [
+      { category: "Lighting", level: "master", checkoutCount: 134, rank: 1, signatureAsset: "ECLProfile CT+", hoursLogged: 892, lastUsed: "Last week" },
+      { category: "Grip Gear", level: "master", checkoutCount: 58, rank: 1, signatureAsset: "Matthews C-Stand Kit", hoursLogged: 342, lastUsed: "3 days ago" },
+      { category: "Power Distribution", level: "proficient", checkoutCount: 29, rank: 2, signatureAsset: "Middle Atlantic UPS", hoursLogged: 178, lastUsed: "Last week" },
+      { category: "Monitors & Displays", level: "familiar", checkoutCount: 14, rank: 9, signatureAsset: "SmallHD 703", hoursLogged: 67, lastUsed: "2 weeks ago" }
+    ],
+    history: [
+      { id: "h-501", date: "Apr 13, 2026", shoot: "Kennedy Center Gala", client: "Kennedy Center", durationHours: 14, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-502", date: "Apr 6, 2026", shoot: "Capitol Hearing Lighting", client: "Capitol Hill", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-503", date: "Mar 29, 2026", shoot: "Smithsonian Night Gallery", client: "Smithsonian", durationHours: 11, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-504", date: "Mar 21, 2026", shoot: "Corporate Keynote", client: "Kenvue", durationHours: 7, kitIds: ["MMG-0000584"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
+    ],
+    frequentCollaborators: [
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 22 },
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 15 },
+      { name: "Clay Foltz", initials: "CF", color: "#a78bfa", sharedShoots: 6 }
+    ],
+    certifications: [
+      { name: "ETC Lighting Console — Level 2", issuedAt: "Jan 2022", expiresAt: null },
+      { name: "Electrical Safety (OSHA 10)", issuedAt: "Mar 2024", expiresAt: "Mar 2027" }
+    ]
+  },
+  {
+    id: "u-006",
+    name: "Chris Kilcullen",
+    initials: "CK",
+    color: "#5aa0f0",
+    role: "Post-Production Engineer",
+    department: "Post",
+    location: "Washington DC",
+    email: "chris@mmg.prod",
+    joinedAt: "Sep 2018",
+    badgeCount: 2,
+    totalCheckouts: 89,
+    totalHours: 612,
+    shootsWorkedThisYear: 12,
+    conditionScore: 97,
+    reliabilityScore: 98,
+    driftIncidents: 0,
+    sopsContributed: 18,
+    expertise: [
+      { category: "Storage Systems", level: "master", checkoutCount: 47, rank: 1, signatureAsset: "Quantum StorNext", hoursLogged: 389, lastUsed: "Today" },
+      { category: "Color Management", level: "master", checkoutCount: 32, rank: 1, signatureAsset: "Flanders Scientific OLED", hoursLogged: 221, lastUsed: "Yesterday" },
+      { category: "Post-Production Workflows", level: "master", checkoutCount: 41, rank: 1, signatureAsset: "Avid Interplay", hoursLogged: 456, lastUsed: "Today" }
+    ],
+    history: [
+      { id: "h-601", date: "Apr 15, 2026", shoot: "Venice Color Session", client: "Internal Post", durationHours: 9, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-602", date: "Apr 8, 2026", shoot: "Senate Doc Color Finish", client: "Advance Local", durationHours: 12, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-603", date: "Mar 25, 2026", shoot: "Smithsonian Master Export", client: "Smithsonian", durationHours: 8, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null }
+    ],
+    frequentCollaborators: [
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 7 },
+      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 5 }
+    ],
+    certifications: [
+      { name: "Avid Certified Support Representative", issuedAt: "Feb 2020", expiresAt: null },
+      { name: "DaVinci Resolve Certified Colorist", issuedAt: "Jun 2023", expiresAt: null },
+      { name: "Quantum StorNext Administrator", issuedAt: "Oct 2024", expiresAt: "Oct 2027" }
+    ]
+  },
+  {
+    id: "u-007",
+    name: "Joon Yi",
+    initials: "JY",
+    color: "#5aa0f0",
+    role: "Producer / Director",
+    department: "Creative",
+    location: "Washington DC",
+    email: "joon@mmg.prod",
+    joinedAt: "Jun 2020",
+    badgeCount: 1,
+    totalCheckouts: 72,
+    totalHours: 498,
+    shootsWorkedThisYear: 28,
+    conditionScore: 94,
+    reliabilityScore: 91,
+    driftIncidents: 1,
+    sopsContributed: 6,
+    expertise: [
+      { category: "Cinema Cameras", level: "proficient", checkoutCount: 34, rank: 4, signatureAsset: "Sony FX6", hoursLogged: 198, lastUsed: "Last week" },
+      { category: "Monitors & Displays", level: "proficient", checkoutCount: 26, rank: 4, signatureAsset: "SmallHD 703", hoursLogged: 112, lastUsed: "Last week" },
+      { category: "Lens Systems", level: "familiar", checkoutCount: 18, rank: 5, signatureAsset: "Fujinon 18-55", hoursLogged: 84, lastUsed: "2 weeks ago" }
+    ],
+    history: [
+      { id: "h-701", date: "Apr 10, 2026", shoot: "Director Interview Series", client: "Internal Creative", durationHours: 6, kitIds: ["MMG-0000580"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-702", date: "Apr 4, 2026", shoot: "Brand Pitch Video", client: "Kenvue", durationHours: 8, kitIds: ["MMG-0000580","MMG-0000581"], conditionOnReturn: "good", notesAdded: false, incident: null },
+      { id: "h-703", date: "Mar 27, 2026", shoot: "Documentary Prep Shoot", client: "NFL Films", durationHours: 5, kitIds: ["MMG-0000581"], conditionOnReturn: "good", notesAdded: true, incident: null }
+    ],
+    frequentCollaborators: [
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 11 },
+      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 9 }
+    ],
+    certifications: [
+      { name: "DGA Director Training", issuedAt: "Jul 2022", expiresAt: null }
+    ]
+  },
+  {
+    id: "u-008",
+    name: "Tom Nauer",
+    initials: "TN",
+    color: "#a78bfa",
+    role: "Audio Mixer / A1",
+    department: "Production",
+    location: "Washington DC",
+    email: "tom@mmg.prod",
+    joinedAt: "Jan 2021",
+    badgeCount: 1,
+    totalCheckouts: 167,
+    totalHours: 1089,
+    shootsWorkedThisYear: 33,
+    conditionScore: 96,
+    reliabilityScore: 97,
+    driftIncidents: 0,
+    sopsContributed: 11,
+    expertise: [
+      { category: "Mixing Consoles", level: "master", checkoutCount: 82, rank: 1, signatureAsset: "Yamaha QL5", hoursLogged: 624, lastUsed: "Yesterday" },
+      { category: "Wireless Audio", level: "proficient", checkoutCount: 48, rank: 2, signatureAsset: "Shure ULXD System", hoursLogged: 287, lastUsed: "Today" },
+      { category: "Studio Mics", level: "proficient", checkoutCount: 37, rank: 3, signatureAsset: "Sennheiser MKH Pair", hoursLogged: 178, lastUsed: "Last week" }
+    ],
+    history: [
+      { id: "h-801", date: "Apr 16, 2026", shoot: "Live Broadcast — Concert", client: "Kennedy Center", durationHours: 10, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-802", date: "Apr 11, 2026", shoot: "Panel Discussion Audio", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null },
+      { id: "h-803", date: "Apr 5, 2026", shoot: "Sports Arena Mix", client: "NFL Films", durationHours: 14, kitIds: ["MMG-0000577"], conditionOnReturn: "good", notesAdded: true, incident: null }
+    ],
+    frequentCollaborators: [
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 16 },
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 12 }
+    ],
+    certifications: [
+      { name: "Yamaha Digital Mixer Certified", issuedAt: "Mar 2022", expiresAt: null },
+      { name: "Dante Level 2", issuedAt: "Aug 2023", expiresAt: "Aug 2026" }
+    ]
+  },
+  {
+    id: "u-009",
+    name: "Thomas Odom",
+    initials: "TO",
+    color: "#4ade80",
+    role: "Editor / DIT",
+    department: "Post",
+    location: "Washington DC",
+    email: "thomas@mmg.prod",
+    joinedAt: "Mar 2022",
+    badgeCount: 1,
+    totalCheckouts: 104,
+    totalHours: 743,
+    shootsWorkedThisYear: 24,
+    conditionScore: 98,
+    reliabilityScore: 96,
+    driftIncidents: 0,
+    sopsContributed: 7,
+    expertise: [
+      { category: "DIT Stations", level: "master", checkoutCount: 62, rank: 1, signatureAsset: "AJA KiPro", hoursLogged: 487, lastUsed: "Today" },
+      { category: "Storage Systems", level: "proficient", checkoutCount: 28, rank: 2, signatureAsset: "ShotPut Pro", hoursLogged: 156, lastUsed: "Yesterday" },
+      { category: "Monitors & Displays", level: "proficient", checkoutCount: 31, rank: 2, signatureAsset: "Flanders Scientific", hoursLogged: 142, lastUsed: "Last week" }
+    ],
+    history: [
+      { id: "h-901", date: "Apr 17, 2026", shoot: "DOI B-Roll DIT Support", client: "Dept of Interior", durationHours: 8, kitIds: ["MMG-0000576"], conditionOnReturn: "none", notesAdded: false, incident: null },
+      { id: "h-902", date: "Apr 9, 2026", shoot: "Multi-Cam DIT Day", client: "Advance Local", durationHours: 12, kitIds: ["MMG-0000578","MMG-0000579"], conditionOnReturn: "excellent", notesAdded: true, incident: null },
+      { id: "h-903", date: "Mar 31, 2026", shoot: "Feature Doc Dailies", client: "NFL Films", durationHours: 14, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null }
+    ],
+    frequentCollaborators: [
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 5 },
+      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedShoots: 9 }
+    ],
+    certifications: [
+      { name: "AJA KiPro Certified Operator", issuedAt: "Jun 2023", expiresAt: null },
+      { name: "Avid Media Composer — Editor", issuedAt: "Feb 2024", expiresAt: null }
+    ]
+  },
+  {
+    id: "u-010",
+    name: "David Lopez",
+    initials: "DL",
     color: "#a78bfa",
     role: "Freelance DP",
     department: "Guest",
     location: "External",
-    email: "jamie@leefilms.com",
+    email: "david@lopezfilms.com",
     joinedAt: "Mar 2026",
     badgeCount: 0,
     isGuest: true,
@@ -354,14 +545,14 @@ export const PROFILES: UserProfile[] = [
     sopsContributed: 0,
     expertise: [
       { category: "Audio Networking", level: "novice", checkoutCount: 2, rank: 14, signatureAsset: "4Ch XLR Network Extender", hoursLogged: 12, lastUsed: "Today (overdue)" },
-      { category: "Misc Prod Gear", level: "novice", checkoutCount: 1, rank: 19, signatureAsset: "iPad Pro", hoursLogged: 4, lastUsed: "Today" },
+      { category: "Misc Prod Gear", level: "novice", checkoutCount: 1, rank: 19, signatureAsset: "iPad Pro", hoursLogged: 4, lastUsed: "Today" }
     ],
     history: [
-      { id: "h-401", date: "Apr 17, 2026", shoot: "Adams Portrait Session", client: "Private", durationHours: 4, kitIds: ["MMG-0000224","MMG-0000225","MMG-0000226"], conditionOnReturn: "none", notesAdded: false, incident: { severity: "major", note: "Currently overdue — gear due back 8:00 AM, not returned" } },
+      { id: "h-1001", date: "Apr 17, 2026", shoot: "Adams Portrait Session", client: "Private", durationHours: 4, kitIds: ["MMG-0000224","MMG-0000225","MMG-0000226"], conditionOnReturn: "none", notesAdded: false, incident: { severity: "major", note: "Currently overdue — gear due back 8:00 AM, not returned" } }
     ],
     frequentCollaborators: [],
-    certifications: [],
-  },
+    certifications: []
+  }
 ];
 
 export function getProfile(initials: string): UserProfile | undefined {
