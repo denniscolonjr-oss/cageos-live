@@ -18,14 +18,62 @@
   --green: #4ade80;
   --blue: #5aa0f0;
   --purple: #a78bfa;
+
+  /* Safe areas for iOS notch */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
-* { box-sizing: border-box; }
-html, body { height: 100%; background: var(--bg); color: var(--t1); font-family: 'DM Sans', sans-serif; overflow: hidden; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
 
-::-webkit-scrollbar { width: 4px; }
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* iOS Safari dvh support */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+}
+
+button, a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+input, textarea, select {
+  font-size: 16px; /* Prevent iOS auto-zoom on focus */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
+
+/* Hide scrollbars in horizontal scroll containers on mobile */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar { display: none; }
 
 @keyframes live-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 @keyframes pop-in { 0%{transform:scale(0);opacity:0} 100%{transform:scale(1);opacity:1} }
