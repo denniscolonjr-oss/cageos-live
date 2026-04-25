@@ -67,7 +67,7 @@ export default function Home() {
           {isMobile ? "Tap to start →" : "Touch anywhere to start →"}
         </div>
         <div style={{ marginTop: 24, fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
-          NAB Show 2026 · Las Vegas
+          Now in early access
         </div>
       </div>
     </div>

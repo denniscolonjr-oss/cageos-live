@@ -44,7 +44,7 @@ export default function ProductPage() {
           {/* Hero */}
           <div style={{ textAlign: "center", marginBottom: isMobile ? 36 : 52 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--acc)", background: "rgba(226,245,92,0.1)", border: "1px solid rgba(226,245,92,0.25)", padding: "5px 12px", borderRadius: 20, marginBottom: 18, letterSpacing: "0.05em" }}>
-              ⬡ NAB 2026 · Las Vegas
+              ⬡ Now in early access
             </div>
             <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 30 : 42, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.1, marginBottom: 16 }}>
               Equipment tracking built<br />for{" "}
@@ -134,8 +134,8 @@ export default function ProductPage() {
           {/* CTA */}
           <Card>
             <div style={{ padding: isMobile ? 24 : 32, textAlign: "center" }}>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 20 : 22, fontWeight: 700, marginBottom: 8 }}>Talk to us at NAB</div>
-              <div style={{ fontSize: 13, color: "var(--t2)", marginBottom: 20, lineHeight: 1.6 }}>We&apos;re demoing live this week in Las Vegas.</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 20 : 22, fontWeight: 700, marginBottom: 8 }}>Get in touch</div>
+              <div style={{ fontSize: 13, color: "var(--t2)", marginBottom: 20, lineHeight: 1.6 }}>Currently onboarding production shops in early access. Reach out to set up a walkthrough.</div>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                 {["cageos.io", "hello@cageos.io"].map(item => (
                   <div key={item} style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8, padding: "10px 16px", fontFamily: "'DM Mono', monospace", fontSize: 12, color: "var(--t2)" }}>{item}</div>

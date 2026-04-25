@@ -99,7 +99,7 @@ export default function KioskPage() {
                 <div style={{ textAlign: "center", marginBottom: 22 }}>
                   <div style={{ width: 60, height: 60, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px" }}>⬡</div>
                   <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 22 : 20, fontWeight: 700, letterSpacing: -0.5, marginBottom: 6 }}>Scan your badge</div>
-                  <div style={{ fontSize: isMobile ? 14 : 13, color: "var(--t2)", lineHeight: 1.5 }}>{isMobile ? "Hold badge to reader, or tap a demo user below." : "Hold badge to the reader, or use your guest token QR code."}</div>
+                  <div style={{ fontSize: isMobile ? 14 : 13, color: "var(--t2)", lineHeight: 1.5 }}>{isMobile ? "Hold badge to reader, or pick your name below." : "Hold badge to the reader, or use your guest token QR code."}</div>
                 </div>
                 {!isMobile && (
                   <>
@@ -113,7 +113,7 @@ export default function KioskPage() {
                       />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0", color: "var(--t3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }}>
-                      <span style={{ flex: 1, height: 1, background: "var(--b1)" }} />or tap a demo user<span style={{ flex: 1, height: 1, background: "var(--b1)" }} />
+                      <span style={{ flex: 1, height: 1, background: "var(--b1)" }} />or pick your name<span style={{ flex: 1, height: 1, background: "var(--b1)" }} />
                     </div>
                   </>
                 )}

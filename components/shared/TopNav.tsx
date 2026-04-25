@@ -74,11 +74,8 @@ export default function TopNav() {
         })}
       </div>
 
-      {/* Right side chips - hide on small mobile */}
+      {/* Right side chips */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        {!isMobile && (
-          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 500, color: "var(--acc)", background: "rgba(226,245,92,0.1)", border: "1px solid rgba(226,245,92,0.3)", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>NAB 2026</div>
-        )}
         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: isMobile ? 9 : 11, color: "var(--t3)", background: "var(--s1)", border: "1px solid var(--b1)", padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>
           {isMobile ? "MMG · DC" : "MMG Production · DC"}
         </div>
