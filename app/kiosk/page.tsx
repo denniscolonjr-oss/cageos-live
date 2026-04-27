@@ -1,9 +1,12 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
+import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { KITS, ASSETS, SHOOTS, DEMO_USERS } from "@/lib/data";
+import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { SHOOTS } from "@/lib/data";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -17,13 +20,14 @@ interface KioskUser {
 
 export default function KioskPage() {
   const isMobile = useIsMobile();
+  const { data, hydrated, isReadOnly } = useWorkspace();
   const [step, setStep] = useState<Step>(1);
   const [user, setUser] = useState<KioskUser | null>(null);
   const [shoot, setShoot] = useState<(typeof SHOOTS)[0] | null>(null);
   const [photos, setPhotos] = useState<Record<string, boolean>>({});
   const [rating, setRating] = useState("good");
   const [animDir, setAnimDir] = useState<"right" | "left">("right");
-  const [expandedKits, setExpandedKits] = useState<Record<string, boolean>>({ "MMG-0000576": true, "MMG-0000575": true });
+  const [expandedKits, setExpandedKits] = useState<Record<string, boolean>>({});
   const badgeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,11 +50,61 @@ export default function KioskPage() {
 
   function reset() {
     setStep(1); setUser(null); setShoot(null); setPhotos({}); setRating("good");
-    setExpandedKits({ "MMG-0000576": true, "MMG-0000575": true });
+    setExpandedKits({});
   }
 
   const animClass = animDir === "right" ? "animate-slide-right" : "animate-slide-left";
-  const kitsForUser = KITS.slice(0, 3);
+
+  // Derive demo users from workspace profiles (first 4)
+  const kioskUsers: KioskUser[] = data.profiles.slice(0, 4).map(p => ({
+    name: p.name, role: p.role, initials: p.initials, color: p.color, isGuest: p.isGuest,
+  }));
+  // Show first 3 kits as "assigned" for the demo flow
+  const kitsForUser = data.kits.slice(0, 3);
+
+  // Empty workspace — kiosk needs at least one kit and one person
+  const needsSetup = !isReadOnly && (data.kits.length === 0 || data.profiles.length === 0);
+
+  if (!hydrated) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Loading workspace...
+        </div>
+      </div>
+    );
+  }
+
+  if (needsSetup) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg)" }}>
+          <Card>
+            <div style={{ padding: isMobile ? "32px 24px" : "44px 36px", textAlign: "center", maxWidth: 460 }}>
+              <div style={{ width: 56, height: 56, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, margin: "0 auto 16px" }}>⬡</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 19 : 22, fontWeight: 700, marginBottom: 8 }}>Set up the kiosk first</div>
+              <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 22 }}>
+                {data.kits.length === 0 && data.profiles.length === 0
+                  ? "The kiosk needs at least one team member and one kit before it can run a checkout flow."
+                  : data.kits.length === 0
+                  ? "The kiosk needs at least one kit before it can run a checkout flow."
+                  : "The kiosk needs at least one team member before it can run a checkout flow."}
+              </div>
+              <Link href="/dashboard" style={{
+                display: "inline-block",
+                background: "var(--acc)", color: "var(--bg)", border: "none",
+                padding: "12px 24px", borderRadius: 7,
+                fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700,
+                textDecoration: "none", minHeight: 44,
+              }}>Go to dashboard →</Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -118,7 +172,7 @@ export default function KioskPage() {
                   </>
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 10 : 7 }}>
-                  {DEMO_USERS.map(u => (
+                  {kioskUsers.map(u => (
                     <button key={u.name} onClick={() => selectUser(u)} style={{
                       background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8,
                       padding: isMobile ? "14px 12px" : "10px 12px",
@@ -173,7 +227,7 @@ export default function KioskPage() {
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Your assigned kits</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
                   {kitsForUser.map(kit => {
-                    const components = ASSETS.filter(a => kit.componentIds.includes(a.id));
+                    const components = data.assets.filter(a => kit.componentIds.includes(a.id));
                     const isOpen = expandedKits[kit.id];
                     return (
                       <div key={kit.id} style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8, overflow: "hidden" }}>

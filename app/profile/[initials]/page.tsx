@@ -6,7 +6,7 @@ import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { getProfile, KITS, PROFILES } from "@/lib/data";
+import { useWorkspace } from "@/lib/hooks/useWorkspace";
 
 const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
   novice: { pct: 25, color: "var(--t3)" },
@@ -17,8 +17,21 @@ const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
 
 export default function ProfileDetailPage({ params }: { params: Promise<{ initials: string }> }) {
   const isMobile = useIsMobile();
+  const { data, hydrated } = useWorkspace();
   const { initials } = use(params);
-  const profile = getProfile(initials);
+
+  if (!hydrated) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Loading workspace...
+        </div>
+      </div>
+    );
+  }
+
+  const profile = data.profiles.find(p => p.initials === initials);
   if (!profile) return notFound();
 
   const nextLevel = profile.expertise.find(e => e.level !== "master");
@@ -181,7 +194,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                         </div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {h.kitIds.slice(0, 3).map(id => {
-                            const kit = KITS.find(k => k.id === id);
+                            const kit = data.kits.find(k => k.id === id);
                             return (
                               <span key={id} style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t2)", background: "var(--s2)", padding: "2px 7px", borderRadius: 3 }}>
                                 {kit?.name ?? id}
@@ -237,7 +250,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Works often with</div>
                   <Card>
                     {profile.frequentCollaborators.map((c, i) => {
-                      const collabProfile = PROFILES.find(p => p.initials === c.initials);
+                      const collabProfile = data.profiles.find(p => p.initials === c.initials);
                       return (
                         <Link key={c.name} href={collabProfile ? `/profile/${c.initials}` : "#"} style={{ textDecoration: "none" }}>
                           <div style={{ padding: "12px 14px", borderBottom: i < profile.frequentCollaborators.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minHeight: 56 }}>

@@ -1,13 +1,29 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
+import EmptyState from "@/components/shared/EmptyState";
+import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { PROFILES } from "@/lib/data";
+import { useWorkspace } from "@/lib/hooks/useWorkspace";
 
 export default function ProfileIndexPage() {
   const isMobile = useIsMobile();
+  const { data, hydrated, isReadOnly } = useWorkspace();
+  const [openAdd, setOpenAdd] = useState(false);
+
+  if (!hydrated) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Loading workspace...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -19,20 +35,39 @@ export default function ProfileIndexPage() {
           padding: isMobile ? "20px 14px 60px" : "32px 28px 80px",
           paddingBottom: `max(${isMobile ? 60 : 80}px, var(--safe-bottom))`,
         }} className="animate-fade-up">
-          <div style={{ marginBottom: isMobile ? 20 : 28 }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--acc)", marginBottom: 8 }}>Crew · People layer</div>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 24 : 28, fontWeight: 800, letterSpacing: -1, lineHeight: 1.1, marginBottom: 10 }}>Team profiles</h1>
-            <p style={{ fontSize: isMobile ? 13 : 14, color: "var(--t2)", lineHeight: 1.6, maxWidth: 640 }}>
-              Every checkout builds a pattern. Tap a profile to see what shoots they&apos;ve worked, what gear they&apos;ve mastered, and where they&apos;re the natural SME.
-            </p>
+          <div style={{
+            display: "flex",
+            alignItems: isMobile ? "flex-start" : "flex-end",
+            justifyContent: "space-between",
+            marginBottom: isMobile ? 20 : 28,
+            gap: 12, flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--acc)", marginBottom: 8 }}>Crew · People layer</div>
+              <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 24 : 28, fontWeight: 800, letterSpacing: -1, lineHeight: 1.1, marginBottom: 10 }}>Team profiles</h1>
+              <p style={{ fontSize: isMobile ? 13 : 14, color: "var(--t2)", lineHeight: 1.6, maxWidth: 640 }}>
+                Every checkout builds a pattern. Tap a profile to see what shoots they&apos;ve worked, what gear they&apos;ve mastered, and where they&apos;re the natural SME.
+              </p>
+            </div>
+            {!isReadOnly && data.profiles.length > 0 && (
+              <button onClick={() => setOpenAdd(true)} style={{
+                background: "var(--acc)", color: "var(--bg)", border: "none",
+                padding: "10px 18px", borderRadius: 7,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
+                cursor: "pointer", minHeight: 40, whiteSpace: "nowrap",
+              }}>+ Add team member</button>
+            )}
           </div>
 
+          {data.profiles.length === 0 ? (
+            <EmptyState context="team" />
+          ) : (
           <div style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))",
             gap: 12,
           }}>
-            {PROFILES.map(p => {
+            {data.profiles.map(p => {
               const masterCategories = p.expertise.filter(e => e.level === "master").length;
               const topCategory = p.expertise[0];
               return (
@@ -85,8 +120,10 @@ export default function ProfileIndexPage() {
               );
             })}
           </div>
+          )}
         </div>
       </div>
+      <AddTeamMemberModal open={openAdd} onClose={() => setOpenAdd(false)} />
     </div>
   );
 }
