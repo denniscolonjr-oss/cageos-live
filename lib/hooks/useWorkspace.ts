@@ -7,46 +7,23 @@ import {
   ALERTS as DEMO_ALERTS,
   PROFILES as DEMO_PROFILES,
   STATS as DEMO_STATS,
-  SHOOTS as DEMO_SHOOTS_BASE,
   type Asset,
   type Kit,
-  type CheckoutRecord,
-  type Alert,
   type UserProfile,
 } from "@/lib/data";
+import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
+import type { StorageAdapter, ModeAdapter } from "@/lib/storage/StorageAdapter";
+import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout } from "./workspaceTypes";
 
-const STORAGE_KEY = "cageos:workspace:v2";
-const LEGACY_STORAGE_KEY = "cageos:workspace:v1";
-const MODE_KEY = "cageos:mode:v1";
+// Re-export types so existing imports from useWorkspace keep working
+export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout };
 
-export type WorkspaceMode = "user" | "demo" | "unset";
-
-export interface Shoot {
-  id: string;
-  title: string;
-  client: string;
-  startsAt: string; // ISO date string or human label
-  endsAt?: string;
-  location?: string;
-  leadInitials?: string; // initials of the lead operator
-  assignedTeam: string[]; // initials
-  assignedKits: string[]; // kit IDs
-  notes?: string;
-  status: "scheduled" | "active" | "completed" | "cancelled";
-}
-
-export interface WorkspaceData {
-  assets: Asset[];
-  kits: Kit[];
-  checkouts: CheckoutRecord[];
-  alerts: Alert[];
-  profiles: UserProfile[];
-  shoots: Shoot[];
-  orgName: string;
-  orgLocation: string;
-  barcodePrefix: string; // e.g. "AST"
-  filterableFields: string[]; // asset fields to expose as filters: "category" | "make" | "location" | "model"
-}
+/**
+ * Active storage adapter. To swap backends, replace this single line.
+ * In a multi-tenant build, you'd inject this from a provider based on org config.
+ */
+const adapter: StorageAdapter = localStorageAdapter;
+const modeAdapter: ModeAdapter = localStorageModeAdapter;
 
 const EMPTY_WORKSPACE: WorkspaceData = {
   assets: [],
@@ -59,118 +36,77 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   orgLocation: "—",
   barcodePrefix: "AST",
   filterableFields: ["category", "location"],
+  timezone: "auto",
+  managerMode: false,
 };
 
-// Build demo shoots from the static SHOOTS list, attaching team/kit assignments
-const DEMO_SHOOTS: Shoot[] = [
-  {
-    id: "sh-001",
-    title: "DOI Interview B-Roll",
-    client: "Dept of Interior",
-    startsAt: "Today 10:00 AM",
-    endsAt: "Today 4:00 PM",
-    location: "DOI HQ",
-    leadInitials: "DC",
-    assignedTeam: ["DC", "TO"],
-    assignedKits: ["MMG-0000576", "MMG-0000575"],
-    notes: "Single subject interview, 3-camera setup, lavs.",
-    status: "active",
-  },
-  {
-    id: "sh-002",
-    title: "Capitol Event Coverage",
-    client: "Capitol Hill",
-    startsAt: "Today 2:00 PM",
-    endsAt: "Today 7:00 PM",
-    location: "Capitol Building",
-    leadInitials: "KS",
-    assignedTeam: ["KS", "AB"],
-    assignedKits: ["MMG-0000578"],
-    notes: "Live event coverage with multiple speakers.",
-    status: "scheduled",
-  },
-  {
-    id: "sh-003",
-    title: "Library Portrait Series",
-    client: "Library of Congress",
-    startsAt: "Tomorrow 9:00 AM",
-    endsAt: "Tomorrow 1:00 PM",
-    location: "LMG05",
-    leadInitials: "DC",
-    assignedTeam: ["DC", "BS", "JY"],
-    assignedKits: ["MMG-0000576"],
-    notes: "Studio portraits with lighting setup.",
-    status: "scheduled",
-  },
-];
+// Demo shoots use real ISO timestamps. Built dynamically so "today" is always today.
+function buildDemoShoots(): Shoot[] {
+  const now = new Date();
+  function atTime(daysFromNow: number, hour: number, minute = 0): string {
+    const d = new Date(now);
+    d.setDate(d.getDate() + daysFromNow);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString();
+  }
+  return [
+    {
+      id: "sh-001",
+      title: "DOI Interview B-Roll",
+      client: "Dept of Interior",
+      startsAt: atTime(0, 10),
+      endsAt: atTime(0, 16),
+      location: "DOI HQ",
+      leadInitials: "DC",
+      assignedTeam: ["DC", "TO"],
+      assignedKits: ["MMG-0000576", "MMG-0000575"],
+      notes: "Single subject interview, 3-camera setup, lavs.",
+      status: "active",
+    },
+    {
+      id: "sh-002",
+      title: "Capitol Event Coverage",
+      client: "Capitol Hill",
+      startsAt: atTime(0, 14),
+      endsAt: atTime(0, 19),
+      location: "Capitol Building",
+      leadInitials: "KS",
+      assignedTeam: ["KS", "AB"],
+      assignedKits: ["MMG-0000578"],
+      notes: "Live event coverage with multiple speakers.",
+      status: "scheduled",
+    },
+    {
+      id: "sh-003",
+      title: "Library Portrait Series",
+      client: "Library of Congress",
+      startsAt: atTime(1, 9),
+      endsAt: atTime(1, 13),
+      location: "LMG05",
+      leadInitials: "DC",
+      assignedTeam: ["DC", "BS", "JY"],
+      assignedKits: ["MMG-0000576"],
+      notes: "Studio portraits with lighting setup.",
+      status: "scheduled",
+    },
+  ];
+}
 
-const DEMO_WORKSPACE: WorkspaceData = {
-  assets: DEMO_ASSETS,
-  kits: DEMO_KITS,
-  checkouts: DEMO_CHECKOUTS,
-  alerts: DEMO_ALERTS,
-  profiles: DEMO_PROFILES,
-  shoots: DEMO_SHOOTS,
-  orgName: "MMG Production",
-  orgLocation: "DC",
-  barcodePrefix: "MMG",
-  filterableFields: ["category", "make", "location"],
-};
-
-function migrateFromLegacy(legacy: Partial<WorkspaceData>): WorkspaceData {
-  // Backfill any missing fields from EMPTY_WORKSPACE
+function buildDemoWorkspace(): WorkspaceData {
   return {
-    ...EMPTY_WORKSPACE,
-    ...legacy,
-    shoots: legacy.shoots ?? [],
-    barcodePrefix: legacy.barcodePrefix ?? "AST",
-    filterableFields: legacy.filterableFields ?? ["category", "location"],
+    assets: DEMO_ASSETS,
+    kits: DEMO_KITS,
+    checkouts: DEMO_CHECKOUTS,
+    alerts: DEMO_ALERTS,
+    profiles: DEMO_PROFILES,
+    shoots: buildDemoShoots(),
+    orgName: "MMG Production",
+    orgLocation: "DC",
+    barcodePrefix: "MMG",
+    filterableFields: ["category", "make", "location"],
+    timezone: "auto",
+    managerMode: false,
   };
-}
-
-function loadFromStorage(): WorkspaceData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as WorkspaceData;
-    // Try legacy
-    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacyRaw) {
-      const legacy = JSON.parse(legacyRaw) as Partial<WorkspaceData>;
-      const migrated = migrateFromLegacy(legacy);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-      return migrated;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function saveToStorage(data: WorkspaceData) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {}
-}
-
-function loadMode(): WorkspaceMode {
-  if (typeof window === "undefined") return "unset";
-  try {
-    const m = localStorage.getItem(MODE_KEY);
-    if (m === "user" || m === "demo") return m;
-    return "unset";
-  } catch {
-    return "unset";
-  }
-}
-
-function saveMode(m: WorkspaceMode) {
-  if (typeof window === "undefined") return;
-  try {
-    if (m === "unset") localStorage.removeItem(MODE_KEY);
-    else localStorage.setItem(MODE_KEY, m);
-  } catch {}
 }
 
 export function useWorkspace() {
@@ -179,28 +115,30 @@ export function useWorkspace() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const m = loadMode();
-    const stored = loadFromStorage();
+    const m = modeAdapter.loadMode();
+    const stored = adapter.load();
     if (stored) setUserData(stored);
     setMode(m);
     setHydrated(true);
   }, []);
 
-  const data: WorkspaceData = mode === "demo" ? DEMO_WORKSPACE : userData;
+  const data: WorkspaceData = mode === "demo" ? buildDemoWorkspace() : userData;
   const isReadOnly = mode === "demo";
 
   const switchMode = useCallback((m: WorkspaceMode) => {
     setMode(m);
-    saveMode(m);
+    modeAdapter.saveMode(m);
   }, []);
 
   const updateUserData = useCallback((updater: (d: WorkspaceData) => WorkspaceData) => {
     setUserData(prev => {
       const next = updater(prev);
-      saveToStorage(next);
+      adapter.save(next);
       return next;
     });
   }, []);
+
+  // --- Asset / Kit / Profile / Shoot mutators ---
 
   const addAsset = useCallback((asset: Asset) => {
     if (isReadOnly) return;
@@ -242,6 +180,16 @@ export function useWorkspace() {
     updateUserData(d => ({ ...d, filterableFields: fields }));
   }, [isReadOnly, updateUserData]);
 
+  const setTimezone = useCallback((tz: string) => {
+    if (isReadOnly) return;
+    updateUserData(d => ({ ...d, timezone: tz }));
+  }, [isReadOnly, updateUserData]);
+
+  const setManagerMode = useCallback((on: boolean) => {
+    if (isReadOnly) return;
+    updateUserData(d => ({ ...d, managerMode: on }));
+  }, [isReadOnly, updateUserData]);
+
   const addShoot = useCallback((shoot: Shoot) => {
     if (isReadOnly) return;
     updateUserData(d => ({ ...d, shoots: [...d.shoots, shoot] }));
@@ -257,14 +205,104 @@ export function useWorkspace() {
     updateUserData(d => ({ ...d, shoots: d.shoots.filter(s => s.id !== id) }));
   }, [isReadOnly, updateUserData]);
 
+  // --- Checkout / Return ---
+
+  /**
+   * Check out one or more kits (with their components) to a user.
+   * - Marks each kit's status to "out"
+   * - Marks each kit component asset's status to "out", sets lastUser/lastUpdated
+   * - Adds a new ActiveCheckout entry to data.checkouts
+   */
+  const checkoutKits = useCallback((args: {
+    user: { name: string; initials: string; color: string; isGuest?: boolean };
+    kitIds: string[];
+    shootTitle: string;
+    shootId?: string;
+    dueBackHoursFromNow?: number;
+  }): ActiveCheckout | null => {
+    if (isReadOnly) return null;
+    const dueBackHours = args.dueBackHoursFromNow ?? 8;
+    const now = new Date();
+    const due = new Date(now.getTime() + dueBackHours * 60 * 60 * 1000);
+
+    let createdCheckout: ActiveCheckout | null = null;
+
+    updateUserData(d => {
+      const targetKits = d.kits.filter(k => args.kitIds.includes(k.id));
+      if (targetKits.length === 0) return d;
+
+      const allComponentIds = targetKits.flatMap(k => k.componentIds);
+
+      const checkout: ActiveCheckout = {
+        id: `co-${now.getTime()}`,
+        checkedOutAtISO: now.toISOString(),
+        checkedOutAtLabel: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        dueBackISO: due.toISOString(),
+        dueBackLabel: due.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        user: args.user.name,
+        initials: args.user.initials,
+        color: args.user.color,
+        shoot: args.shootTitle,
+        shootId: args.shootId,
+        kits: targetKits.map(k => k.name),
+        kitIds: args.kitIds,
+        assetIds: allComponentIds,
+        status: "active",
+        isGuest: args.user.isGuest,
+      };
+      createdCheckout = checkout;
+
+      return {
+        ...d,
+        kits: d.kits.map(k => args.kitIds.includes(k.id) ? { ...k, status: "out" } : k),
+        assets: d.assets.map(a => allComponentIds.includes(a.id)
+          ? { ...a, status: "out", lastUser: args.user.name, lastUpdated: checkout.checkedOutAtLabel }
+          : a),
+        checkouts: [...d.checkouts, checkout],
+      };
+    });
+
+    return createdCheckout;
+  }, [isReadOnly, updateUserData]);
+
+  /**
+   * Return a checkout — by id. Reverses the checkoutKits effects.
+   */
+  const returnCheckout = useCallback((checkoutId: string) => {
+    if (isReadOnly) return;
+    const now = new Date();
+    updateUserData(d => {
+      const co = d.checkouts.find(c => c.id === checkoutId);
+      if (!co) return d;
+      // Only ActiveCheckout has structured ids — guard against demo CheckoutRecord
+      const active = co as ActiveCheckout;
+      const kitIds = active.kitIds ?? [];
+      const assetIds = active.assetIds ?? [];
+
+      return {
+        ...d,
+        kits: d.kits.map(k => kitIds.includes(k.id) ? { ...k, status: "available" } : k),
+        assets: d.assets.map(a => assetIds.includes(a.id)
+          ? { ...a, status: "in", lastUpdated: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
+          : a),
+        checkouts: d.checkouts.map(c => c.id === checkoutId
+          ? ({ ...active, status: "returned", returnedAtISO: now.toISOString() } as ActiveCheckout)
+          : c),
+      };
+    });
+  }, [isReadOnly, updateUserData]);
+
   const resetWorkspace = useCallback(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    } catch {}
+    adapter.clear();
     setUserData(EMPTY_WORKSPACE);
   }, []);
+
+  // --- Computed ---
+
+  const activeCheckouts = data.checkouts.filter(c => {
+    // demo records use string status; active records do too
+    return c.status === "active" || c.status === "overdue";
+  });
 
   const stats = mode === "demo" ? DEMO_STATS : {
     totalAssets: data.assets.length,
@@ -283,6 +321,7 @@ export function useWorkspace() {
     isReadOnly,
     isEmpty: mode !== "demo" && data.assets.length === 0 && data.profiles.length === 0,
     stats,
+    activeCheckouts,
     switchMode,
     addAsset,
     addAssets,
@@ -295,11 +334,15 @@ export function useWorkspace() {
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,
+    setTimezone,
+    setManagerMode,
+    checkoutKits,
+    returnCheckout,
     resetWorkspace,
+    adapterName: adapter.name,
   };
 }
 
-// Helper: generate next barcode using the workspace's prefix
 export function nextBarcode(existingAssets: Asset[], prefix: string = "AST"): string {
   const safePrefix = prefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "AST";
   const escapedPrefix = safePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -314,12 +357,8 @@ export function nextBarcode(existingAssets: Asset[], prefix: string = "AST"): st
   return `${safePrefix}-${String(max + 1).padStart(7, "0")}`;
 }
 
-// Helper: get initials from name
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-// Suppress unused import warning — DEMO_SHOOTS_BASE kept for future migration
-void DEMO_SHOOTS_BASE;

@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { formatShootRange } from "@/lib/timezone";
 
 const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
   novice: { pct: 25, color: "var(--t3)" },
@@ -101,25 +102,27 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
           {/* Stats */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : `repeat(${data.managerMode ? 5 : 3}, 1fr)`,
             gap: isMobile ? 8 : 10,
             marginBottom: 24,
           }}>
             {[
-              { label: "Checkouts", value: profile.totalCheckouts, sub: "lifetime", color: "var(--blue)" },
-              { label: "Hours", value: profile.totalHours, sub: "lifetime", color: "var(--blue)" },
-              { label: "Shoots / yr", value: profile.shootsWorkedThisYear, sub: "2026 YTD", color: "var(--acc)" },
-              { label: "Condition", value: profile.conditionScore, sub: "return quality", color: profile.conditionScore >= 95 ? "var(--green)" : profile.conditionScore >= 85 ? "var(--amber)" : "var(--red)" },
-              { label: "Reliability", value: profile.reliabilityScore, sub: "on-time", color: profile.reliabilityScore >= 95 ? "var(--green)" : profile.reliabilityScore >= 85 ? "var(--amber)" : "var(--red)" },
-            ].map(s => (
-              <Card key={s.label} accentColor={s.color}>
-                <div style={{ padding: isMobile ? "12px 14px" : "14px 16px" }}>
-                  <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: "var(--t1)" }}>{s.value}</div>
-                  <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{s.sub}</div>
-                </div>
-              </Card>
-            ))}
+              { label: "Checkouts", value: profile.totalCheckouts, sub: "lifetime", color: "var(--blue)", managerOnly: false },
+              { label: "Hours", value: profile.totalHours, sub: "lifetime", color: "var(--blue)", managerOnly: false },
+              { label: "Shoots / yr", value: profile.shootsWorkedThisYear, sub: "2026 YTD", color: "var(--acc)", managerOnly: false },
+              { label: "Condition", value: profile.conditionScore, sub: "return quality", color: profile.conditionScore >= 95 ? "var(--green)" : profile.conditionScore >= 85 ? "var(--amber)" : "var(--red)", managerOnly: true },
+              { label: "Reliability", value: profile.reliabilityScore, sub: "on-time", color: profile.reliabilityScore >= 95 ? "var(--green)" : profile.reliabilityScore >= 85 ? "var(--amber)" : "var(--red)", managerOnly: true },
+            ]
+              .filter(s => !s.managerOnly || data.managerMode)
+              .map(s => (
+                <Card key={s.label} accentColor={s.color}>
+                  <div style={{ padding: isMobile ? "12px 14px" : "14px 16px" }}>
+                    <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: "var(--t1)" }}>{s.value}</div>
+                    <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{s.sub}</div>
+                  </div>
+                </Card>
+              ))}
           </div>
 
           {/* Two column main content */}
@@ -197,7 +200,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                               <Badge variant={sh.status === "active" ? "green" : "blue"}>{sh.status}</Badge>
                             </div>
                             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--t2)", marginBottom: sh.notes ? 6 : 0 }}>
-                              {sh.client} · {sh.startsAt}{sh.endsAt ? ` → ${sh.endsAt}` : ""}{sh.location ? ` · ${sh.location}` : ""}
+                              {sh.client} · {formatShootRange(sh.startsAt, sh.endsAt, data.timezone)}{sh.location ? ` · ${sh.location}` : ""}
                             </div>
                             {sh.notes && (
                               <div style={{ fontSize: 11, color: "var(--t3)", lineHeight: 1.5 }}>{sh.notes}</div>
@@ -271,10 +274,12 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                     <div style={{ fontSize: 12, color: "var(--t2)" }}>SOPs contributed</div>
                     <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: profile.sopsContributed > 5 ? "var(--acc)" : "var(--t1)" }}>{profile.sopsContributed}</div>
                   </div>
-                  <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 12, color: "var(--t2)" }}>Drift incidents</div>
-                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: profile.driftIncidents === 0 ? "var(--green)" : profile.driftIncidents > 2 ? "var(--red)" : "var(--amber)" }}>{profile.driftIncidents}</div>
-                  </div>
+                  {data.managerMode && (
+                    <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: 12, color: "var(--t2)" }}>Drift incidents</div>
+                      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: profile.driftIncidents === 0 ? "var(--green)" : profile.driftIncidents > 2 ? "var(--red)" : "var(--amber)" }}>{profile.driftIncidents}</div>
+                    </div>
+                  )}
                   <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ fontSize: 12, color: "var(--t2)" }}>Active badges</div>
                     <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700 }}>{profile.badgeCount}</div>

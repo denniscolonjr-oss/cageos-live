@@ -61,6 +61,33 @@ input, textarea, select {
   font-size: 16px; /* Prevent iOS auto-zoom on focus */
   -webkit-appearance: none;
   appearance: none;
+  color-scheme: dark;
+}
+
+/* Force dark dropdowns on Safari/iOS — prevents the white-bg flash when an option is selected */
+select {
+  background-color: var(--s2) !important;
+  color: var(--t1) !important;
+}
+select:focus {
+  background-color: var(--s2) !important;
+  color: var(--t1) !important;
+}
+select option {
+  background-color: var(--s2);
+  color: var(--t1);
+}
+/* WebKit-specific: native pickers use system colors unless we force them */
+@supports (-webkit-touch-callout: none) {
+  select { background-color: var(--s2) !important; }
+}
+
+/* datetime-local picker calendar icon on Chrome/iOS — invert so it shows on dark bg */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }

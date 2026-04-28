@@ -12,6 +12,7 @@ import CSVUploadModal from "@/components/forms/CSVUploadModal";
 import AddShootModal from "@/components/forms/AddShootModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
 
 const PAGES: Record<string, string> = {
   cage: "Cage status", checkouts: "Active checkouts",
@@ -24,7 +25,7 @@ const PAGES: Record<string, string> = {
 
 export default function DashboardPage() {
   const isMobile = useIsMobile();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, resetWorkspace, setBarcodePrefix, setFilterableFields } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -329,7 +330,7 @@ export default function DashboardPage() {
                               </div>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                              <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: co.status === "overdue" ? "var(--red)" : "var(--t3)" }}>{co.checkedOutAt}</span>
+                              <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: co.status === "overdue" ? "var(--red)" : "var(--t3)" }}>{("checkedOutAt" in co ? co.checkedOutAt : null) ?? ("checkedOutAtLabel" in co ? co.checkedOutAtLabel : "—")}</span>
                               {co.status === "overdue" && <Badge variant="red" style={{ fontSize: 9 }}>overdue</Badge>}
                             </div>
                           </div>
@@ -456,17 +457,19 @@ export default function DashboardPage() {
                             borderRadius: 6, fontSize: 12,
                             fontFamily: "'DM Mono',monospace",
                             border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
-                            background: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                            backgroundColor: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
                             color: active ? "var(--acc)" : "var(--t2)",
                             cursor: "pointer", minHeight: 36,
                             appearance: "none",
+                            WebkitAppearance: "none",
+                            colorScheme: "dark",
                             backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238c8880' stroke-width='1.5' fill='none'/></svg>\")",
                             backgroundRepeat: "no-repeat",
                             backgroundPosition: "right 10px center",
                           }}
                         >
-                          <option value="">{field.charAt(0).toUpperCase() + field.slice(1)}: all</option>
-                          {values.map(v => <option key={v} value={v}>{v}</option>)}
+                          <option value="" style={{ backgroundColor: "var(--s2)", color: "var(--t1)" }}>{field.charAt(0).toUpperCase() + field.slice(1)}: all</option>
+                          {values.map(v => <option key={v} value={v} style={{ backgroundColor: "var(--s2)", color: "var(--t1)" }}>{v}</option>)}
                         </select>
                       </div>
                     );
@@ -620,7 +623,7 @@ export default function DashboardPage() {
                           </div>
 
                           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", marginBottom: 12, lineHeight: 1.5 }}>
-                            {sh.startsAt}{sh.endsAt ? ` → ${sh.endsAt}` : ""}
+                            {formatShootRange(sh.startsAt, sh.endsAt, data.timezone)}
                             {sh.location && <><br />📍 {sh.location}</>}
                           </div>
 
@@ -784,6 +787,57 @@ export default function DashboardPage() {
                         );
                       })}
                     </div>
+                  </div>
+                </Card>
+              )}
+
+              {!isReadOnly && (
+                <Card>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Time zone</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
+                      How shoot dates and times are displayed across the app. Shoots are stored as absolute moments and converted on display.
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <select
+                        value={data.timezone}
+                        onChange={e => setTimezone(e.target.value)}
+                        style={{
+                          minWidth: 240, backgroundColor: "var(--s2)", border: "1px solid var(--b1)",
+                          borderRadius: 7, padding: "10px 12px", color: "var(--t1)", outline: "none",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44, colorScheme: "dark",
+                        }}
+                      >
+                        {getTimezoneOptions().map(opt => (
+                          <option key={opt.value} value={opt.value} style={{ backgroundColor: "var(--s2)", color: "var(--t1)" }}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
+                        currently {timezoneShortLabel(data.timezone)} · {resolveTimezone(data.timezone)}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {!isReadOnly && (
+                <Card>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Manager mode</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
+                      Reveal reliability scores, condition scores, and drift incident counts on team profiles. Off by default — these stats are sensitive and shouldn&apos;t be visible to crew browsing each other&apos;s profiles.
+                    </div>
+                    <button
+                      onClick={() => setManagerMode(!data.managerMode)}
+                      style={{
+                        padding: "10px 16px", borderRadius: 6,
+                        background: data.managerMode ? "rgba(226,245,92,0.08)" : "transparent",
+                        border: `1px solid ${data.managerMode ? "var(--acc)" : "var(--b1)"}`,
+                        color: data.managerMode ? "var(--acc)" : "var(--t2)",
+                        cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                      }}>
+                      {data.managerMode ? "✓ Manager mode is ON" : "Turn on manager mode"}
+                    </button>
                   </div>
                 </Card>
               )}
