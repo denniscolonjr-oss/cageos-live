@@ -173,6 +173,43 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                 </Card>
               </div>
 
+              {/* Upcoming shoots from workspace */}
+              {(() => {
+                const upcomingShoots = data.shoots.filter(s =>
+                  (s.status === "active" || s.status === "scheduled") &&
+                  (s.assignedTeam.includes(profile.initials) || s.leadInitials === profile.initials)
+                );
+                if (upcomingShoots.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 22 }}>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>On the calendar</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Upcoming shoots</div>
+                    <Card>
+                      {upcomingShoots.map((sh, i) => (
+                        <div key={sh.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < upcomingShoots.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          <div style={{ width: 4, alignSelf: "stretch", flexShrink: 0, background: sh.status === "active" ? "var(--green)" : "var(--blue)", borderRadius: 2 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 600 }}>
+                                {sh.title}
+                                {sh.leadInitials === profile.initials && <span style={{ color: "var(--acc)", marginLeft: 6, fontSize: 11 }}>★ lead</span>}
+                              </div>
+                              <Badge variant={sh.status === "active" ? "green" : "blue"}>{sh.status}</Badge>
+                            </div>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--t2)", marginBottom: sh.notes ? 6 : 0 }}>
+                              {sh.client} · {sh.startsAt}{sh.endsAt ? ` → ${sh.endsAt}` : ""}{sh.location ? ` · ${sh.location}` : ""}
+                            </div>
+                            {sh.notes && (
+                              <div style={{ fontSize: 11, color: "var(--t3)", lineHeight: 1.5 }}>{sh.notes}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </Card>
+                  </div>
+                );
+              })()}
+
               {/* History */}
               <div>
                 <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Activity</div>

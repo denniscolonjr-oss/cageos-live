@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { useWorkspace, nextBarcode } from "@/lib/hooks/useWorkspace";
-import type { Kit } from "@/lib/data";
+import { toast } from "@/components/ui/Toast";
+import type { Kit, Asset } from "@/lib/data";
 
 export default function AddKitModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data, addKit } = useWorkspace();
@@ -12,7 +13,12 @@ export default function AddKitModal({ open, onClose }: { open: boolean; onClose:
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
-  const suggestedBarcode = nextBarcode([...data.assets, ...data.kits.map(k => ({ id: k.id, barcode: k.barcode } as never))]);
+  // Combine assets + kits for next-barcode lookup so we don't collide
+  const combinedForBarcode = [
+    ...data.assets,
+    ...data.kits.map(k => ({ id: k.id, barcode: k.barcode } as Asset)),
+  ];
+  const suggestedBarcode = nextBarcode(combinedForBarcode, data.barcodePrefix);
 
   const availableAssets = data.assets.filter(a =>
     !a.kitId &&
@@ -42,6 +48,7 @@ export default function AddKitModal({ open, onClose }: { open: boolean; onClose:
       componentIds: Array.from(selectedIds),
     };
     addKit(kit);
+    toast(`${kit.name} created`, { detail: `${kit.componentIds.length} component${kit.componentIds.length === 1 ? "" : "s"}` });
     reset();
     onClose();
   }

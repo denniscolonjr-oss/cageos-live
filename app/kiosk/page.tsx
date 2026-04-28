@@ -6,7 +6,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
-import { SHOOTS } from "@/lib/data";
+import type { Shoot } from "@/lib/hooks/useWorkspace";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -23,7 +23,7 @@ export default function KioskPage() {
   const { data, hydrated, isReadOnly } = useWorkspace();
   const [step, setStep] = useState<Step>(1);
   const [user, setUser] = useState<KioskUser | null>(null);
-  const [shoot, setShoot] = useState<(typeof SHOOTS)[0] | null>(null);
+  const [shoot, setShoot] = useState<Shoot | null>(null);
   const [photos, setPhotos] = useState<Record<string, boolean>>({});
   const [rating, setRating] = useState("good");
   const [animDir, setAnimDir] = useState<"right" | "left">("right");
@@ -44,7 +44,7 @@ export default function KioskPage() {
     goStep(2);
   }
 
-  function selectShoot(s: typeof SHOOTS[0]) { setShoot(s); }
+  function selectShoot(s: Shoot) { setShoot(s); }
   function toggleKit(id: string) { setExpandedKits(prev => ({ ...prev, [id]: !prev[id] })); }
   function capturePhoto(id: string) { setPhotos(prev => ({ ...prev, [id]: true })); }
 
@@ -77,30 +77,114 @@ export default function KioskPage() {
   }
 
   if (needsSetup) {
+    const teamReady = data.profiles.length > 0;
+    const kitsReady = data.kits.length > 0;
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <TopNav />
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg)" }}>
-          <Card>
-            <div style={{ padding: isMobile ? "32px 24px" : "44px 36px", textAlign: "center", maxWidth: 460 }}>
-              <div style={{ width: 56, height: 56, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, margin: "0 auto 16px" }}>⬡</div>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 19 : 22, fontWeight: 700, marginBottom: 8 }}>Set up the kiosk first</div>
-              <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 22 }}>
-                {data.kits.length === 0 && data.profiles.length === 0
-                  ? "The kiosk needs at least one team member and one kit before it can run a checkout flow."
-                  : data.kits.length === 0
-                  ? "The kiosk needs at least one kit before it can run a checkout flow."
-                  : "The kiosk needs at least one team member before it can run a checkout flow."}
+        <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "20px 14px" : "40px 28px", background: "var(--bg)" }}>
+          <div style={{ maxWidth: 620, margin: "0 auto" }}>
+            <Card>
+              <div style={{ padding: isMobile ? "28px 20px" : "36px 32px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+                  <div style={{ width: 48, height: 48, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>⬡</div>
+                  <div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--acc)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Kiosk setup</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 20 : 24, fontWeight: 700, letterSpacing: -0.5 }}>Finish setup to enable checkouts</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 22 }}>
+                  The Kiosk is the in-shop checkout terminal. It runs on a tablet at the cage door, lets crew scan their badge or pick their name, and walks them through the gear they&apos;re taking. Before it can run, your workspace needs:
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+                  {/* Team check */}
+                  <div style={{
+                    padding: "14px 16px", borderRadius: 8,
+                    background: "var(--s2)",
+                    border: `1px solid ${teamReady ? "rgba(74,222,128,0.3)" : "var(--b1)"}`,
+                    display: "flex", alignItems: "flex-start", gap: 12,
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                      background: teamReady ? "rgba(74,222,128,0.12)" : "var(--s3)",
+                      color: teamReady ? "var(--green)" : "var(--t3)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 700,
+                    }}>{teamReady ? "✓" : "1"}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--t1)", marginBottom: 2 }}>
+                        At least one team member
+                        {teamReady && <span style={{ color: "var(--green)", fontFamily: "'DM Mono',monospace", fontSize: 11, marginLeft: 8 }}>· {data.profiles.length} added</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono',monospace", lineHeight: 1.5, marginBottom: teamReady ? 0 : 10 }}>
+                        Crew, freelancers, or guest token holders. The kiosk shows their name when they tap or scan in.
+                      </div>
+                      {!teamReady && (
+                        <Link href="/dashboard" style={{
+                          display: "inline-block", padding: "8px 14px", borderRadius: 6,
+                          background: "var(--acc)", color: "var(--bg)",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 500,
+                          textDecoration: "none", minHeight: 36,
+                        }}>Add team member →</Link>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Kits check */}
+                  <div style={{
+                    padding: "14px 16px", borderRadius: 8,
+                    background: "var(--s2)",
+                    border: `1px solid ${kitsReady ? "rgba(74,222,128,0.3)" : "var(--b1)"}`,
+                    display: "flex", alignItems: "flex-start", gap: 12,
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                      background: kitsReady ? "rgba(74,222,128,0.12)" : "var(--s3)",
+                      color: kitsReady ? "var(--green)" : "var(--t3)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 700,
+                    }}>{kitsReady ? "✓" : "2"}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--t1)", marginBottom: 2 }}>
+                        At least one kit
+                        {kitsReady && <span style={{ color: "var(--green)", fontFamily: "'DM Mono',monospace", fontSize: 11, marginLeft: 8 }}>· {data.kits.length} built</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono',monospace", lineHeight: 1.5, marginBottom: kitsReady ? 0 : 10 }}>
+                        Kits group related assets together (e.g. &quot;Camera Kit A&quot; with body, lenses, and monitor). The kiosk lets crew check out whole kits in one tap instead of scanning each item.
+                      </div>
+                      {!kitsReady && data.assets.length === 0 && (
+                        <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "'DM Mono',monospace", lineHeight: 1.5, marginBottom: 10 }}>
+                          You&apos;ll need to add some assets first — kits are made of assets.
+                        </div>
+                      )}
+                      {!kitsReady && (
+                        <Link href="/dashboard" style={{
+                          display: "inline-block", padding: "8px 14px", borderRadius: 6,
+                          background: "var(--acc)", color: "var(--bg)",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 500,
+                          textDecoration: "none", minHeight: 36,
+                        }}>{data.assets.length === 0 ? "Add assets first →" : "Build a kit →"}</Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: "12px 14px",
+                  background: "rgba(90,160,240,0.06)",
+                  border: "1px solid rgba(90,160,240,0.2)",
+                  borderRadius: 7,
+                  fontSize: 11, color: "var(--blue)",
+                  fontFamily: "'DM Mono',monospace",
+                  lineHeight: 1.5,
+                }}>
+                  <strong style={{ color: "var(--t1)" }}>Tip:</strong> Want to see a fully working kiosk now? Switch to the Demo workspace using the chip in the top right.
+                </div>
               </div>
-              <Link href="/dashboard" style={{
-                display: "inline-block",
-                background: "var(--acc)", color: "var(--bg)", border: "none",
-                padding: "12px 24px", borderRadius: 7,
-                fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700,
-                textDecoration: "none", minHeight: 44,
-              }}>Go to dashboard →</Link>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -204,7 +288,14 @@ export default function KioskPage() {
 
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>Select your shoot</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {SHOOTS.map(s => (
+                  {/* Filter to active + scheduled shoots, plus a general use fallback */}
+                  {[
+                    ...data.shoots.filter(s => s.status === "active" || s.status === "scheduled"),
+                    {
+                      id: "general", title: "General use / no shoot", client: "Ad hoc",
+                      startsAt: "", assignedTeam: [], assignedKits: [], status: "scheduled" as const,
+                    } as Shoot,
+                  ].map(s => (
                     <button key={s.id} onClick={() => selectShoot(s)} style={{
                       background: "var(--s2)",
                       border: `1px solid ${shoot?.id === s.id ? "var(--acc)" : "var(--b1)"}`,
@@ -215,7 +306,9 @@ export default function KioskPage() {
                       minHeight: 56,
                     }}>
                       <div style={{ fontSize: 14, fontWeight: 500, color: "var(--t1)" }}>{s.title}</div>
-                      {s.client && <div style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)", marginTop: 3 }}>{s.client}{s.when ? ` · ${s.when}` : ""}</div>}
+                      {s.client && <div style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)", marginTop: 3 }}>
+                        {s.client}{s.startsAt ? ` · ${s.startsAt}` : ""}
+                      </div>}
                     </button>
                   ))}
                 </div>

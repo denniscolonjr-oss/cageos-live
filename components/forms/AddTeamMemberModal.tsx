@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { useWorkspace, getInitials } from "@/lib/hooks/useWorkspace";
+import { toast } from "@/components/ui/Toast";
 import type { UserProfile } from "@/lib/data";
 
 const ROLES = [
@@ -64,6 +65,7 @@ export default function AddTeamMemberModal({ open, onClose }: { open: boolean; o
       certifications: [],
     };
     addProfile(profile);
+    toast(`${profile.name} added to your team`, { detail: `${profile.role} · ${profile.initials}` });
     reset();
     onClose();
   }

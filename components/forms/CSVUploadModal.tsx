@@ -1,7 +1,8 @@
 "use client";
 import { useState, useRef } from "react";
 import Modal from "@/components/ui/Modal";
-import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useWorkspace, nextBarcode } from "@/lib/hooks/useWorkspace";
+import { toast } from "@/components/ui/Toast";
 import type { Asset } from "@/lib/data";
 
 interface ParsedRow {
@@ -81,21 +82,31 @@ function parseCSV(text: string): { headers: string[]; rows: ParsedRow[] } {
   return { headers, rows };
 }
 
-type Stage = "upload" | "map" | "preview" | "done";
+type Stage = "upload" | "map" | "preview" | "filters" | "done";
+
+const FILTER_OPTIONS: { key: string; label: string }[] = [
+  { key: "category", label: "Category" },
+  { key: "make", label: "Make" },
+  { key: "model", label: "Model" },
+  { key: "location", label: "Location" },
+  { key: "status", label: "Status" },
+];
 
 export default function CSVUploadModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { addAssets, data } = useWorkspace();
+  const { addAssets, data, setFilterableFields } = useWorkspace();
   const [stage, setStage] = useState<Stage>("upload");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  const [chosenFilters, setChosenFilters] = useState<Set<string>>(new Set(data.filterableFields));
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   function reset() {
     setStage("upload"); setHeaders([]); setRows([]); setMapping({}); setError(null); setImportedCount(0);
+    setChosenFilters(new Set(data.filterableFields));
   }
 
   function handleClose() { reset(); onClose(); }
@@ -140,16 +151,13 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
     const nameCol = mapping["name"];
     if (!nameCol) { setError("You must map at least the 'Asset name' field."); return; }
 
+    const prefix = data.barcodePrefix || "AST";
     const existingBarcodes = new Set(data.assets.map(a => a.barcode));
     const newAssets: Asset[] = [];
-    let nextNum = 1;
-    if (data.assets.length > 0) {
-      const nums = data.assets.map(a => {
-        const m = a.barcode.match(/MMG-(\d+)/);
-        return m ? parseInt(m[1], 10) : 0;
-      });
-      nextNum = Math.max(...nums, 0) + 1;
-    }
+
+    // Seed the next-number using the existing nextBarcode helper, then increment locally
+    let seedBarcode = nextBarcode(data.assets, prefix);
+    let nextNum = parseInt(seedBarcode.split("-")[1] ?? "1", 10);
 
     for (const row of rows) {
       const name = (row[nameCol] || "").trim();
@@ -157,7 +165,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
 
       let barcode = mapping["barcode"] ? (row[mapping["barcode"]] || "").trim() : "";
       if (!barcode || existingBarcodes.has(barcode)) {
-        barcode = `MMG-${String(nextNum++).padStart(7, "0")}`;
+        barcode = `${prefix}-${String(nextNum++).padStart(7, "0")}`;
       }
       existingBarcodes.add(barcode);
 
@@ -181,11 +189,27 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
         serialNumber: mapping["serial"] ? (row[mapping["serial"]] || "").trim() : null,
         serviceFlag: null,
       });
+      // Suppress unused seedBarcode warning
+      void seedBarcode;
     }
 
     addAssets(newAssets);
     setImportedCount(newAssets.length);
+    setStage("filters");
+  }
+
+  function commitFilters() {
+    setFilterableFields(Array.from(chosenFilters));
     setStage("done");
+    toast(`${importedCount} asset${importedCount === 1 ? "" : "s"} imported`, {
+      detail: chosenFilters.size > 0 ? `Filters: ${Array.from(chosenFilters).join(", ")}` : undefined,
+    });
+  }
+
+  function toggleFilter(key: string) {
+    const next = new Set(chosenFilters);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setChosenFilters(next);
   }
 
   const inputStyle = {
@@ -335,6 +359,59 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
               fontSize: 14, fontWeight: 700, minHeight: 44,
             }}>
               Import {rows.length} assets
+            </button>
+          </div>
+        </div>
+      )}
+
+      {stage === "filters" && (
+        <div>
+          <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.5, marginBottom: 6 }}>
+            Almost done. Which fields should be <strong style={{ color: "var(--t1)" }}>sortable filters</strong> on the assets page?
+          </div>
+          <div style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginBottom: 14 }}>
+            Pick the columns your team will want to slice by. You can change this later in Settings.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+            {FILTER_OPTIONS.map(opt => {
+              const active = chosenFilters.has(opt.key);
+              return (
+                <label key={opt.key} onClick={() => toggleFilter(opt.key)} style={{
+                  padding: "12px 14px",
+                  background: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                  border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 10,
+                  minHeight: 44,
+                }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: 4,
+                    border: `1.5px solid ${active ? "var(--acc)" : "var(--b2)"}`,
+                    background: active ? "var(--acc)" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                    color: "var(--bg)", fontSize: 11, fontWeight: 700,
+                  }}>{active && "✓"}</div>
+                  <div style={{ fontSize: 13, color: "var(--t1)" }}>{opt.label}</div>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
+            <button onClick={() => { setChosenFilters(new Set()); commitFilters(); }} style={{
+              flex: 1, padding: "12px 18px", borderRadius: 7,
+              background: "transparent", border: "1px solid var(--b1)",
+              color: "var(--t2)", cursor: "pointer",
+              fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44,
+            }}>Skip</button>
+            <button onClick={commitFilters} style={{
+              flex: 2, padding: "12px 18px", borderRadius: 7,
+              background: "var(--acc)", border: "none", color: "var(--bg)",
+              cursor: "pointer", fontFamily: "'Syne',sans-serif",
+              fontSize: 14, fontWeight: 700, minHeight: 44,
+            }}>
+              Save filters{chosenFilters.size > 0 ? ` (${chosenFilters.size})` : ""}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { useWorkspace, nextBarcode } from "@/lib/hooks/useWorkspace";
+import { toast } from "@/components/ui/Toast";
 import type { Asset } from "@/lib/data";
 
 const CATEGORIES = ["Video", "Audio", "Lighting", "Grip", "Power", "Misc Prod", "IT / Network"];
@@ -18,8 +19,8 @@ export default function AddAssetModal({ open, onClose }: { open: boolean; onClos
   const [cost, setCost] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Auto-suggest barcode when modal opens
-  const suggestedBarcode = nextBarcode(data.assets);
+  // Auto-suggest barcode using the workspace's configured prefix
+  const suggestedBarcode = nextBarcode(data.assets, data.barcodePrefix);
 
   function reset() {
     setName(""); setBarcode(""); setCategory("Video"); setMake(""); setModel("");
@@ -49,6 +50,7 @@ export default function AddAssetModal({ open, onClose }: { open: boolean; onClos
       serviceFlag: null,
     };
     addAsset(asset);
+    toast(`${asset.name} added`, { detail: `Barcode ${asset.barcode}` });
     reset();
     setSubmitting(false);
     onClose();

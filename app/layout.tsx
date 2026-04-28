@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ToastHost from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: "CageOS — Production Equipment Tracking",
@@ -17,7 +18,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ height: "100vh", overflow: "hidden" }}>{children}</body>
+      <body style={{ height: "100vh", overflow: "hidden" }}>
+        {children}
+        <ToastHost />
+      </body>
     </html>
   );
 }

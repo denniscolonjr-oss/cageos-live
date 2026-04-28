@@ -9,13 +9,14 @@ import AddAssetModal from "@/components/forms/AddAssetModal";
 import AddKitModal from "@/components/forms/AddKitModal";
 import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
 import CSVUploadModal from "@/components/forms/CSVUploadModal";
+import AddShootModal from "@/components/forms/AddShootModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 
 const PAGES: Record<string, string> = {
   cage: "Cage status", checkouts: "Active checkouts",
-  assets: "All assets", kits: "Kits", flags: "Service flags",
-  settings: "Settings", schedule: "Shoot schedule",
+  assets: "All assets", kits: "Kits", shoots: "Shoots", flags: "Service flags",
+  settings: "Settings",
   badges: "Staff badges", guests: "Guest tokens",
   "kiosk-admin": "Kiosk devices", integrations: "Integrations",
   audit: "Audit log", billing: "Billing",
@@ -23,24 +24,73 @@ const PAGES: Record<string, string> = {
 
 export default function DashboardPage() {
   const isMobile = useIsMobile();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, resetWorkspace } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, resetWorkspace, setBarcodePrefix, setFilterableFields } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | null>(null);
+  const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | "shoot" | null>(null);
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
-  const filteredAssets = data.assets.filter(a => {
-    const matchFilter =
-      assetFilter === "all" ? true :
-      assetFilter === "out" ? a.status === "out" :
-      assetFilter === "flagged" ? a.status === "flagged" :
-      assetFilter === "in" ? a.status === "in" : true;
-    const matchSearch = search === "" ||
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.barcode.toLowerCase().includes(search.toLowerCase());
-    return matchFilter && matchSearch;
-  });
+  function clearColumnFilter(field: string) {
+    setColumnFilters(prev => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function toggleSort(field: string) {
+    if (sortField === field) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
+
+  // Get unique values for a field — used to build filter dropdowns
+  function uniqueValues(field: string): string[] {
+    const set = new Set<string>();
+    for (const a of data.assets) {
+      const val = (a as unknown as Record<string, unknown>)[field];
+      if (typeof val === "string" && val.trim()) set.add(val.trim());
+    }
+    return Array.from(set).sort();
+  }
+
+  // Apply: search + status filter + per-column filters + sort
+  const filteredAssets = (() => {
+    let list = data.assets.filter(a => {
+      const matchStatus =
+        assetFilter === "all" ? true :
+        assetFilter === "out" ? a.status === "out" :
+        assetFilter === "flagged" ? a.status === "flagged" :
+        assetFilter === "in" ? a.status === "in" : true;
+      const matchSearch = search === "" ||
+        a.name.toLowerCase().includes(search.toLowerCase()) ||
+        a.barcode.toLowerCase().includes(search.toLowerCase());
+      const matchColumns = Object.entries(columnFilters).every(([field, val]) => {
+        if (!val) return true;
+        const fieldVal = (a as unknown as Record<string, unknown>)[field];
+        return typeof fieldVal === "string" && fieldVal === val;
+      });
+      return matchStatus && matchSearch && matchColumns;
+    });
+    // Sort
+    list = [...list].sort((a, b) => {
+      const aVal = (a as unknown as Record<string, unknown>)[sortField];
+      const bVal = (b as unknown as Record<string, unknown>)[sortField];
+      const aStr = aVal == null ? "" : String(aVal).toLowerCase();
+      const bStr = bVal == null ? "" : String(bVal).toLowerCase();
+      if (aStr < bStr) return sortDir === "asc" ? -1 : 1;
+      if (aStr > bStr) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return list;
+  })();
 
   type SidebarItem = { label: string; key: string; count: number | null; countStyle: string | null; action?: string };
   const SIDEBAR: { section: string; items: SidebarItem[] }[] = [
@@ -51,12 +101,14 @@ export default function DashboardPage() {
     { section: "Inventory", items: [
       { label: "All assets", key: "assets", count: data.assets.length || null, countStyle: null },
       { label: "Kits", key: "kits", count: data.kits.length || null, countStyle: null },
+      { label: "Shoots", key: "shoots", count: data.shoots.length || null, countStyle: null },
       { label: "Service flags", key: "flags", count: stats.serviceFlags || null, countStyle: stats.serviceFlags > 0 ? "alert" : null },
     ]},
     { section: "Add", items: [
       { label: "+ Asset", key: "_asset", count: null, countStyle: null, action: "asset" },
       { label: "+ Build kit", key: "_kit", count: null, countStyle: null, action: "kit" },
       { label: "+ Team member", key: "_team", count: null, countStyle: null, action: "team" },
+      { label: "+ Schedule shoot", key: "_shoot", count: null, countStyle: null, action: "shoot" },
       { label: "↑ Upload CSV", key: "_csv", count: null, countStyle: null, action: "csv" },
     ]},
     { section: "Admin", items: [
@@ -68,7 +120,7 @@ export default function DashboardPage() {
 
   function handleSidebarClick(item: SidebarItem) {
     if (item.action) {
-      setOpenModal(item.action as "asset" | "kit" | "team" | "csv");
+      setOpenModal(item.action as "asset" | "kit" | "team" | "csv" | "shoot");
     } else {
       setActiveKey(item.key);
     }
@@ -369,7 +421,7 @@ export default function DashboardPage() {
 
           {activeKey === "assets" && data.assets.length > 0 && (
             <div className="animate-fade-up">
-              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginBottom: 12 }}>
                 <input
                   placeholder="Search by name or barcode..."
                   value={search}
@@ -382,14 +434,87 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Per-column filter dropdowns */}
+              {data.filterableFields.length > 0 && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  {data.filterableFields.map(field => {
+                    const values = uniqueValues(field);
+                    if (values.length === 0) return null;
+                    const active = !!columnFilters[field];
+                    return (
+                      <div key={field} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <select
+                          value={columnFilters[field] || ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val) setColumnFilters({ ...columnFilters, [field]: val });
+                            else clearColumnFilter(field);
+                          }}
+                          style={{
+                            padding: "8px 28px 8px 12px",
+                            borderRadius: 6, fontSize: 12,
+                            fontFamily: "'DM Mono',monospace",
+                            border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
+                            background: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                            color: active ? "var(--acc)" : "var(--t2)",
+                            cursor: "pointer", minHeight: 36,
+                            appearance: "none",
+                            backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238c8880' stroke-width='1.5' fill='none'/></svg>\")",
+                            backgroundRepeat: "no-repeat",
+                            backgroundPosition: "right 10px center",
+                          }}
+                        >
+                          <option value="">{field.charAt(0).toUpperCase() + field.slice(1)}: all</option>
+                          {values.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
+                  {Object.keys(columnFilters).length > 0 && (
+                    <button onClick={() => setColumnFilters({})} style={{
+                      padding: "8px 14px", borderRadius: 6, fontSize: 12,
+                      fontFamily: "'DM Mono',monospace",
+                      background: "transparent", border: "1px solid var(--b1)",
+                      color: "var(--t3)", cursor: "pointer", minHeight: 36, whiteSpace: "nowrap",
+                    }}>Clear filters</button>
+                  )}
+                </div>
+              )}
+
               <Card>
                 <div className="scroll-x">
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 700 : "auto" }}>
                     <thead>
                       <tr>
-                        {["Asset","Barcode","Category","Status","Location","Kit","Service flag","Last user"].map(h => (
-                          <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid var(--b1)", fontWeight: 400, whiteSpace: "nowrap" }}>{h}</th>
-                        ))}
+                        {[
+                          { label: "Asset", field: "name" },
+                          { label: "Barcode", field: "barcode" },
+                          { label: "Category", field: "category" },
+                          { label: "Make", field: "make" },
+                          { label: "Status", field: "status" },
+                          { label: "Location", field: "location" },
+                          { label: "Kit", field: "kitId" },
+                          { label: "Last user", field: "lastUser" },
+                        ].map(h => {
+                          const isActive = sortField === h.field;
+                          return (
+                            <th key={h.field} onClick={() => toggleSort(h.field)} style={{
+                              padding: "10px 14px", textAlign: "left",
+                              fontSize: 10, fontFamily: "'DM Mono', monospace",
+                              color: isActive ? "var(--acc)" : "var(--t3)",
+                              letterSpacing: "0.05em", textTransform: "uppercase",
+                              borderBottom: "1px solid var(--b1)", fontWeight: 400,
+                              whiteSpace: "nowrap", cursor: "pointer",
+                              userSelect: "none",
+                            }}>
+                              {h.label}
+                              <span style={{ marginLeft: 5, opacity: isActive ? 1 : 0.3, fontSize: 9 }}>
+                                {isActive ? (sortDir === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
@@ -398,12 +523,10 @@ export default function DashboardPage() {
                           <td style={{ padding: "11px 14px", fontSize: 12 }}>{a.name}</td>
                           <td style={{ padding: "11px 14px", fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--t2)" }}>{a.barcode}</td>
                           <td style={{ padding: "11px 14px", fontSize: 11, color: "var(--t2)" }}>{a.category}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 11, color: "var(--t2)" }}>{a.make || "—"}</td>
                           <td style={{ padding: "11px 14px" }}><Badge variant={a.status === "in" ? "green" : a.status === "out" ? "amber" : "red"}>{a.status}</Badge></td>
                           <td style={{ padding: "11px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>{a.location || "—"}</td>
                           <td style={{ padding: "11px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>{a.kitId || "—"}</td>
-                          <td style={{ padding: "11px 14px" }}>
-                            {a.serviceFlag ? <Badge variant={a.serviceFlag.severity === "critical" ? "red" : "amber"}>{a.serviceFlag.severity}</Badge> : <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>}
-                          </td>
                           <td style={{ padding: "11px 14px", fontSize: 12 }}>{a.lastUser || "—"}</td>
                         </tr>
                       ))}
@@ -411,7 +534,7 @@ export default function DashboardPage() {
                   </table>
                 </div>
                 <div style={{ padding: "10px 16px", borderTop: "1px solid var(--b1)", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t3)" }}>
-                  {filteredAssets.length} of {data.assets.length} assets
+                  {filteredAssets.length} of {data.assets.length} assets · sorted by {sortField} ({sortDir})
                 </div>
               </Card>
             </div>
@@ -450,6 +573,112 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {activeKey === "shoots" && (
+            <div className="animate-fade-up">
+              {data.shoots.length === 0 ? (
+                <Card>
+                  <div style={{ padding: isMobile ? "32px 20px" : "44px 32px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
+                    <div style={{ width: 56, height: 56, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, margin: "0 auto 16px" }}>⬡</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 19 : 22, fontWeight: 700, marginBottom: 8 }}>No shoots scheduled yet</div>
+                    <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 22 }}>
+                      Shoots tie together a client, a date, your team, and the kits they&apos;ll need. Schedule one and the kiosk will surface it when crew check out gear.
+                    </div>
+                    {!isReadOnly && (
+                      <button onClick={() => setOpenModal("shoot")} style={{
+                        background: "var(--acc)", color: "var(--bg)", border: "none",
+                        padding: "12px 22px", borderRadius: 7,
+                        fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700,
+                        cursor: "pointer", minHeight: 44,
+                      }}>+ Schedule a shoot</button>
+                    )}
+                  </div>
+                </Card>
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(320px, 1fr))",
+                  gap: 12,
+                }}>
+                  {data.shoots.map(sh => {
+                    const lead = sh.leadInitials ? data.profiles.find(p => p.initials === sh.leadInitials) : null;
+                    const teamProfiles = sh.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
+                    const kits = sh.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
+                    const accent =
+                      sh.status === "active" ? "var(--green)" :
+                      sh.status === "scheduled" ? "var(--blue)" :
+                      sh.status === "completed" ? "var(--t3)" :
+                      "var(--red)";
+                    return (
+                      <Card key={sh.id} accentColor={accent}>
+                        <div style={{ padding: "16px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{sh.title}</div>
+                              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)" }}>{sh.client}</div>
+                            </div>
+                            <Badge variant={sh.status === "active" ? "green" : sh.status === "scheduled" ? "blue" : sh.status === "completed" ? "gray" : "red"}>{sh.status}</Badge>
+                          </div>
+
+                          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", marginBottom: 12, lineHeight: 1.5 }}>
+                            {sh.startsAt}{sh.endsAt ? ` → ${sh.endsAt}` : ""}
+                            {sh.location && <><br />📍 {sh.location}</>}
+                          </div>
+
+                          {teamProfiles.length > 0 && (
+                            <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
+                              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Team ({teamProfiles.length})</div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                                {teamProfiles.map(p => (
+                                  <Link key={p!.initials} href={`/profile/${p!.initials}`} style={{ textDecoration: "none" }}>
+                                    <div title={p!.name} style={{
+                                      display: "flex", alignItems: "center", gap: 5,
+                                      padding: "4px 8px 4px 4px", borderRadius: 14,
+                                      background: "var(--s2)", border: "1px solid var(--b1)",
+                                      cursor: "pointer",
+                                    }}>
+                                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: p!.color, flexShrink: 0 }}>{p!.initials}</div>
+                                      <span style={{ fontSize: 11, color: "var(--t2)" }}>
+                                        {p!.name.split(" ")[0]}
+                                        {sh.leadInitials === p!.initials && <span style={{ color: "var(--acc)", marginLeft: 4 }}>★</span>}
+                                      </span>
+                                    </div>
+                                  </Link>
+                                ))}
+                              </div>
+                              {lead && (
+                                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 6 }}>
+                                  ★ Lead: <span style={{ color: "var(--acc)" }}>{lead.name}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {kits.length > 0 && (
+                            <div style={{ paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
+                              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Kits ({kits.length})</div>
+                              {kits.map(k => (
+                                <div key={k!.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>
+                                  <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--b2)", flexShrink: 0 }} />
+                                  {k!.name}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {sh.notes && (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--b1)", fontSize: 11, color: "var(--t3)", lineHeight: 1.5 }}>
+                              {sh.notes}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeKey === "flags" && (
             <div className="animate-fade-up">
               <Card>
@@ -479,17 +708,96 @@ export default function DashboardPage() {
           )}
 
           {activeKey === "settings" && (
-            <div className="animate-fade-up">
+            <div className="animate-fade-up" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Card>
                 <div style={{ padding: 20 }}>
                   <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Workspace</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 16 }}>
-                    Currently: {mode === "demo" ? "Demo (MMG)" : data.orgName} · {data.assets.length} assets · {data.profiles.length} team
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)" }}>
+                    Currently: {mode === "demo" ? "Demo (MMG)" : data.orgName} · {data.assets.length} assets · {data.profiles.length} team · {data.kits.length} kits
                   </div>
-                  {!isReadOnly && (
+                </div>
+              </Card>
+
+              {!isReadOnly && (
+                <Card>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Barcode prefix</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
+                      Used when auto-generating barcodes. Letters and numbers only.
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        defaultValue={data.barcodePrefix}
+                        onBlur={e => {
+                          const v = e.target.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+                          if (v && v !== data.barcodePrefix) setBarcodePrefix(v);
+                        }}
+                        maxLength={6}
+                        style={{
+                          width: 110, background: "var(--s2)", border: "1px solid var(--b1)",
+                          borderRadius: 7, padding: "10px 12px",
+                          color: "var(--t1)", outline: "none",
+                          fontFamily: "'DM Mono',monospace", fontSize: 14, minHeight: 44,
+                          textTransform: "uppercase",
+                        }}
+                      />
+                      <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "var(--t3)" }}>
+                        next: {data.barcodePrefix}-{String((data.assets.length + 1)).padStart(7, "0")}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {!isReadOnly && (
+                <Card>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Asset filters</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
+                      Which fields appear as filter dropdowns on the assets page.
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {[
+                        { key: "category", label: "Category" },
+                        { key: "make", label: "Make" },
+                        { key: "model", label: "Model" },
+                        { key: "location", label: "Location" },
+                        { key: "status", label: "Status" },
+                      ].map(opt => {
+                        const active = data.filterableFields.includes(opt.key);
+                        return (
+                          <button key={opt.key} onClick={() => {
+                            const next = active
+                              ? data.filterableFields.filter(f => f !== opt.key)
+                              : [...data.filterableFields, opt.key];
+                            setFilterableFields(next);
+                          }} style={{
+                            padding: "8px 14px", borderRadius: 6, fontSize: 12,
+                            fontFamily: "'DM Mono',monospace",
+                            border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
+                            background: active ? "rgba(226,245,92,0.06)" : "transparent",
+                            color: active ? "var(--acc)" : "var(--t3)",
+                            cursor: "pointer", minHeight: 36,
+                          }}>
+                            {active ? "✓ " : ""}{opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {!isReadOnly && (
+                <Card>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Reset</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
+                      Permanently delete all assets, kits, team members, and shoots in this workspace.
+                    </div>
                     <button
                       onClick={() => {
-                        if (confirm("Reset your workspace? All assets, kits, and team members you've added will be deleted.")) {
+                        if (confirm("Reset your workspace? This can't be undone.")) {
                           resetWorkspace();
                         }
                       }}
@@ -498,13 +806,13 @@ export default function DashboardPage() {
                         border: "1px solid var(--red)", color: "var(--red)", cursor: "pointer",
                         fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
                       }}>Reset workspace</button>
-                  )}
-                </div>
-              </Card>
+                  </div>
+                </Card>
+              )}
             </div>
           )}
 
-          {["schedule","badges","guests","kiosk-admin","integrations","audit","billing"].includes(activeKey) && (
+          {["badges","guests","kiosk-admin","integrations","audit","billing"].includes(activeKey) && (
             <div className="animate-fade-up">
               <Card>
                 <div style={{ padding: 48, textAlign: "center" }}>
@@ -522,6 +830,7 @@ export default function DashboardPage() {
       <AddKitModal open={openModal === "kit"} onClose={() => setOpenModal(null)} />
       <AddTeamMemberModal open={openModal === "team"} onClose={() => setOpenModal(null)} />
       <CSVUploadModal open={openModal === "csv"} onClose={() => setOpenModal(null)} />
+      <AddShootModal open={openModal === "shoot"} onClose={() => setOpenModal(null)} />
     </div>
   );
 }
