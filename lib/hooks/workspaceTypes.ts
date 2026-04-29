@@ -60,6 +60,31 @@ export interface ActiveCheckout {
   returnedAtISO?: string;
 }
 
+export type AuditCategory =
+  | "checkout"
+  | "return"
+  | "asset_added"
+  | "kit_added"
+  | "team_added"
+  | "shoot_scheduled"
+  | "shoot_updated"
+  | "shoot_status_changed"
+  | "shoot_deleted"
+  | "manager_mode";
+
+export interface AuditEvent {
+  id: string;
+  /** ISO UTC timestamp */
+  timestamp: string;
+  category: AuditCategory;
+  /** Who performed it. For v1 with no auth, this is "—" or the actor name (e.g., kiosk user) */
+  actor: string;
+  /** Short summary, e.g. "Checked out Venice Cinema Kit" */
+  summary: string;
+  /** Optional secondary line, e.g. "for DOI Interview B-Roll" */
+  detail?: string;
+}
+
 export interface WorkspaceData {
   assets: Asset[];
   kits: Kit[];
@@ -68,6 +93,7 @@ export interface WorkspaceData {
   alerts: Alert[];
   profiles: UserProfile[];
   shoots: Shoot[];
+  events: AuditEvent[];
   orgName: string;
   orgLocation: string;
   barcodePrefix: string;

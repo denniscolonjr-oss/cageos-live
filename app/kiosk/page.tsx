@@ -267,6 +267,25 @@ export default function KioskPage() {
                                 toast("Demo mode is read-only", { variant: "info" });
                                 return;
                               }
+                              // If this checkout is tied to a shoot whose end is in the future, ask first.
+                              const activeCheckout = co as ActiveCheckout;
+                              if (activeCheckout.shootId && activeCheckout.shootId !== "general") {
+                                const shoot = data.shoots.find(s => s.id === activeCheckout.shootId);
+                                const now = new Date();
+                                if (shoot && (shoot.status === "active" || shoot.status === "scheduled")) {
+                                  // Use endsAt if set, else startsAt as a proxy
+                                  const endRef = shoot.endsAt || shoot.startsAt;
+                                  if (endRef) {
+                                    const endDate = new Date(endRef);
+                                    if (!isNaN(endDate.getTime()) && endDate > now) {
+                                      const ok = confirm(
+                                        `This kit is still scheduled for "${shoot.title}" until ${formatShootRange(shoot.startsAt, shoot.endsAt, data.timezone)}.\n\nDo you still want to return it now?`
+                                      );
+                                      if (!ok) return;
+                                    }
+                                  }
+                                }
+                              }
                               returnCheckout(co.id);
                               toast(`Returned: ${co.kits.join(" · ")}`, { detail: `from ${co.shoot}` });
                             }}

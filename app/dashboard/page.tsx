@@ -10,9 +10,11 @@ import AddKitModal from "@/components/forms/AddKitModal";
 import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
 import CSVUploadModal from "@/components/forms/CSVUploadModal";
 import AddShootModal from "@/components/forms/AddShootModal";
+import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
+import type { Shoot } from "@/lib/hooks/workspaceTypes";
 
 const PAGES: Record<string, string> = {
   cage: "Cage status", checkouts: "Active checkouts",
@@ -25,12 +27,14 @@ const PAGES: Record<string, string> = {
 
 export default function DashboardPage() {
   const isMobile = useIsMobile();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | "shoot" | null>(null);
+  const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
+  const [auditFilter, setAuditFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -97,7 +101,7 @@ export default function DashboardPage() {
   const SIDEBAR: { section: string; items: SidebarItem[] }[] = [
     { section: "Overview", items: [
       { label: "Cage status", key: "cage", count: null, countStyle: null },
-      { label: "Active checkouts", key: "checkouts", count: data.checkouts.length || null, countStyle: data.checkouts.some(c => c.status === "overdue") ? "warn" : null },
+      { label: "Active checkouts", key: "checkouts", count: activeCheckouts.length || null, countStyle: activeCheckouts.some(c => c.status === "overdue") ? "warn" : null },
     ]},
     { section: "Inventory", items: [
       { label: "All assets", key: "assets", count: data.assets.length || null, countStyle: null },
@@ -114,8 +118,9 @@ export default function DashboardPage() {
     ]},
     { section: "Admin", items: [
       { label: "Settings", key: "settings", count: null, countStyle: null },
-      { label: "Audit log", key: "audit", count: null, countStyle: null },
-      { label: "Billing", key: "billing", count: null, countStyle: null },
+      { label: "Audit log", key: "audit", count: data.events.length || null, countStyle: null },
+      // Billing is a placeholder until real billing exists — show only in demo to signal roadmap
+      ...(mode === "demo" ? [{ label: "Billing", key: "billing", count: null, countStyle: null }] : []),
     ]},
   ];
 
@@ -192,7 +197,7 @@ export default function DashboardPage() {
           }}>☰ All</button>
           {[
             { key: "cage", label: "Cage" },
-            { key: "checkouts", label: "Checkouts", badge: data.checkouts.length },
+            { key: "checkouts", label: "Checkouts", badge: activeCheckouts.length },
             { key: "assets", label: "Assets", badge: data.assets.length },
             { key: "kits", label: "Kits", badge: data.kits.length },
             { key: "flags", label: "Flags", badge: stats.serviceFlags, badgeColor: "var(--red)" },
@@ -288,7 +293,7 @@ export default function DashboardPage() {
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 8 : 10, marginBottom: 16 }}>
                 {[
                   { label: "Checked in", value: stats.checkedIn, sub: `of ${stats.totalAssets}`, color: "var(--green)" },
-                  { label: "Checked out", value: stats.checkedOut, sub: data.checkouts.length > 0 ? `${data.checkouts.length} active` : "—", color: "var(--amber)" },
+                  { label: "Checked out", value: stats.checkedOut, sub: activeCheckouts.length > 0 ? `${activeCheckouts.length} active` : "—", color: "var(--amber)" },
                   { label: "Service flags", value: stats.serviceFlags, sub: stats.criticalFlags > 0 ? `${stats.criticalFlags} critical` : "all clear", color: stats.serviceFlags > 0 ? "var(--red)" : "var(--green)" },
                   { label: "Kit drift", value: stats.kitDriftEvents, sub: stats.kitDriftEvents > 0 ? "unresolved" : "none", color: stats.kitDriftEvents > 0 ? "var(--blue)" : "var(--green)" },
                 ].map(s => (
@@ -304,7 +309,7 @@ export default function DashboardPage() {
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 310px", gap: 14 }}>
                 <div>
-                  {data.checkouts.length > 0 ? (
+                  {activeCheckouts.length > 0 ? (
                     <Card style={{ marginBottom: 14 }}>
                       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 600 }}>Live checkouts</div>
@@ -312,7 +317,7 @@ export default function DashboardPage() {
                           <span className="animate-live" style={{ width: 5, height: 5, background: "var(--green)", borderRadius: "50%", display: "inline-block" }} />LIVE
                         </div>
                       </div>
-                      {data.checkouts.map(co => (
+                      {activeCheckouts.map(co => (
                         <Link key={co.id} href={`/profile/${co.initials}`} style={{ textDecoration: "none", color: "inherit" }}>
                           <div style={{
                             padding: isMobile ? "13px 16px" : "11px 16px", borderBottom: "1px solid var(--b1)",
@@ -372,7 +377,13 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredAssets.slice(0, 12).map(a => (
+                            {[...data.assets].sort((a, b) => {
+                              if (!a.lastUpdated && !b.lastUpdated) return 0;
+                              if (!a.lastUpdated) return 1;
+                              if (!b.lastUpdated) return -1;
+                              // lastUpdated is a free-form label like "9:14 AM" — compare as strings descending
+                              return b.lastUpdated.localeCompare(a.lastUpdated);
+                            }).slice(0, 12).map(a => (
                               <tr key={a.id} style={{ borderBottom: "1px solid var(--b1)" }}>
                                 <td style={{ padding: "11px 14px", fontSize: 12 }}>
                                   {a.name}
@@ -612,7 +623,8 @@ export default function DashboardPage() {
                       sh.status === "completed" ? "var(--t3)" :
                       "var(--red)";
                     return (
-                      <Card key={sh.id} accentColor={accent}>
+                      <div key={sh.id} onClick={() => setSelectedShoot(sh)} style={{ cursor: "pointer" }}>
+                      <Card accentColor={accent}>
                         <div style={{ padding: "16px 18px" }}>
                           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
@@ -675,6 +687,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </Card>
+                      </div>
                     );
                   })}
                 </div>
@@ -866,7 +879,122 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {["badges","guests","kiosk-admin","integrations","audit","billing"].includes(activeKey) && (
+          {activeKey === "audit" && (
+            <div className="animate-fade-up">
+              {(() => {
+                const CATEGORIES: { key: string; label: string }[] = [
+                  { key: "all", label: "All events" },
+                  { key: "checkout", label: "Checkouts" },
+                  { key: "return", label: "Returns" },
+                  { key: "shoot_scheduled", label: "Shoots scheduled" },
+                  { key: "shoot_status_changed", label: "Shoot status" },
+                  { key: "shoot_updated", label: "Shoot edits" },
+                  { key: "shoot_deleted", label: "Shoot deletions" },
+                  { key: "asset_added", label: "Assets added" },
+                  { key: "kit_added", label: "Kits built" },
+                  { key: "team_added", label: "Team added" },
+                  { key: "manager_mode", label: "Manager mode" },
+                ];
+                const filtered = auditFilter === "all"
+                  ? data.events
+                  : data.events.filter(e => e.category === auditFilter);
+                const categoryColor = (c: string) => {
+                  if (c === "checkout") return "var(--amber)";
+                  if (c === "return") return "var(--green)";
+                  if (c.startsWith("shoot")) return "var(--blue)";
+                  if (c === "asset_added" || c === "kit_added") return "var(--acc)";
+                  if (c === "team_added") return "var(--purple)";
+                  return "var(--t3)";
+                };
+
+                return (
+                  <>
+                    <div className="scroll-x" style={{ display: "flex", gap: 6, marginBottom: 14, paddingBottom: 4 }}>
+                      {CATEGORIES.map(c => {
+                        const isActive = auditFilter === c.key;
+                        const count = c.key === "all" ? data.events.length : data.events.filter(e => e.category === c.key).length;
+                        return (
+                          <button key={c.key} onClick={() => setAuditFilter(c.key)} style={{
+                            padding: "8px 14px", borderRadius: 6, fontSize: 11,
+                            fontFamily: "'DM Mono',monospace",
+                            border: `1px solid ${isActive ? "var(--acc)" : "var(--b1)"}`,
+                            background: isActive ? "rgba(226,245,92,0.08)" : "transparent",
+                            color: isActive ? "var(--acc)" : "var(--t2)",
+                            cursor: "pointer", flexShrink: 0, minHeight: 36, whiteSpace: "nowrap",
+                          }}>
+                            {c.label}{count > 0 && <span style={{ marginLeft: 6, color: "var(--t3)" }}>{count}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {filtered.length === 0 ? (
+                      <Card>
+                        <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                          <div style={{ fontSize: 28, opacity: 0.4, marginBottom: 10 }}>⬡</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
+                            {auditFilter === "all" ? "No events yet" : "No events in this category"}
+                          </div>
+                          <div style={{ fontSize: 12, color: "var(--t2)" }}>
+                            {auditFilter === "all"
+                              ? "Activity will populate here as you add assets, build kits, schedule shoots, and run kiosk transactions."
+                              : "Try a different category."}
+                          </div>
+                        </div>
+                      </Card>
+                    ) : (
+                      <Card>
+                        {filtered.map((e, i) => {
+                          const ts = new Date(e.timestamp);
+                          const dt = new Intl.DateTimeFormat("en-US", {
+                            month: "short", day: "numeric",
+                            hour: "numeric", minute: "2-digit",
+                          }).format(ts);
+                          return (
+                            <div key={e.id} style={{
+                              padding: "13px 16px",
+                              borderBottom: i < filtered.length - 1 ? "1px solid var(--b1)" : "none",
+                              display: "flex", alignItems: "flex-start", gap: 12,
+                            }}>
+                              <div style={{
+                                width: 6, alignSelf: "stretch", flexShrink: 0,
+                                background: categoryColor(e.category), borderRadius: 2,
+                                marginTop: 2, marginBottom: 2,
+                              }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 3 }}>
+                                  <div style={{ fontSize: 13, color: "var(--t1)" }}>{e.summary}</div>
+                                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap" }}>{dt}</div>
+                                </div>
+                                {e.detail && (
+                                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 3 }}>{e.detail}</div>
+                                )}
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <span style={{
+                                    fontSize: 9, padding: "1px 6px", borderRadius: 3,
+                                    fontFamily: "'DM Mono',monospace",
+                                    textTransform: "uppercase", letterSpacing: "0.05em",
+                                    background: "var(--s2)",
+                                    color: categoryColor(e.category),
+                                  }}>{e.category.replace(/_/g, " ")}</span>
+                                  <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>{e.actor}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div style={{ padding: "10px 16px", borderTop: "1px solid var(--b1)", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t3)" }}>
+                          {filtered.length} event{filtered.length === 1 ? "" : "s"} {auditFilter !== "all" ? `· filtered to ${CATEGORIES.find(c => c.key === auditFilter)?.label}` : ""}
+                        </div>
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {["badges","guests","kiosk-admin","integrations","billing"].includes(activeKey) && (
             <div className="animate-fade-up">
               <Card>
                 <div style={{ padding: 48, textAlign: "center" }}>
@@ -885,6 +1013,7 @@ export default function DashboardPage() {
       <AddTeamMemberModal open={openModal === "team"} onClose={() => setOpenModal(null)} />
       <CSVUploadModal open={openModal === "csv"} onClose={() => setOpenModal(null)} />
       <AddShootModal open={openModal === "shoot"} onClose={() => setOpenModal(null)} />
+      <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} shoot={selectedShoot} />
     </div>
   );
 }

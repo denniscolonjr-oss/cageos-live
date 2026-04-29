@@ -1,5 +1,5 @@
 "use client";
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
@@ -8,6 +8,7 @@ import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { formatShootRange } from "@/lib/timezone";
+import AssignToShootModal from "@/components/forms/AssignToShootModal";
 
 const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
   novice: { pct: 25, color: "var(--t3)" },
@@ -20,6 +21,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
   const isMobile = useIsMobile();
   const { data, hydrated } = useWorkspace();
   const { initials } = use(params);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   if (!hydrated) {
     return (
@@ -90,12 +92,33 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, width: isMobile ? "100%" : "auto" }}>
-              <button style={{ padding: "10px 14px", borderRadius: 6, fontSize: 12, background: "transparent", border: "1px solid var(--b1)", color: "var(--t2)", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", flex: isMobile ? 1 : "0 0 auto", minHeight: 40 }}>
-                Message
-              </button>
-              <button style={{ padding: "10px 14px", borderRadius: 6, fontSize: 12, background: "var(--acc)", color: "var(--bg)", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", fontWeight: 500, flex: isMobile ? 1 : "0 0 auto", minHeight: 40 }}>
-                Assign to shoot
-              </button>
+              {profile.email && (
+                <a
+                  href={`mailto:${profile.email}`}
+                  style={{
+                    padding: "10px 14px", borderRadius: 6, fontSize: 12,
+                    background: "transparent", border: "1px solid var(--b1)",
+                    color: "var(--t2)", cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                    flex: isMobile ? 1 : "0 0 auto", minHeight: 40,
+                    textDecoration: "none",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                  Message
+                </a>
+              )}
+              {data.managerMode && (
+                <button
+                  onClick={() => setAssignOpen(true)}
+                  style={{
+                    padding: "10px 14px", borderRadius: 6, fontSize: 12,
+                    background: "var(--acc)", color: "var(--bg)", border: "none",
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    fontWeight: 500, flex: isMobile ? 1 : "0 0 auto", minHeight: 40,
+                  }}>
+                  Assign to shoot
+                </button>
+              )}
             </div>
           </div>
 
@@ -342,6 +365,12 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
           </div>
         </div>
       </div>
+      <AssignToShootModal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        profileInitials={profile.initials}
+        profileName={profile.name}
+      />
     </div>
   );
 }

@@ -13,10 +13,10 @@ import {
 } from "@/lib/data";
 import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
 import type { StorageAdapter, ModeAdapter } from "@/lib/storage/StorageAdapter";
-import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working
-export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout };
+export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory };
 
 /**
  * Active storage adapter. To swap backends, replace this single line.
@@ -32,6 +32,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   alerts: [],
   profiles: [],
   shoots: [],
+  events: [],
   orgName: "Your Org",
   orgLocation: "—",
   barcodePrefix: "AST",
@@ -92,6 +93,21 @@ function buildDemoShoots(): Shoot[] {
   ];
 }
 
+function buildDemoEvents(): AuditEvent[] {
+  const now = Date.now();
+  function ago(mins: number): string { return new Date(now - mins * 60 * 1000).toISOString(); }
+  return [
+    { id: "ev-d1", timestamp: ago(8), category: "checkout", actor: "Dennis Colon Jr", summary: "Checked out Venice Cinema Kit", detail: "for DOI Interview B-Roll" },
+    { id: "ev-d2", timestamp: ago(12), category: "checkout", actor: "Tom Odom", summary: "Checked out Sound Devices MixPre 6", detail: "for DOI Interview B-Roll" },
+    { id: "ev-d3", timestamp: ago(34), category: "shoot_scheduled", actor: "Dennis Colon Jr", summary: "Scheduled Library Portrait Series", detail: "Library of Congress · tomorrow" },
+    { id: "ev-d4", timestamp: ago(67), category: "return", actor: "Brittany Smith", summary: "Returned Aputure 600x kit", detail: "from Studio Setup" },
+    { id: "ev-d5", timestamp: ago(124), category: "asset_added", actor: "Dennis Colon Jr", summary: "Added Sigma 85mm f/1.4 Art", detail: "MMG-0000412" },
+    { id: "ev-d6", timestamp: ago(245), category: "shoot_status_changed", actor: "Kevin Silverman", summary: "Marked DOI Interview B-Roll active" },
+    { id: "ev-d7", timestamp: ago(380), category: "team_added", actor: "Dennis Colon Jr", summary: "Added Joon Yi to team", detail: "Video Editor · JY" },
+    { id: "ev-d8", timestamp: ago(720), category: "kit_added", actor: "Dennis Colon Jr", summary: "Built Venice Cinema Kit", detail: "8 components · MMG-0000576" },
+  ];
+}
+
 function buildDemoWorkspace(): WorkspaceData {
   return {
     assets: DEMO_ASSETS,
@@ -100,6 +116,7 @@ function buildDemoWorkspace(): WorkspaceData {
     alerts: DEMO_ALERTS,
     profiles: DEMO_PROFILES,
     shoots: buildDemoShoots(),
+    events: buildDemoEvents(),
     orgName: "MMG Production",
     orgLocation: "DC",
     barcodePrefix: "MMG",
@@ -138,31 +155,62 @@ export function useWorkspace() {
     });
   }, []);
 
+  /** Append an audit event to data.events. Used internally by all auditable mutators. */
+  function appendEvent(d: WorkspaceData, category: AuditCategory, summary: string, opts?: { actor?: string; detail?: string }): WorkspaceData {
+    const evt: AuditEvent = {
+      id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      category,
+      actor: opts?.actor ?? "—",
+      summary,
+      detail: opts?.detail,
+    };
+    return { ...d, events: [evt, ...d.events] };
+  }
+
   // --- Asset / Kit / Profile / Shoot mutators ---
 
   const addAsset = useCallback((asset: Asset) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, assets: [...d.assets, asset] }));
+    updateUserData(d => appendEvent(
+      { ...d, assets: [...d.assets, asset] },
+      "asset_added", `Added ${asset.name}`, { detail: asset.barcode },
+    ));
   }, [isReadOnly, updateUserData]);
 
   const addAssets = useCallback((assets: Asset[]) => {
-    if (isReadOnly) return;
-    updateUserData(d => ({ ...d, assets: [...d.assets, ...assets] }));
+    if (isReadOnly || assets.length === 0) return;
+    updateUserData(d => appendEvent(
+      { ...d, assets: [...d.assets, ...assets] },
+      "asset_added", `Imported ${assets.length} asset${assets.length === 1 ? "" : "s"}`,
+      { detail: assets.length <= 3 ? assets.map(a => a.name).join(", ") : `${assets.slice(0, 3).map(a => a.name).join(", ")} +${assets.length - 3} more` },
+    ));
   }, [isReadOnly, updateUserData]);
 
   const addKit = useCallback((kit: Kit) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, kits: [...d.kits, kit] }));
+    updateUserData(d => appendEvent(
+      { ...d, kits: [...d.kits, kit] },
+      "kit_added", `Built ${kit.name}`,
+      { detail: `${kit.componentIds.length} component${kit.componentIds.length === 1 ? "" : "s"} · ${kit.barcode}` },
+    ));
   }, [isReadOnly, updateUserData]);
 
   const addProfile = useCallback((profile: UserProfile) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, profiles: [...d.profiles, profile] }));
+    updateUserData(d => appendEvent(
+      { ...d, profiles: [...d.profiles, profile] },
+      "team_added", `Added ${profile.name} to team`,
+      { detail: `${profile.role} · ${profile.initials}` },
+    ));
   }, [isReadOnly, updateUserData]);
 
   const addProfiles = useCallback((profiles: UserProfile[]) => {
-    if (isReadOnly) return;
-    updateUserData(d => ({ ...d, profiles: [...d.profiles, ...profiles] }));
+    if (isReadOnly || profiles.length === 0) return;
+    updateUserData(d => appendEvent(
+      { ...d, profiles: [...d.profiles, ...profiles] },
+      "team_added", `Added ${profiles.length} team member${profiles.length === 1 ? "" : "s"}`,
+    ));
   }, [isReadOnly, updateUserData]);
 
   const updateOrg = useCallback((orgName: string, orgLocation: string) => {
@@ -187,22 +235,44 @@ export function useWorkspace() {
 
   const setManagerMode = useCallback((on: boolean) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, managerMode: on }));
+    updateUserData(d => appendEvent(
+      { ...d, managerMode: on },
+      "manager_mode", on ? "Manager mode turned ON" : "Manager mode turned OFF",
+    ));
   }, [isReadOnly, updateUserData]);
 
   const addShoot = useCallback((shoot: Shoot) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, shoots: [...d.shoots, shoot] }));
+    updateUserData(d => appendEvent(
+      { ...d, shoots: [...d.shoots, shoot] },
+      "shoot_scheduled", `Scheduled ${shoot.title}`,
+      { detail: `${shoot.client} · ${shoot.assignedTeam.length} team · ${shoot.assignedKits.length} kit${shoot.assignedKits.length === 1 ? "" : "s"}` },
+    ));
   }, [isReadOnly, updateUserData]);
 
   const updateShoot = useCallback((id: string, patch: Partial<Shoot>) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, shoots: d.shoots.map(s => s.id === id ? { ...s, ...patch } : s) }));
+    updateUserData(d => {
+      const before = d.shoots.find(s => s.id === id);
+      const next = { ...d, shoots: d.shoots.map(s => s.id === id ? { ...s, ...patch } : s) };
+      if (!before) return next;
+      // Differentiate status change from generic edit
+      if (patch.status && patch.status !== before.status) {
+        return appendEvent(next, "shoot_status_changed",
+          `${before.title} marked ${patch.status}`);
+      }
+      return appendEvent(next, "shoot_updated", `Updated ${before.title}`);
+    });
   }, [isReadOnly, updateUserData]);
 
   const deleteShoot = useCallback((id: string) => {
     if (isReadOnly) return;
-    updateUserData(d => ({ ...d, shoots: d.shoots.filter(s => s.id !== id) }));
+    updateUserData(d => {
+      const target = d.shoots.find(s => s.id === id);
+      const next = { ...d, shoots: d.shoots.filter(s => s.id !== id) };
+      if (!target) return next;
+      return appendEvent(next, "shoot_deleted", `Deleted ${target.title}`);
+    });
   }, [isReadOnly, updateUserData]);
 
   // --- Checkout / Return ---
@@ -252,14 +322,17 @@ export function useWorkspace() {
       };
       createdCheckout = checkout;
 
-      return {
+      const next = {
         ...d,
-        kits: d.kits.map(k => args.kitIds.includes(k.id) ? { ...k, status: "out" } : k),
+        kits: d.kits.map(k => args.kitIds.includes(k.id) ? { ...k, status: "out" as const } : k),
         assets: d.assets.map(a => allComponentIds.includes(a.id)
-          ? { ...a, status: "out", lastUser: args.user.name, lastUpdated: checkout.checkedOutAtLabel }
+          ? { ...a, status: "out" as const, lastUser: args.user.name, lastUpdated: checkout.checkedOutAtLabel }
           : a),
         checkouts: [...d.checkouts, checkout],
       };
+      return appendEvent(next, "checkout",
+        `${args.user.name} checked out ${targetKits.length === 1 ? targetKits[0].name : `${targetKits.length} kits`}`,
+        { actor: args.user.name, detail: `for ${args.shootTitle}` });
     });
 
     return createdCheckout;
@@ -279,16 +352,19 @@ export function useWorkspace() {
       const kitIds = active.kitIds ?? [];
       const assetIds = active.assetIds ?? [];
 
-      return {
+      const next = {
         ...d,
-        kits: d.kits.map(k => kitIds.includes(k.id) ? { ...k, status: "available" } : k),
+        kits: d.kits.map(k => kitIds.includes(k.id) ? { ...k, status: "available" as const } : k),
         assets: d.assets.map(a => assetIds.includes(a.id)
-          ? { ...a, status: "in", lastUpdated: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
+          ? { ...a, status: "in" as const, lastUpdated: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
           : a),
         checkouts: d.checkouts.map(c => c.id === checkoutId
-          ? ({ ...active, status: "returned", returnedAtISO: now.toISOString() } as ActiveCheckout)
+          ? ({ ...active, status: "returned" as const, returnedAtISO: now.toISOString() } as ActiveCheckout)
           : c),
       };
+      return appendEvent(next, "return",
+        `${active.user} returned ${active.kits.length === 1 ? active.kits[0] : `${active.kits.length} kits`}`,
+        { actor: active.user, detail: `from ${active.shoot}` });
     });
   }, [isReadOnly, updateUserData]);
 

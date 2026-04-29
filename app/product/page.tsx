@@ -21,10 +21,10 @@ const COMPARE = [
 ];
 
 const PLANS = [
-  { name: "Starter", price: "$49", assets: "250 assets", users: "5 users", kiosks: "0 kiosks", features: ["Barcode checkout","Kit management","Overdue alerts","Email notifications"] },
-  { name: "Pro", price: "$149", assets: "1,000 assets", users: "20 users", kiosks: "1 kiosk", features: ["Everything in Starter","Guest tokens","Condition photos","Kit drift detection","Calendar sync"], featured: true },
-  { name: "Studio", price: "$399", assets: "5,000 assets", users: "100 users", kiosks: "3 kiosks", features: ["Everything in Pro","API access","ServiceNow sync","Full audit log","SSO support"] },
-  { name: "Enterprise", price: "Custom", assets: "Unlimited", users: "Unlimited", kiosks: "Unlimited", features: ["Everything in Studio","Dedicated support","Custom integrations","On-site setup"] },
+  { name: "Starter", price: "$79", assets: "250 assets", users: "5 users", kiosks: "0 kiosks", features: ["Barcode checkout","Kit management","Overdue alerts","Email notifications"] },
+  { name: "Pro", price: "$199", assets: "1,500 assets", users: "25 users", kiosks: "1 kiosk", features: ["Everything in Starter","Guest tokens","Condition photos","Kit drift detection","Calendar sync"], featured: true },
+  { name: "Studio", price: "$499", assets: "5,000 assets", users: "100 users", kiosks: "3 kiosks", features: ["Everything in Pro","API access","ServiceNow sync","Full audit log","SSO support"] },
+  { name: "Enterprise", price: "Custom", assets: "Unlimited", users: "Unlimited", kiosks: "Unlimited", features: ["Everything in Studio","Dedicated support","Custom integrations","On-site setup","SOC 2 / FedRAMP path"] },
 ];
 
 export default function ProductPage() {
