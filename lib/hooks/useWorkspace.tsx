@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
 import {
   ASSETS as DEMO_ASSETS,
   KITS as DEMO_KITS,
@@ -126,7 +126,7 @@ function buildDemoWorkspace(): WorkspaceData {
   };
 }
 
-export function useWorkspace() {
+function useWorkspaceImpl() {
   const [mode, setMode] = useState<WorkspaceMode>("unset");
   const [userData, setUserData] = useState<WorkspaceData>(EMPTY_WORKSPACE);
   const [hydrated, setHydrated] = useState(false);
@@ -137,6 +137,23 @@ export function useWorkspace() {
     if (stored) setUserData(stored);
     setMode(m);
     setHydrated(true);
+  }, []);
+
+  // Cross-tab sync: when another tab on the same origin writes to localStorage,
+  // the browser fires a `storage` event in this tab. Re-load and apply.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function handleStorage(e: StorageEvent) {
+      // Only react to our keys; ignore unrelated localStorage activity.
+      if (e.key === "cageos:workspace:v3") {
+        const stored = adapter.load();
+        if (stored) setUserData(stored);
+      } else if (e.key === "cageos:mode:v1") {
+        setMode(modeAdapter.loadMode());
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   const data: WorkspaceData = mode === "demo" ? buildDemoWorkspace() : userData;
@@ -417,6 +434,40 @@ export function useWorkspace() {
     resetWorkspace,
     adapterName: adapter.name,
   };
+}
+
+// =============================================================
+// Workspace context — single source of truth across the app
+// =============================================================
+//
+// Every component that calls `useWorkspace()` reads from the same provider
+// instance. Without this, each component held its own React state and got out
+// of sync the moment any other component mutated localStorage.
+//
+// The `WorkspaceProvider` mounts once in the root layout. `useWorkspace`
+// reads from it. The public API of `useWorkspace` is unchanged — the entire
+// rest of the codebase keeps working without modification.
+
+type WorkspaceContextValue = ReturnType<typeof useWorkspaceImpl>;
+const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
+
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const value = useWorkspaceImpl();
+  return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
+}
+
+/**
+ * Consume the workspace context. Public API identical to the previous hook —
+ * every existing call site keeps working as-is.
+ */
+export function useWorkspace(): WorkspaceContextValue {
+  const ctx = useContext(WorkspaceContext);
+  if (!ctx) {
+    throw new Error(
+      "useWorkspace must be used inside <WorkspaceProvider>. Mount it in app/layout.tsx."
+    );
+  }
+  return ctx;
 }
 
 export function nextBarcode(existingAssets: Asset[], prefix: string = "AST"): string {
