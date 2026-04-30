@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
@@ -35,6 +36,7 @@ const PAGES: Record<string, string> = {
 
 export default function DashboardPage() {
   const isMobile = useIsMobile();
+  const router = useRouter();
   const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
@@ -396,7 +398,11 @@ export default function DashboardPage() {
                               // lastUpdated is a free-form label like "9:14 AM" — compare as strings descending
                               return b.lastUpdated.localeCompare(a.lastUpdated);
                             }).slice(0, 12).map(a => (
-                              <tr key={a.id} style={{ borderBottom: "1px solid var(--b1)" }}>
+                              <tr
+                                key={a.id}
+                                onClick={() => router.push(`/asset/${encodeURIComponent(a.barcode)}`)}
+                                style={{ borderBottom: "1px solid var(--b1)", cursor: "pointer" }}
+                              >
                                 <td style={{ padding: "11px 14px", fontSize: 12 }}>
                                   {a.name}
                                   {isMobile && <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>{a.barcode}</div>}
@@ -559,7 +565,11 @@ export default function DashboardPage() {
                       {filteredAssets.map(a => {
                         const hasOpenFlag = openFlags.some(f => f.assetId === a.id);
                         return (
-                        <tr key={a.id} style={{ borderBottom: "1px solid var(--b1)" }}>
+                        <tr
+                          key={a.id}
+                          onClick={() => router.push(`/asset/${encodeURIComponent(a.barcode)}`)}
+                          style={{ borderBottom: "1px solid var(--b1)", cursor: "pointer" }}
+                        >
                           <td style={{ padding: "11px 14px", fontSize: 12 }}>
                             {a.name}
                             {hasOpenFlag && (
@@ -576,7 +586,7 @@ export default function DashboardPage() {
                           {data.managerMode && !isReadOnly && (
                             <td style={{ padding: "8px 14px", textAlign: "right" }}>
                               <button
-                                onClick={() => setFlagAssetTarget(a)}
+                                onClick={(e) => { e.stopPropagation(); setFlagAssetTarget(a); }}
                                 disabled={hasOpenFlag}
                                 title={hasOpenFlag ? "Already has an open flag" : "Flag this asset for service"}
                                 style={{
@@ -608,7 +618,8 @@ export default function DashboardPage() {
           {activeKey === "kits" && data.kits.length > 0 && (
             <div className="animate-fade-up" style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
               {data.kits.map(kit => (
-                <Card key={kit.id} accentColor={kit.status === "available" ? "var(--green)" : kit.status === "out" ? "var(--amber)" : "var(--blue)"}>
+                <div key={kit.id} onClick={() => router.push(`/kit/${encodeURIComponent(kit.barcode)}`)} style={{ cursor: "pointer" }}>
+                <Card accentColor={kit.status === "available" ? "var(--green)" : kit.status === "out" ? "var(--amber)" : "var(--blue)"}>
                   <div style={{ padding: "14px 16px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
@@ -634,6 +645,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </Card>
+                </div>
               ))}
             </div>
           )}

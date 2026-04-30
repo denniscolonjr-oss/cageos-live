@@ -277,6 +277,113 @@ function useWorkspaceImpl() {
     ));
   }, [isReadOnly, updateUserData]);
 
+  /** Patch any subset of an asset's fields. Used by the asset detail editor. */
+  const updateAsset = useCallback((assetId: string, patch: Partial<Asset>) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const before = d.assets.find(a => a.id === assetId);
+      if (!before) return d;
+      const next = { ...d, assets: d.assets.map(a => a.id === assetId ? { ...a, ...patch } : a) };
+      return appendEvent(next, "asset_added", `Updated ${before.name}`, { detail: before.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Remove an asset entirely. Cleans up kit membership and any open flags too. */
+  const deleteAsset = useCallback((assetId: string) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.assets.find(a => a.id === assetId);
+      if (!target) return d;
+      const next = {
+        ...d,
+        assets: d.assets.filter(a => a.id !== assetId),
+        // Remove from any kit that referenced it
+        kits: d.kits.map(k => k.componentIds.includes(assetId)
+          ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
+          : k),
+        // Resolve any open flags for this asset
+        flags: d.flags.map(f => f.assetId === assetId && f.status !== "resolved"
+          ? { ...f, status: "resolved" as const, resolvedAtISO: new Date().toISOString(), resolvedBy: "system", resolutionSummary: "Asset deleted." }
+          : f),
+      };
+      return appendEvent(next, "asset_added", `Deleted ${target.name}`, { detail: target.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Patch a kit's fields. */
+  const updateKit = useCallback((kitId: string, patch: Partial<Kit>) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const before = d.kits.find(k => k.id === kitId);
+      if (!before) return d;
+      const next = { ...d, kits: d.kits.map(k => k.id === kitId ? { ...k, ...patch } : k) };
+      return appendEvent(next, "kit_added", `Updated ${before.name}`, { detail: before.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Delete a kit. Components stay in inventory but lose their kitId reference. */
+  const deleteKit = useCallback((kitId: string) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.kits.find(k => k.id === kitId);
+      if (!target) return d;
+      const next = {
+        ...d,
+        kits: d.kits.filter(k => k.id !== kitId),
+        assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
+        // Also unlink from any shoot's assignedKits
+        shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
+          ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
+          : s),
+      };
+      return appendEvent(next, "kit_added", `Deleted ${target.name}`, { detail: target.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Attach a single asset to a kit. Removes from any prior kit first. */
+  const attachAssetToKit = useCallback((assetId: string, kitId: string) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const asset = d.assets.find(a => a.id === assetId);
+      const kit = d.kits.find(k => k.id === kitId);
+      if (!asset || !kit) return d;
+      const next = {
+        ...d,
+        // Remove asset from any prior kit's componentIds
+        kits: d.kits.map(k => {
+          if (k.id === kitId) {
+            return k.componentIds.includes(assetId)
+              ? k
+              : { ...k, componentIds: [...k.componentIds, assetId] };
+          }
+          return k.componentIds.includes(assetId)
+            ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
+            : k;
+        }),
+        assets: d.assets.map(a => a.id === assetId ? { ...a, kitId } : a),
+      };
+      return appendEvent(next, "kit_added", `Added ${asset.name} to ${kit.name}`, { detail: kit.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Remove an asset from its kit. Asset stays in inventory. */
+  const detachAssetFromKit = useCallback((assetId: string) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const asset = d.assets.find(a => a.id === assetId);
+      if (!asset || !asset.kitId) return d;
+      const kit = d.kits.find(k => k.id === asset.kitId);
+      const next = {
+        ...d,
+        kits: d.kits.map(k => k.id === asset.kitId
+          ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
+          : k),
+        assets: d.assets.map(a => a.id === assetId ? { ...a, kitId: null } : a),
+      };
+      return appendEvent(next, "kit_added", `Removed ${asset.name} from ${kit?.name ?? "kit"}`, { detail: kit?.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
   const addProfile = useCallback((profile: UserProfile) => {
     if (isReadOnly) return;
     updateUserData(d => appendEvent(
@@ -636,7 +743,13 @@ function useWorkspaceImpl() {
     switchMode,
     addAsset,
     addAssets,
+    updateAsset,
+    deleteAsset,
     addKit,
+    updateKit,
+    deleteKit,
+    attachAssetToKit,
+    detachAssetFromKit,
     addProfile,
     addProfiles,
     addShoot,

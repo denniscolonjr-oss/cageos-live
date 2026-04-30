@@ -19,6 +19,8 @@ export interface Asset {
   eolDate: string | null;
   serialNumber: string | null;
   serviceFlag: { severity: "critical" | "warning"; reason: string } | null;
+  /** Free-form notes editable from the asset detail page. */
+  notes?: string;
 }
 
 export interface Kit {
