@@ -11,10 +11,18 @@ import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
 import CSVUploadModal from "@/components/forms/CSVUploadModal";
 import AddShootModal from "@/components/forms/AddShootModal";
 import ShootDetailModal from "@/components/forms/ShootDetailModal";
+import FlagItemModal from "@/components/forms/FlagItemModal";
+import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
 import type { Shoot } from "@/lib/hooks/workspaceTypes";
+import type { Asset } from "@/lib/data";
+
+const flagBadgeStyle: React.CSSProperties = {
+  fontSize: 9, padding: "2px 7px", borderRadius: 3,
+  fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.05em",
+};
 
 const PAGES: Record<string, string> = {
   cage: "Cage status", checkouts: "Active checkouts",
@@ -27,13 +35,17 @@ const PAGES: Record<string, string> = {
 
 export default function DashboardPage() {
   const isMobile = useIsMobile();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | "shoot" | null>(null);
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
+  const [flagAssetTarget, setFlagAssetTarget] = useState<Asset | null>(null);
+  const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null);
+  const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
+  const [flagFilter, setFlagFilter] = useState<"open" | "in_repair" | "resolved" | "all">("open");
   const [auditFilter, setAuditFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -529,12 +541,31 @@ export default function DashboardPage() {
                             </th>
                           );
                         })}
+                        {data.managerMode && !isReadOnly && (
+                          <th style={{
+                            padding: "10px 14px", textAlign: "right",
+                            fontSize: 10, fontFamily: "'DM Mono', monospace",
+                            color: "var(--t3)",
+                            letterSpacing: "0.05em", textTransform: "uppercase",
+                            borderBottom: "1px solid var(--b1)", fontWeight: 400,
+                            whiteSpace: "nowrap",
+                          }}>
+                            Actions
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAssets.map(a => (
+                      {filteredAssets.map(a => {
+                        const hasOpenFlag = openFlags.some(f => f.assetId === a.id);
+                        return (
                         <tr key={a.id} style={{ borderBottom: "1px solid var(--b1)" }}>
-                          <td style={{ padding: "11px 14px", fontSize: 12 }}>{a.name}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 12 }}>
+                            {a.name}
+                            {hasOpenFlag && (
+                              <span title="Has an open service flag" style={{ color: "var(--red)", marginLeft: 6, fontSize: 11 }}>⚠</span>
+                            )}
+                          </td>
                           <td style={{ padding: "11px 14px", fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--t2)" }}>{a.barcode}</td>
                           <td style={{ padding: "11px 14px", fontSize: 11, color: "var(--t2)" }}>{a.category}</td>
                           <td style={{ padding: "11px 14px", fontSize: 11, color: "var(--t2)" }}>{a.make || "—"}</td>
@@ -542,8 +573,28 @@ export default function DashboardPage() {
                           <td style={{ padding: "11px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>{a.location || "—"}</td>
                           <td style={{ padding: "11px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>{a.kitId || "—"}</td>
                           <td style={{ padding: "11px 14px", fontSize: 12 }}>{a.lastUser || "—"}</td>
+                          {data.managerMode && !isReadOnly && (
+                            <td style={{ padding: "8px 14px", textAlign: "right" }}>
+                              <button
+                                onClick={() => setFlagAssetTarget(a)}
+                                disabled={hasOpenFlag}
+                                title={hasOpenFlag ? "Already has an open flag" : "Flag this asset for service"}
+                                style={{
+                                  padding: "5px 10px", borderRadius: 5,
+                                  background: "transparent",
+                                  border: `1px solid ${hasOpenFlag ? "var(--b2)" : "var(--red)"}`,
+                                  color: hasOpenFlag ? "var(--t3)" : "var(--red)",
+                                  cursor: hasOpenFlag ? "not-allowed" : "pointer",
+                                  fontFamily: "'DM Mono',monospace", fontSize: 10,
+                                  whiteSpace: "nowrap",
+                                }}>
+                                ⚠ Flag
+                              </button>
+                            </td>
+                          )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -697,29 +748,164 @@ export default function DashboardPage() {
 
           {activeKey === "flags" && (
             <div className="animate-fade-up">
-              <Card>
-                {data.assets.filter(a => a.serviceFlag).length === 0 ? (
-                  <div style={{ padding: 32, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, marginBottom: 8 }}>✓</div>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 4 }}>All clear</div>
-                    <div style={{ fontSize: 12, color: "var(--t2)" }}>No service flags right now.</div>
-                  </div>
-                ) : (
-                  data.assets.filter(a => a.serviceFlag).map(a => (
-                    <div key={a.id} style={{ padding: "14px 16px", borderBottom: "1px solid var(--b1)", display: "flex", gap: 14, alignItems: "flex-start", flexWrap: isMobile ? "wrap" : "nowrap" }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 7, background: a.serviceFlag!.severity === "critical" ? "rgba(255,79,79,0.12)" : "rgba(245,166,35,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>⚠</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 14, fontWeight: 600 }}>{a.name}</span>
-                          <Badge variant={a.serviceFlag!.severity === "critical" ? "red" : "amber"}>{a.serviceFlag!.severity}</Badge>
+              {(() => {
+                const FILTER_OPTIONS: { key: typeof flagFilter; label: string }[] = [
+                  { key: "open", label: "Open" },
+                  { key: "in_repair", label: "In repair" },
+                  { key: "resolved", label: "Resolved" },
+                  { key: "all", label: "All" },
+                ];
+                const filtered = flagFilter === "all"
+                  ? data.flags
+                  : data.flags.filter(f => f.status === flagFilter);
+                // Sort: critical first, then most recent
+                const sorted = [...filtered].sort((a, b) => {
+                  if (a.severity !== b.severity) return a.severity === "critical" ? -1 : 1;
+                  return b.flaggedAtISO.localeCompare(a.flaggedAtISO);
+                });
+                const counts = {
+                  open: data.flags.filter(f => f.status === "open").length,
+                  in_repair: data.flags.filter(f => f.status === "in_repair").length,
+                  resolved: data.flags.filter(f => f.status === "resolved").length,
+                  all: data.flags.length,
+                };
+
+                return (
+                  <>
+                    {/* Stats row */}
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+                      <Card accentColor="var(--red)">
+                        <div style={{ padding: "12px 14px" }}>
+                          <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>Critical open</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, color: openFlags.filter(f => f.severity === "critical").length > 0 ? "var(--red)" : "var(--t1)" }}>
+                            {openFlags.filter(f => f.severity === "critical").length}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--t2)" }}>{a.serviceFlag!.reason}</div>
-                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", marginTop: 4 }}>{a.barcode} · Last user: {a.lastUser}</div>
-                      </div>
+                      </Card>
+                      <Card accentColor="var(--amber)">
+                        <div style={{ padding: "12px 14px" }}>
+                          <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>Warning open</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, color: "var(--t1)" }}>
+                            {openFlags.filter(f => f.severity === "warning").length}
+                          </div>
+                        </div>
+                      </Card>
+                      <Card accentColor="var(--blue)">
+                        <div style={{ padding: "12px 14px" }}>
+                          <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>In repair</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, color: "var(--t1)" }}>
+                            {counts.in_repair}
+                          </div>
+                        </div>
+                      </Card>
+                      <Card accentColor="var(--green)">
+                        <div style={{ padding: "12px 14px" }}>
+                          <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>Resolved</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 22 : 26, fontWeight: 700, color: "var(--t1)" }}>
+                            {counts.resolved}
+                          </div>
+                        </div>
+                      </Card>
                     </div>
-                  ))
-                )}
-              </Card>
+
+                    {/* Filter chips */}
+                    <div className="scroll-x" style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                      {FILTER_OPTIONS.map(opt => {
+                        const isActive = flagFilter === opt.key;
+                        const count = counts[opt.key];
+                        return (
+                          <button key={opt.key} onClick={() => setFlagFilter(opt.key)} style={{
+                            padding: "8px 14px", borderRadius: 6, fontSize: 11,
+                            fontFamily: "'DM Mono',monospace",
+                            border: `1px solid ${isActive ? "var(--acc)" : "var(--b1)"}`,
+                            background: isActive ? "rgba(226,245,92,0.08)" : "transparent",
+                            color: isActive ? "var(--acc)" : "var(--t2)",
+                            cursor: "pointer", flexShrink: 0, minHeight: 36, whiteSpace: "nowrap",
+                          }}>
+                            {opt.label}{count > 0 && <span style={{ marginLeft: 6, color: "var(--t3)" }}>{count}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* List */}
+                    {sorted.length === 0 ? (
+                      <Card>
+                        <div style={{ padding: 36, textAlign: "center" }}>
+                          <div style={{ fontSize: 28, marginBottom: 10 }}>{flagFilter === "open" ? "✓" : "—"}</div>
+                          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
+                            {flagFilter === "open" ? "All clear" : `No ${flagFilter === "all" ? "" : flagFilter + " "}flags`}
+                          </div>
+                          <div style={{ fontSize: 12, color: "var(--t2)" }}>
+                            {flagFilter === "open"
+                              ? "No open service flags right now."
+                              : flagFilter === "all" && data.flags.length === 0
+                                ? "Flag an asset from the All Assets table to start tracking service issues."
+                                : "Try a different filter."}
+                          </div>
+                        </div>
+                      </Card>
+                    ) : (
+                      <Card>
+                        {sorted.map((f, i) => {
+                          const asset = data.assets.find(a => a.id === f.assetId);
+                          const sevColor = f.severity === "critical" ? "var(--red)" : "var(--amber)";
+                          const statusColor =
+                            f.status === "resolved" ? "var(--green)" :
+                            f.status === "in_repair" ? "var(--amber)" : "var(--red)";
+                          const flaggedAt = new Date(f.flaggedAtISO);
+                          const ago = Math.floor((Date.now() - flaggedAt.getTime()) / (1000 * 60 * 60));
+                          const agoLabel = ago < 1 ? "just now" : ago < 24 ? `${ago}h ago` : `${Math.floor(ago / 24)}d ago`;
+                          const flagsForThisAsset = data.flags.filter(x => x.assetId === f.assetId).length;
+                          return (
+                            <div key={f.id} onClick={() => setSelectedFlagId(f.id)} style={{
+                              padding: "14px 16px",
+                              borderBottom: i < sorted.length - 1 ? "1px solid var(--b1)" : "none",
+                              cursor: "pointer",
+                              display: "flex", gap: 12, alignItems: "flex-start",
+                            }}>
+                              <div style={{
+                                width: 36, height: 36, borderRadius: 7, flexShrink: 0,
+                                background: `${sevColor}20`,
+                                color: sevColor,
+                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+                              }}>{f.status === "resolved" ? "✓" : "⚠"}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                                  <span style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600 }}>
+                                    {asset?.name ?? "Unknown asset"}
+                                  </span>
+                                  <span style={{ ...flagBadgeStyle, background: `${sevColor}20`, color: sevColor }}>
+                                    {f.severity}
+                                  </span>
+                                  <span style={{ ...flagBadgeStyle, background: `${statusColor}20`, color: statusColor }}>
+                                    {f.status.replace(/_/g, " ")}
+                                  </span>
+                                  {flagsForThisAsset > 1 && (
+                                    <span style={{ ...flagBadgeStyle, background: "var(--s3)", color: "var(--t2)" }}>
+                                      {flagsForThisAsset}× flagged
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginBottom: 5,
+                                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
+                                }}>
+                                  {f.reason}
+                                </div>
+                                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
+                                  {asset?.barcode} · flagged {agoLabel} by {f.flaggedBy}
+                                  {f.repairNotes.length > 0 && ` · ${f.repairNotes.length} repair note${f.repairNotes.length === 1 ? "" : "s"}`}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 14, color: "var(--t3)", alignSelf: "center", flexShrink: 0 }}>›</div>
+                            </div>
+                          );
+                        })}
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -1014,6 +1200,8 @@ export default function DashboardPage() {
       <CSVUploadModal open={openModal === "csv"} onClose={() => setOpenModal(null)} />
       <AddShootModal open={openModal === "shoot"} onClose={() => setOpenModal(null)} />
       <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} shoot={selectedShoot} />
+      <FlagItemModal open={!!flagAssetTarget} onClose={() => setFlagAssetTarget(null)} asset={flagAssetTarget} />
+      <FlagDetailModal open={!!selectedFlag} onClose={() => setSelectedFlagId(null)} flag={selectedFlag} />
     </div>
   );
 }

@@ -23,7 +23,7 @@ interface KioskUser {
 
 export default function KioskPage() {
   const isMobile = useIsMobile();
-  const { data, hydrated, isReadOnly, checkoutKits, returnCheckout } = useWorkspace();
+  const { data, hydrated, isReadOnly, checkoutKits, returnCheckout, getBlockingFlags } = useWorkspace();
   const [flow, setFlow] = useState<Flow>("menu");
 
   // Checkout state
@@ -563,6 +563,16 @@ export default function KioskPage() {
                   }
                   if (!user || kitsForCheckout.length === 0) {
                     toast("No kits available to check out.", { variant: "error" });
+                    return;
+                  }
+                  // Block on open service flags
+                  const blocking = getBlockingFlags(kitsForCheckout.map(k => k.id));
+                  if (blocking.length > 0) {
+                    const critical = blocking.filter(b => b.severity === "critical");
+                    const summary = critical.length > 0
+                      ? `${critical[0].assetName} has a critical flag and is out of service. Resolve the flag in the Service Flags page before checkout.`
+                      : `${blocking[0].assetName} has a warning flag. Manager review required before checkout.`;
+                    toast("Checkout blocked", { variant: "error", detail: summary });
                     return;
                   }
                   const result = checkoutKits({

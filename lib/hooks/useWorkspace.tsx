@@ -13,10 +13,10 @@ import {
 } from "@/lib/data";
 import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
 import type { StorageAdapter, ModeAdapter } from "@/lib/storage/StorageAdapter";
-import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working
-export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory };
+export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity };
 
 /**
  * Active storage adapter. To swap backends, replace this single line.
@@ -33,6 +33,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   profiles: [],
   shoots: [],
   events: [],
+  flags: [],
   orgName: "Your Org",
   orgLocation: "—",
   barcodePrefix: "AST",
@@ -108,6 +109,68 @@ function buildDemoEvents(): AuditEvent[] {
   ];
 }
 
+function buildDemoFlags(): ServiceFlag[] {
+  const now = Date.now();
+  function hoursAgo(h: number): string { return new Date(now - h * 60 * 60 * 1000).toISOString(); }
+  return [
+    {
+      id: "fl-d1",
+      assetId: "MMG-0000005", // Sigma 85MM
+      severity: "critical",
+      reason: "Front element scratched diagonally across the coating during teardown after the Capitol shoot last Friday. Visible in test images, soft focus on infinity, unusable for client deliverables.",
+      flaggedBy: "Clay Foltz",
+      flaggedAtISO: hoursAgo(28),
+      status: "in_repair",
+      repairNotes: [
+        {
+          id: "rn-d1a", timestamp: hoursAgo(26), author: "Dennis Colon Jr",
+          actionType: "diagnostic",
+          body: "Inspected under bright light, scratch confirmed approximately 4mm long across the front element. Also noted minor coating delamination near the edge of the scratch line.",
+        },
+        {
+          id: "rn-d1b", timestamp: hoursAgo(20), author: "Dennis Colon Jr",
+          actionType: "sent_to_vendor",
+          body: "Shipped to Sigma USA service center in Ronkonkoma NY for front element replacement and recoating, RMA number 14223 issued, expected return in roughly fourteen business days.",
+        },
+      ],
+    },
+    {
+      id: "fl-d2",
+      assetId: "MMG-0000023", // ULXD2 Handheld
+      severity: "warning",
+      reason: "Battery contacts are oxidized and intermittent — receiver loses signal for two to three seconds at a time when handheld is rotated downward, traced to corroded battery terminal.",
+      flaggedBy: "Brittany Smith",
+      flaggedAtISO: hoursAgo(8),
+      status: "open",
+      repairNotes: [],
+    },
+    {
+      id: "fl-d3",
+      assetId: "MMG-0000002", // SmallHD Monitor
+      severity: "warning",
+      reason: "HDMI input one shows intermittent signal dropout when cable is wiggled at the connector, suspect internal board solder joint cold or hairline cracked, input two unaffected so far.",
+      flaggedBy: "Dennis Colon Jr",
+      flaggedAtISO: hoursAgo(140),
+      status: "resolved",
+      repairNotes: [
+        {
+          id: "rn-d3a", timestamp: hoursAgo(130), author: "Dennis Colon Jr",
+          actionType: "diagnostic",
+          body: "Confirmed dropout reproducible by flexing cable. Opened the unit and reflowed solder joints on the HDMI one input board. Tested across multiple cables successfully afterward.",
+        },
+        {
+          id: "rn-d3b", timestamp: hoursAgo(120), author: "Dennis Colon Jr",
+          actionType: "tested",
+          body: "Ran a six-hour soak test feeding 4K signal continuously while flexing cable at random intervals. No dropouts observed, signal lock remained stable throughout the entire test period.",
+        },
+      ],
+      resolvedAtISO: hoursAgo(118),
+      resolvedBy: "Dennis Colon Jr",
+      resolutionSummary: "Reflow on HDMI one input board solved the issue completely. Soak tested for six hours under stress with no signal dropout. Returned to active inventory ready for production.",
+    },
+  ];
+}
+
 function buildDemoWorkspace(): WorkspaceData {
   return {
     assets: DEMO_ASSETS,
@@ -117,6 +180,7 @@ function buildDemoWorkspace(): WorkspaceData {
     profiles: DEMO_PROFILES,
     shoots: buildDemoShoots(),
     events: buildDemoEvents(),
+    flags: buildDemoFlags(),
     orgName: "MMG Production",
     orgLocation: "DC",
     barcodePrefix: "MMG",
@@ -292,6 +356,128 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
+  // --- Service flag mutators ---
+
+  /** Open a new flag on an asset. Reason should be 20+ words (UI enforces). */
+  const flagAsset = useCallback((args: {
+    assetId: string;
+    severity: FlagSeverity;
+    reason: string;
+    flaggedBy: string;
+  }): ServiceFlag | null => {
+    if (isReadOnly) return null;
+    let createdFlag: ServiceFlag | null = null;
+    updateUserData(d => {
+      const asset = d.assets.find(a => a.id === args.assetId);
+      if (!asset) return d;
+      const flag: ServiceFlag = {
+        id: `fl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        assetId: args.assetId,
+        severity: args.severity,
+        reason: args.reason,
+        flaggedBy: args.flaggedBy,
+        flaggedAtISO: new Date().toISOString(),
+        status: "open",
+        repairNotes: [],
+      };
+      createdFlag = flag;
+      // Also reflect on the asset itself for any UI still reading asset.serviceFlag
+      const next = {
+        ...d,
+        flags: [flag, ...d.flags],
+        assets: d.assets.map(a => a.id === args.assetId
+          ? { ...a, status: "flagged" as const, serviceFlag: { severity: args.severity, reason: args.reason } }
+          : a),
+      };
+      return appendEvent(next, "flag_opened",
+        `${args.flaggedBy} flagged ${asset.name}`,
+        { actor: args.flaggedBy, detail: `${args.severity} · ${asset.barcode}` });
+    });
+    return createdFlag;
+  }, [isReadOnly, updateUserData]);
+
+  /** Append a repair note to an existing flag. Body should be 20+ words. */
+  const addRepairNote = useCallback((args: {
+    flagId: string;
+    author: string;
+    actionType: RepairNote["actionType"];
+    body: string;
+  }) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const flag = d.flags.find(f => f.id === args.flagId);
+      if (!flag) return d;
+      const note: RepairNote = {
+        id: `rn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        author: args.author,
+        actionType: args.actionType,
+        body: args.body,
+      };
+      const updatedFlag: ServiceFlag = {
+        ...flag,
+        repairNotes: [...flag.repairNotes, note],
+        // sent_to_vendor implies status moves to in_repair if currently open
+        status: (args.actionType === "sent_to_vendor" && flag.status === "open") ? "in_repair" : flag.status,
+      };
+      const next = {
+        ...d,
+        flags: d.flags.map(f => f.id === args.flagId ? updatedFlag : f),
+      };
+      const asset = d.assets.find(a => a.id === flag.assetId);
+      const eventCategory: AuditCategory = (args.actionType === "sent_to_vendor" && flag.status === "open")
+        ? "flag_status_changed" : "flag_note_added";
+      const summary = (args.actionType === "sent_to_vendor" && flag.status === "open")
+        ? `${asset?.name ?? "Asset"} sent for repair`
+        : `Repair note added to ${asset?.name ?? "asset"}`;
+      return appendEvent(next, eventCategory, summary,
+        { actor: args.author, detail: args.actionType.replace(/_/g, " ") });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /** Resolve a flag with a 20+ word resolution summary. */
+  const resolveFlag = useCallback((args: {
+    flagId: string;
+    resolvedBy: string;
+    resolutionSummary: string;
+  }) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const flag = d.flags.find(f => f.id === args.flagId);
+      if (!flag) return d;
+      const resolvedFlag: ServiceFlag = {
+        ...flag,
+        status: "resolved",
+        resolvedAtISO: new Date().toISOString(),
+        resolvedBy: args.resolvedBy,
+        resolutionSummary: args.resolutionSummary,
+      };
+
+      // Recompute the asset's serviceFlag: the most recent OTHER open flag, or null
+      const otherOpenFlag = d.flags
+        .filter(f => f.id !== args.flagId && f.assetId === flag.assetId && f.status !== "resolved")
+        .sort((a, b) => b.flaggedAtISO.localeCompare(a.flaggedAtISO))[0];
+
+      const next = {
+        ...d,
+        flags: d.flags.map(f => f.id === args.flagId ? resolvedFlag : f),
+        assets: d.assets.map(a => a.id === flag.assetId
+          ? {
+              ...a,
+              status: otherOpenFlag ? "flagged" as const : "in" as const,
+              serviceFlag: otherOpenFlag
+                ? { severity: otherOpenFlag.severity, reason: otherOpenFlag.reason }
+                : null,
+            }
+          : a),
+      };
+      const asset = d.assets.find(a => a.id === flag.assetId);
+      return appendEvent(next, "flag_resolved",
+        `${asset?.name ?? "Asset"} flag resolved`,
+        { actor: args.resolvedBy, detail: asset?.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
   // --- Checkout / Return ---
 
   /**
@@ -299,6 +485,9 @@ function useWorkspaceImpl() {
    * - Marks each kit's status to "out"
    * - Marks each kit component asset's status to "out", sets lastUser/lastUpdated
    * - Adds a new ActiveCheckout entry to data.checkouts
+   *
+   * Note: this does NOT check for blocking flags — call `getBlockingFlags(kitIds)`
+   * before invoking this if you want to prevent flagged-asset checkouts.
    */
   const checkoutKits = useCallback((args: {
     user: { name: string; initials: string; color: string; isGuest?: boolean };
@@ -397,12 +586,41 @@ function useWorkspaceImpl() {
     return c.status === "active" || c.status === "overdue";
   });
 
+  /** All open or in-repair flags (anything not yet resolved). */
+  const openFlags = data.flags.filter(f => f.status !== "resolved");
+
+  /** All flag history for a given asset, newest first. */
+  const flagsForAsset = useCallback((assetId: string): ServiceFlag[] => {
+    return data.flags
+      .filter(f => f.assetId === assetId)
+      .sort((a, b) => b.flaggedAtISO.localeCompare(a.flaggedAtISO));
+  }, [data.flags]);
+
+  /** Returns the asset names that would block checkout because they have an open flag.
+   *  Empty array means safe to proceed. */
+  const getBlockingFlags = useCallback((kitIds: string[]): { assetName: string; severity: FlagSeverity; reason: string }[] => {
+    const targetKits = data.kits.filter(k => kitIds.includes(k.id));
+    const componentIds = new Set(targetKits.flatMap(k => k.componentIds));
+    const blocked: { assetName: string; severity: FlagSeverity; reason: string }[] = [];
+    for (const f of data.flags) {
+      if (f.status === "resolved") continue;
+      if (!componentIds.has(f.assetId)) continue;
+      const asset = data.assets.find(a => a.id === f.assetId);
+      blocked.push({
+        assetName: asset?.name ?? f.assetId,
+        severity: f.severity,
+        reason: f.reason,
+      });
+    }
+    return blocked;
+  }, [data.flags, data.kits, data.assets]);
+
   const stats = mode === "demo" ? DEMO_STATS : {
     totalAssets: data.assets.length,
     checkedIn: data.assets.filter(a => a.status === "in").length,
     checkedOut: data.assets.filter(a => a.status === "out").length,
-    serviceFlags: data.assets.filter(a => a.serviceFlag).length,
-    criticalFlags: data.assets.filter(a => a.serviceFlag?.severity === "critical").length,
+    serviceFlags: openFlags.length,
+    criticalFlags: openFlags.filter(f => f.severity === "critical").length,
     kitDriftEvents: 0,
     knownInventoryValue: data.assets.reduce((sum, a) => sum + (a.cost || 0), 0),
   };
@@ -431,6 +649,12 @@ function useWorkspaceImpl() {
     setManagerMode,
     checkoutKits,
     returnCheckout,
+    flagAsset,
+    addRepairNote,
+    resolveFlag,
+    flagsForAsset,
+    getBlockingFlags,
+    openFlags,
     resetWorkspace,
     adapterName: adapter.name,
   };

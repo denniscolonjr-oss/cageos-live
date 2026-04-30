@@ -70,7 +70,45 @@ export type AuditCategory =
   | "shoot_updated"
   | "shoot_status_changed"
   | "shoot_deleted"
-  | "manager_mode";
+  | "manager_mode"
+  | "flag_opened"
+  | "flag_status_changed"
+  | "flag_note_added"
+  | "flag_resolved";
+
+export type FlagStatus = "open" | "in_repair" | "resolved";
+export type FlagSeverity = "critical" | "warning";
+
+export interface RepairNote {
+  id: string;
+  /** ISO UTC timestamp */
+  timestamp: string;
+  author: string;
+  /** Free-form text — UI enforces 20-word minimum */
+  body: string;
+  actionType: "diagnostic" | "sent_to_vendor" | "received_back" | "tested" | "other";
+}
+
+export interface ServiceFlag {
+  id: string;
+  assetId: string;
+  severity: FlagSeverity;
+  /** Initial reason the asset was flagged. UI enforces 20-word minimum. */
+  reason: string;
+  flaggedBy: string;
+  /** ISO UTC */
+  flaggedAtISO: string;
+
+  status: FlagStatus;
+
+  repairNotes: RepairNote[];
+
+  /** ISO UTC */
+  resolvedAtISO?: string;
+  resolvedBy?: string;
+  /** UI enforces 20-word minimum at resolution time */
+  resolutionSummary?: string;
+}
 
 export interface AuditEvent {
   id: string;
@@ -94,6 +132,12 @@ export interface WorkspaceData {
   profiles: UserProfile[];
   shoots: Shoot[];
   events: AuditEvent[];
+  /**
+   * Service flag history. Each flag is its own record with full repair lifecycle.
+   * Replaces the older single-flag-per-asset model — `asset.serviceFlag` is now
+   * computed from the most recent open flag in this list.
+   */
+  flags: ServiceFlag[];
   orgName: string;
   orgLocation: string;
   barcodePrefix: string;
