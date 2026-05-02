@@ -87,6 +87,8 @@ export interface RepairNote {
   /** Free-form text — UI enforces 20-word minimum */
   body: string;
   actionType: "diagnostic" | "sent_to_vendor" | "received_back" | "tested" | "other";
+  /** Optional photos attached to this note. Supabase Storage URLs. */
+  photoUrls?: string[];
 }
 
 export interface ServiceFlag {
@@ -102,6 +104,9 @@ export interface ServiceFlag {
   status: FlagStatus;
 
   repairNotes: RepairNote[];
+
+  /** Optional photos attached to the initial flag. Supabase Storage URLs. */
+  photoUrls?: string[];
 
   /** ISO UTC */
   resolvedAtISO?: string;

@@ -21,6 +21,8 @@ export interface Asset {
   serviceFlag: { severity: "critical" | "warning"; reason: string } | null;
   /** Free-form notes editable from the asset detail page. */
   notes?: string;
+  /** Photo URL from Supabase Storage. One photo per asset. */
+  photoUrl?: string;
 }
 
 export interface Kit {

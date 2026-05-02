@@ -2,7 +2,10 @@
 import { useState, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import WordCountTextarea, { countWords } from "@/components/ui/WordCountTextarea";
+import PhotoUpload from "@/components/ui/PhotoUpload";
+import PhotoDisplay from "@/components/ui/PhotoDisplay";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
 import type { ServiceFlag, RepairNote } from "@/lib/hooks/workspaceTypes";
 
@@ -32,12 +35,14 @@ const ACTION_COLORS: Record<RepairNote["actionType"], string> = {
 
 export default function FlagDetailModal({ open, onClose, flag }: Props) {
   const { data, addRepairNote, resolveFlag, isReadOnly } = useWorkspace();
+  const { activeWorkspaceId } = useAuth();
   const [mode, setMode] = useState<"view" | "addNote" | "resolve">("view");
 
   // Note form
   const [noteAction, setNoteAction] = useState<RepairNote["actionType"]>("diagnostic");
   const [noteAuthor, setNoteAuthor] = useState("");
   const [noteBody, setNoteBody] = useState("");
+  const [notePhotoUrls, setNotePhotoUrls] = useState<string[]>([]);
 
   // Resolve form
   const [resolveBy, setResolveBy] = useState("");
@@ -54,7 +59,7 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
   const resolveReady = countWords(resolveSummary) >= MIN_WORDS && resolveBy.trim().length > 0;
 
   function resetForms() {
-    setNoteAction("diagnostic"); setNoteAuthor(""); setNoteBody("");
+    setNoteAction("diagnostic"); setNoteAuthor(""); setNoteBody(""); setNotePhotoUrls([]);
     setResolveBy(""); setResolveSummary("");
     setMode("view");
   }
@@ -71,6 +76,7 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
       author: noteAuthor.trim(),
       actionType: noteAction,
       body: noteBody.trim(),
+      photoUrls: notePhotoUrls.length > 0 ? notePhotoUrls : undefined,
     });
     toast(`Repair note added`, { detail: ACTION_LABELS[noteAction] });
     resetForms();
@@ -128,6 +134,29 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
               autoFocus
             />
           </div>
+
+          {activeWorkspaceId && (
+            <div>
+              <label style={labelStyle}>Photos <span style={{ textTransform: "none", color: "var(--t3)" }}>(optional)</span></label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {notePhotoUrls.map((url, i) => (
+                  <PhotoDisplay
+                    key={url}
+                    url={url}
+                    alt={`Note photo ${i + 1}`}
+                    size="small"
+                    onRemove={() => setNotePhotoUrls(notePhotoUrls.filter(u => u !== url))}
+                  />
+                ))}
+                <PhotoUpload
+                  workspaceId={activeWorkspaceId}
+                  pathPrefix={`flags/${flag.id}/notes`}
+                  onUploaded={(url) => setNotePhotoUrls([...notePhotoUrls, url])}
+                  compact
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label style={labelStyle}>Author</label>
@@ -248,6 +277,13 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
           }}>
             {flag.reason}
           </div>
+          {flag.photoUrls && flag.photoUrls.length > 0 && (
+            <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {flag.photoUrls.map((url, i) => (
+                <PhotoDisplay key={url} url={url} alt={`Flag photo ${i + 1}`} size="medium" />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Repair history */}
@@ -288,6 +324,13 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
                       <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>{tsLabel}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--t1)", lineHeight: 1.55 }}>{note.body}</div>
+                    {note.photoUrls && note.photoUrls.length > 0 && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {note.photoUrls.map((url, i) => (
+                          <PhotoDisplay key={url} url={url} alt={`Note photo ${i + 1}`} size="small" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

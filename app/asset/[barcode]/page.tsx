@@ -5,8 +5,11 @@ import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
+import PhotoUpload from "@/components/ui/PhotoUpload";
+import PhotoDisplay from "@/components/ui/PhotoDisplay";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
 import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
@@ -19,6 +22,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   const isMobile = useIsMobile();
   const router = useRouter();
   const { data, hydrated, isReadOnly, updateAsset, deleteAsset, detachAssetFromKit } = useWorkspace();
+  const { activeWorkspaceId } = useAuth();
   const { barcode } = use(params);
 
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -93,9 +97,12 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   }
 
   function handleDelete() {
-    if (!confirm(`Delete "${asset!.name}"? This removes it from any kit and resolves any open flags. This can't be undone.`)) return;
-    deleteAsset(asset!.id);
-    toast(`${asset!.name} deleted`);
+    if (!confirm(`Delete "${asset!.name}"? This removes it from any kit and resolves any open flags.`)) return;
+    const assetName = asset!.name;
+    const undo = deleteAsset(asset!.id);
+    toast(`${assetName} deleted`, {
+      action: undo ? { label: "Undo", onClick: () => { undo(); toast(`${assetName} restored`); } } : undefined,
+    });
     router.push("/dashboard");
   }
 
@@ -260,6 +267,48 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   </div>
                 </Card>
               )}
+
+              {/* Photo */}
+              <Card>
+                <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700 }}>Photo</div>
+                  {!isReadOnly && asset.photoUrl && activeWorkspaceId && (
+                    <PhotoUpload
+                      workspaceId={activeWorkspaceId}
+                      pathPrefix={`assets/${asset.id}`}
+                      onUploaded={(url) => updateAsset(asset.id, { photoUrl: url })}
+                      label="Replace"
+                      compact
+                    />
+                  )}
+                </div>
+                <div style={{ padding: "16px 18px" }}>
+                  {asset.photoUrl ? (
+                    <PhotoDisplay
+                      url={asset.photoUrl}
+                      alt={asset.name}
+                      size="large"
+                      onRemove={!isReadOnly ? () => updateAsset(asset.id, { photoUrl: undefined }) : undefined}
+                    />
+                  ) : !isReadOnly && activeWorkspaceId ? (
+                    <div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", marginBottom: 10, lineHeight: 1.5 }}>
+                        Add a reference photo so crew can identify this asset at the cage.
+                      </div>
+                      <PhotoUpload
+                        workspaceId={activeWorkspaceId}
+                        pathPrefix={`assets/${asset.id}`}
+                        onUploaded={(url) => updateAsset(asset.id, { photoUrl: url })}
+                        label="+ Upload photo"
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
+                      No photo {isReadOnly ? "" : "— sign in to upload"}
+                    </div>
+                  )}
+                </div>
+              </Card>
 
               {/* Details — editable fields */}
               <Card>

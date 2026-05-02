@@ -527,6 +527,7 @@ function useWorkspaceImpl() {
     severity: FlagSeverity;
     reason: string;
     flaggedBy: string;
+    photoUrls?: string[];
   }): ServiceFlag | null => {
     if (isReadOnly) return null;
     let createdFlag: ServiceFlag | null = null;
@@ -542,6 +543,7 @@ function useWorkspaceImpl() {
         flaggedAtISO: new Date().toISOString(),
         status: "open",
         repairNotes: [],
+        photoUrls: args.photoUrls && args.photoUrls.length > 0 ? args.photoUrls : undefined,
       };
       createdFlag = flag;
       // Also reflect on the asset itself for any UI still reading asset.serviceFlag
@@ -565,6 +567,7 @@ function useWorkspaceImpl() {
     author: string;
     actionType: RepairNote["actionType"];
     body: string;
+    photoUrls?: string[];
   }) => {
     if (isReadOnly) return;
     updateUserData(d => {
@@ -576,6 +579,7 @@ function useWorkspaceImpl() {
         author: args.author,
         actionType: args.actionType,
         body: args.body,
+        photoUrls: args.photoUrls && args.photoUrls.length > 0 ? args.photoUrls : undefined,
       };
       const updatedFlag: ServiceFlag = {
         ...flag,

@@ -2,7 +2,10 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import WordCountTextarea, { countWords } from "@/components/ui/WordCountTextarea";
+import PhotoUpload from "@/components/ui/PhotoUpload";
+import PhotoDisplay from "@/components/ui/PhotoDisplay";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
 import type { Asset } from "@/lib/data";
 import type { FlagSeverity } from "@/lib/hooks/workspaceTypes";
@@ -17,9 +20,11 @@ interface Props {
 
 export default function FlagItemModal({ open, onClose, asset }: Props) {
   const { flagAsset } = useWorkspace();
+  const { activeWorkspaceId } = useAuth();
   const [severity, setSeverity] = useState<FlagSeverity>("warning");
   const [reason, setReason] = useState("");
   const [flaggedBy, setFlaggedBy] = useState("");
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
 
   const ready = countWords(reason) >= MIN_WORDS && flaggedBy.trim().length > 0;
 
@@ -30,9 +35,10 @@ export default function FlagItemModal({ open, onClose, asset }: Props) {
       severity,
       reason: reason.trim(),
       flaggedBy: flaggedBy.trim(),
+      photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
     });
     toast(`${asset.name} flagged ${severity}`, { detail: asset.barcode });
-    setSeverity("warning"); setReason(""); setFlaggedBy("");
+    setSeverity("warning"); setReason(""); setFlaggedBy(""); setPhotoUrls([]);
     onClose();
   }
 
@@ -94,6 +100,31 @@ export default function FlagItemModal({ open, onClose, asset }: Props) {
             autoFocus
           />
         </div>
+
+        {activeWorkspaceId && (
+          <div>
+            <label style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, display: "block" }}>
+              Photos <span style={{ textTransform: "none", color: "var(--t3)" }}>(optional)</span>
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {photoUrls.map((url, i) => (
+                <PhotoDisplay
+                  key={url}
+                  url={url}
+                  alt={`Flag photo ${i + 1}`}
+                  size="small"
+                  onRemove={() => setPhotoUrls(photoUrls.filter(u => u !== url))}
+                />
+              ))}
+              <PhotoUpload
+                workspaceId={activeWorkspaceId}
+                pathPrefix={`flags/temp-${asset.id}`}
+                onUploaded={(url) => setPhotoUrls([...photoUrls, url])}
+                compact
+              />
+            </div>
+          </div>
+        )}
 
         <div>
           <label style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, display: "block" }}>
