@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   ASSETS as DEMO_ASSETS,
   KITS as DEMO_KITS,
@@ -12,18 +12,15 @@ import {
   type UserProfile,
 } from "@/lib/data";
 import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
-import type { StorageAdapter, ModeAdapter } from "@/lib/storage/StorageAdapter";
+import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { useAuth } from "@/lib/supabase/AuthContext";
+import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
 import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working
 export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity };
 
-/**
- * Active storage adapter. To swap backends, replace this single line.
- * In a multi-tenant build, you'd inject this from a provider based on org config.
- */
-const adapter: StorageAdapter = localStorageAdapter;
-const modeAdapter: ModeAdapter = localStorageModeAdapter;
+const modeAdapter = localStorageModeAdapter;
 
 const EMPTY_WORKSPACE: WorkspaceData = {
   assets: [],
@@ -191,34 +188,70 @@ function buildDemoWorkspace(): WorkspaceData {
 }
 
 function useWorkspaceImpl() {
+  const auth = useAuth();
   const [mode, setMode] = useState<WorkspaceMode>("unset");
   const [userData, setUserData] = useState<WorkspaceData>(EMPTY_WORKSPACE);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    const m = modeAdapter.loadMode();
-    const stored = adapter.load();
-    if (stored) setUserData(stored);
-    setMode(m);
-    setHydrated(true);
-  }, []);
+  // Choose the right adapter for the current auth state:
+  // - Authenticated user with active workspace → Supabase adapter for that workspace
+  // - Otherwise → localStorage adapter (anonymous demo / dev)
+  const adapter: StorageAdapter = useMemo(() => {
+    if (auth.supabaseEnabled && auth.session && auth.activeWorkspaceId) {
+      return createSupabaseAdapter(auth.activeWorkspaceId);
+    }
+    return localStorageAdapter;
+  }, [auth.supabaseEnabled, auth.session, auth.activeWorkspaceId]);
 
-  // Cross-tab sync: when another tab on the same origin writes to localStorage,
-  // the browser fires a `storage` event in this tab. Re-load and apply.
+  // Initial load + reload whenever the adapter changes (e.g., user logs in or switches workspace)
+  useEffect(() => {
+    if (auth.loading) return; // Wait for auth to resolve before loading
+    let cancelled = false;
+    setHydrated(false);
+    const m = modeAdapter.loadMode();
+    adapter.load().then(stored => {
+      if (cancelled) return;
+      if (stored) setUserData(stored);
+      else setUserData(EMPTY_WORKSPACE);
+      setMode(m);
+      setHydrated(true);
+    }).catch(err => {
+      console.error("Workspace load failed:", err);
+      if (!cancelled) {
+        setUserData(EMPTY_WORKSPACE);
+        setHydrated(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [adapter, auth.loading]);
+
+  // Cross-tab + real-time sync.
+  // For localStorage: listens to the browser's storage event.
+  // For Supabase: subscribes to row-level updates via the adapter.
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Real-time subscription if the adapter supports it (Supabase)
+    if (adapter.subscribe) {
+      const unsub = adapter.subscribe(newData => {
+        setUserData(newData);
+      });
+      return unsub;
+    }
+
+    // Cross-tab fallback for localStorage
     function handleStorage(e: StorageEvent) {
-      // Only react to our keys; ignore unrelated localStorage activity.
       if (e.key === "cageos:workspace:v3") {
-        const stored = adapter.load();
-        if (stored) setUserData(stored);
+        adapter.load().then(stored => {
+          if (stored) setUserData(stored);
+        });
       } else if (e.key === "cageos:mode:v1") {
         setMode(modeAdapter.loadMode());
       }
     }
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+  }, [adapter]);
 
   const data: WorkspaceData = mode === "demo" ? buildDemoWorkspace() : userData;
   const isReadOnly = mode === "demo";
@@ -231,10 +264,10 @@ function useWorkspaceImpl() {
   const updateUserData = useCallback((updater: (d: WorkspaceData) => WorkspaceData) => {
     setUserData(prev => {
       const next = updater(prev);
-      adapter.save(next);
+      adapter.save(next).catch(err => console.error("Workspace save failed:", err));
       return next;
     });
-  }, []);
+  }, [adapter]);
 
   /** Append an audit event to data.events. Used internally by all auditable mutators. */
   function appendEvent(d: WorkspaceData, category: AuditCategory, summary: string, opts?: { actor?: string; detail?: string }): WorkspaceData {
@@ -705,9 +738,9 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   const resetWorkspace = useCallback(() => {
-    adapter.clear();
+    adapter.clear().catch(err => console.error("Reset failed:", err));
     setUserData(EMPTY_WORKSPACE);
-  }, []);
+  }, [adapter]);
 
   // --- Computed ---
 

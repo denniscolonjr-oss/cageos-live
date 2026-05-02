@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ToastHost from "@/components/ui/Toast";
 import { WorkspaceProvider } from "@/lib/hooks/useWorkspace";
+import { AuthProvider } from "@/lib/supabase/AuthContext";
 
 export const metadata: Metadata = {
   title: "CageOS — Production Equipment Tracking",
@@ -20,10 +21,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body style={{ height: "100vh", overflow: "hidden" }}>
-        <WorkspaceProvider>
-          {children}
-          <ToastHost />
-        </WorkspaceProvider>
+        <AuthProvider>
+          <WorkspaceProvider>
+            {children}
+            <ToastHost />
+          </WorkspaceProvider>
+        </AuthProvider>
       </body>
     </html>
   );

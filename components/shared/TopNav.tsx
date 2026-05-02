@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 
 const TABS = [
   { href: "/dashboard", label: "Dashboard", short: "Dash" },
@@ -16,7 +17,14 @@ export default function TopNav() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { mode, data, switchMode } = useWorkspace();
+  const { session, user, supabaseEnabled, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  async function handleSignOut() {
+    await signOut();
+    setMenuOpen(false);
+    router.push("/");
+  }
 
   const orgLabel = mode === "demo"
     ? (isMobile ? "MMG · DEMO" : "MMG Production · DEMO")
@@ -148,6 +156,40 @@ export default function TopNav() {
                   Sample data · read-only example
                 </div>
               </button>
+
+              {supabaseEnabled && (
+                <>
+                  <div style={{ padding: "8px 12px 6px", borderTop: "1px solid var(--b1)", fontFamily: "'DM Mono',monospace", fontSize: 9, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    Account
+                  </div>
+                  {session ? (
+                    <>
+                      <div style={{ padding: "8px 12px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)" }}>
+                        {user?.email}
+                      </div>
+                      <button onClick={handleSignOut} style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "10px 12px",
+                        background: "transparent", border: "none",
+                        borderTop: "1px solid var(--b1)", cursor: "pointer",
+                        color: "var(--red)", fontFamily: "'DM Sans',sans-serif",
+                        fontSize: 13, minHeight: 44,
+                      }}>
+                        Sign out
+                      </button>
+                    </>
+                  ) : (
+                    <Link href="/login" onClick={() => setMenuOpen(false)} style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 12px",
+                      color: "var(--acc)", fontFamily: "'DM Sans',sans-serif",
+                      fontSize: 13, minHeight: 44, textDecoration: "none",
+                    }}>
+                      Sign in
+                    </Link>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}

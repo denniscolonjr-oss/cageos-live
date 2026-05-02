@@ -8,9 +8,8 @@
  * To swap backends, you implement a new adapter and change a single line in
  * lib/hooks/useWorkspace.ts to use it. No UI code changes.
  *
- * Adapters are intentionally synchronous in the v1 contract. When we move to async
- * backends (Supabase, REST), we'll add a v2 contract with Promises. The hook will
- * branch on contract version to keep localStorage paths zero-latency.
+ * Adapters are async. The localStorage adapter wraps its sync calls in
+ * resolved Promises so the hook code stays uniform across backends.
  */
 
 import type { WorkspaceData } from "@/lib/hooks/workspaceTypes";
@@ -20,13 +19,13 @@ export interface StorageAdapter {
   name: string;
 
   /** Load the user's workspace. Returns null if none exists. */
-  load(): WorkspaceData | null;
+  load(): Promise<WorkspaceData | null>;
 
   /** Persist the entire workspace. Last-write-wins for v1. */
-  save(data: WorkspaceData): void;
+  save(data: WorkspaceData): Promise<void>;
 
   /** Clear all workspace data. */
-  clear(): void;
+  clear(): Promise<void>;
 
   /** Optional: subscribe to remote changes. Returns an unsubscribe fn. */
   subscribe?(onChange: (data: WorkspaceData) => void): () => void;

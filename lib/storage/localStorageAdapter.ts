@@ -34,7 +34,7 @@ function migrate(legacy: Partial<WorkspaceData>): WorkspaceData {
 export const localStorageAdapter: StorageAdapter = {
   name: "localStorage",
 
-  load() {
+  async load() {
     if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -55,17 +55,16 @@ export const localStorageAdapter: StorageAdapter = {
     }
   },
 
-  save(data) {
+  async save(data) {
     if (typeof window === "undefined") return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
       // Quota exceeded or storage disabled — silently ignore.
-      // In a real backend adapter this would surface an error toast.
     }
   },
 
-  clear() {
+  async clear() {
     if (typeof window === "undefined") return;
     try {
       localStorage.removeItem(STORAGE_KEY);
