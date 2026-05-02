@@ -99,11 +99,19 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   function handleDelete() {
     if (!confirm(`Delete "${asset!.name}"? This removes it from any kit and resolves any open flags.`)) return;
     const assetName = asset!.name;
-    const undo = deleteAsset(asset!.id);
-    toast(`${assetName} deleted`, {
-      action: undo ? { label: "Undo", onClick: () => { undo(); toast(`${assetName} restored`); } } : undefined,
-    });
+    const assetId = asset!.id;
+    // Navigate FIRST so we don't render the now-missing asset's detail page
+    // and trigger a 404 flash before the redirect lands.
     router.push("/dashboard");
+    // Then delete — the dashboard will reflect the change instantly via the
+    // shared workspace state.
+    const undo = deleteAsset(assetId);
+    toast(`${assetName} deleted`, {
+      action: undo ? { label: "Undo", onClick: () => {
+        undo();
+        toast(`${assetName} restored`);
+      } } : undefined,
+    });
   }
 
   function handleDetachFromKit() {

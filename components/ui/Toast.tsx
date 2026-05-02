@@ -3,11 +3,20 @@ import { useState, useEffect } from "react";
 
 export type ToastVariant = "success" | "error" | "info";
 
+export interface ToastAction {
+  label: string;
+  /** Called when the user clicks the action. The toast dismisses immediately afterward. */
+  onClick: () => void;
+}
+
 interface ToastEvent {
   id: number;
   message: string;
   detail?: string;
   variant: ToastVariant;
+  action?: ToastAction;
+  /** Auto-dismiss duration in ms. Defaults to 3500, or 10000 if action is provided. */
+  durationMs: number;
 }
 
 type Listener = (toast: ToastEvent) => void;
@@ -15,12 +24,17 @@ type Listener = (toast: ToastEvent) => void;
 let counter = 0;
 const listeners: Set<Listener> = new Set();
 
-export function toast(message: string, opts?: { detail?: string; variant?: ToastVariant }) {
+export function toast(
+  message: string,
+  opts?: { detail?: string; variant?: ToastVariant; action?: ToastAction; durationMs?: number },
+) {
   const evt: ToastEvent = {
     id: ++counter,
     message,
     detail: opts?.detail,
     variant: opts?.variant ?? "success",
+    action: opts?.action,
+    durationMs: opts?.durationMs ?? (opts?.action ? 10000 : 3500),
   };
   listeners.forEach(l => l(evt));
 }
@@ -33,11 +47,15 @@ export default function ToastHost() {
       setToasts(prev => [...prev, t]);
       window.setTimeout(() => {
         setToasts(prev => prev.filter(x => x.id !== t.id));
-      }, 3500);
+      }, t.durationMs);
     };
     listeners.add(handler);
     return () => { listeners.delete(handler); };
   }, []);
+
+  function dismiss(id: number) {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }
 
   if (toasts.length === 0) return null;
 
@@ -72,9 +90,9 @@ export default function ToastHost() {
             borderRadius: 8,
             padding: "12px 16px",
             display: "flex",
-            alignItems: "flex-start",
+            alignItems: "center",
             gap: 10,
-            maxWidth: 380,
+            maxWidth: 420,
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           }}>
             <div style={{
@@ -91,6 +109,20 @@ export default function ToastHost() {
                 <div style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: "var(--t3)", marginTop: 3 }}>{t.detail}</div>
               )}
             </div>
+            {t.action && (
+              <button
+                onClick={() => { t.action!.onClick(); dismiss(t.id); }}
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 12px", borderRadius: 5,
+                  background: "transparent", border: `1px solid ${accent}`,
+                  color: accent, cursor: "pointer",
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                  minHeight: 32,
+                }}>
+                {t.action.label}
+              </button>
+            )}
           </div>
         );
       })}

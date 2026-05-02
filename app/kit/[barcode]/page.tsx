@@ -74,9 +74,18 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
 
   function handleDelete() {
     if (!confirm(`Delete "${kit!.name}"? Components stay in inventory but lose their kit assignment.`)) return;
-    deleteKit(kit!.id);
-    toast(`${kit!.name} deleted`);
+    const kitName = kit!.name;
+    const kitId = kit!.id;
+    // Navigate FIRST so we don't render the now-missing kit's detail page
+    // and trigger a 404 flash before the redirect lands.
     router.push("/dashboard");
+    const undo = deleteKit(kitId);
+    toast(`${kitName} deleted`, {
+      action: undo ? { label: "Undo", onClick: () => {
+        undo();
+        toast(`${kitName} restored`);
+      } } : undefined,
+    });
   }
 
   const statusVariant: "green" | "amber" | "red" =
