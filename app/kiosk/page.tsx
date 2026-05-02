@@ -35,6 +35,8 @@ export default function KioskPage() {
   const [animDir, setAnimDir] = useState<"right" | "left">("right");
   const [expandedKits, setExpandedKits] = useState<Record<string, boolean>>({});
   const [createdCheckout, setCreatedCheckout] = useState<ActiveCheckout | null>(null);
+  const [selectedKitIds, setSelectedKitIds] = useState<Set<string>>(new Set());
+  const [kitSearch, setKitSearch] = useState("");
   const badgeInputRef = useRef<HTMLInputElement>(null);
 
   // Return state
@@ -43,6 +45,19 @@ export default function KioskPage() {
   useEffect(() => {
     if (flow === "checkout" && step === 1 && !isMobile) badgeInputRef.current?.focus();
   }, [flow, step, isMobile]);
+
+  // When a shoot is selected, preselect its assigned kits (those still available)
+  useEffect(() => {
+    if (shoot && shoot.assignedKits.length > 0) {
+      const eligible = shoot.assignedKits.filter(id => {
+        const kit = data.kits.find(k => k.id === id);
+        return kit && kit.status !== "out";
+      });
+      setSelectedKitIds(new Set(eligible));
+    } else {
+      setSelectedKitIds(new Set());
+    }
+  }, [shoot, data.kits]);
 
   function goStep(next: CheckoutStep) {
     setAnimDir(next > step ? "right" : "left");
@@ -56,11 +71,19 @@ export default function KioskPage() {
 
   function selectShoot(s: Shoot) { setShoot(s); }
   function toggleKit(id: string) { setExpandedKits(prev => ({ ...prev, [id]: !prev[id] })); }
+  function toggleKitSelected(id: string) {
+    setSelectedKitIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   function capturePhoto(id: string) { setPhotos(prev => ({ ...prev, [id]: true })); }
 
   function resetCheckout() {
     setStep(1); setUser(null); setShoot(null); setPhotos({}); setRating("good");
-    setExpandedKits({}); setCreatedCheckout(null);
+    setExpandedKits({}); setCreatedCheckout(null); setSelectedKitIds(new Set()); setKitSearch("");
   }
   function resetReturn() { setReturnUser(null); }
 
@@ -75,10 +98,18 @@ export default function KioskPage() {
     name: p.name, role: p.role, initials: p.initials, color: p.color, isGuest: p.isGuest,
   }));
 
-  // For checkout: prefer the kits assigned to the selected shoot, else first 3 available kits
-  const kitsForCheckout = shoot && shoot.assignedKits.length > 0
-    ? data.kits.filter(k => shoot.assignedKits.includes(k.id) && k.status !== "out")
-    : data.kits.filter(k => k.status !== "out").slice(0, 3);
+  // All kits not currently checked out, optionally filtered by search
+  const allAvailableKits = data.kits
+    .filter(k => k.status !== "out")
+    .filter(k => kitSearch === "" ||
+      k.name.toLowerCase().includes(kitSearch.toLowerCase()) ||
+      k.barcode.toLowerCase().includes(kitSearch.toLowerCase()));
+
+  // Kits the user has selected for this checkout (from full workspace, not filtered list)
+  const kitsForCheckout = data.kits.filter(k => selectedKitIds.has(k.id));
+
+  // The kits assigned to the active shoot (for visual grouping)
+  const shootAssignedKitIds = new Set(shoot?.assignedKits ?? []);
 
   // For return: find active checkouts under the selected user (or all if no user)
   const activeForUser = returnUser
@@ -412,44 +443,141 @@ export default function KioskPage() {
 
             {step === 3 && (
               <div>
-                <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-                  {shoot && shoot.assignedKits.length > 0 ? "Kits assigned to this shoot" : "Available kits"}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    Pick kits to check out
+                  </div>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: selectedKitIds.size > 0 ? "var(--acc)" : "var(--t3)" }}>
+                    {selectedKitIds.size} selected
+                  </div>
                 </div>
+
+                {/* Search input — only show if there are more than 6 kits */}
+                {data.kits.filter(k => k.status !== "out").length > 6 && (
+                  <input
+                    type="text"
+                    value={kitSearch}
+                    onChange={e => setKitSearch(e.target.value)}
+                    placeholder="Search kits by name or barcode..."
+                    style={{
+                      width: "100%", background: "var(--s2)", border: "1px solid var(--b1)",
+                      borderRadius: 7, padding: "10px 12px", marginBottom: 12,
+                      color: "var(--t1)", outline: "none",
+                      fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                      colorScheme: "dark",
+                    }}
+                  />
+                )}
+
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                  {kitsForCheckout.length === 0 ? (
+                  {allAvailableKits.length === 0 ? (
                     <div style={{ padding: "20px 14px", textAlign: "center", color: "var(--t3)", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
-                      No kits available right now.
+                      {data.kits.filter(k => k.status !== "out").length === 0
+                        ? "No kits available right now."
+                        : "No kits match your search."}
                     </div>
-                  ) : kitsForCheckout.map(kit => {
-                    const components = data.assets.filter(a => kit.componentIds.includes(a.id));
-                    const isOpen = expandedKits[kit.id];
-                    return (
-                      <div key={kit.id} style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8, overflow: "hidden" }}>
-                        <div onClick={() => toggleKit(kit.id)} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", minHeight: 48 }}>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500 }}>{kit.name}</div>
-                            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t2)", marginTop: 2 }}>{kit.barcode} · {kit.componentIds.length} items</div>
-                          </div>
-                          <span style={{ fontSize: 11, color: "var(--t3)", transition: "transform 0.15s", transform: isOpen ? "rotate(0)" : "rotate(-90deg)" }}>▾</span>
-                        </div>
-                        {isOpen && (
-                          <div style={{ borderTop: "1px solid var(--b1)", padding: "6px 0" }}>
-                            {components.map(c => (
-                              <div key={c.id} style={{ padding: "5px 14px 5px 26px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)", display: "flex", alignItems: "center", gap: 7 }}>
-                                <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--b2)", flexShrink: 0 }} />
-                                {c.name}
-                                {c.serviceFlag && <span style={{ color: "var(--red)", fontSize: 10, marginLeft: 4 }}>⚠ {c.serviceFlag.severity}</span>}
-                              </div>
-                            ))}
-                          </div>
+                  ) : (() => {
+                    // Group: shoot-assigned first, then everything else
+                    const shootAssigned = allAvailableKits.filter(k => shootAssignedKitIds.has(k.id));
+                    const others = allAvailableKits.filter(k => !shootAssignedKitIds.has(k.id));
+                    const sections: { label: string; kits: typeof allAvailableKits }[] = [];
+                    if (shootAssigned.length > 0) sections.push({ label: "Assigned to this shoot", kits: shootAssigned });
+                    if (others.length > 0) sections.push({
+                      label: shootAssigned.length > 0 ? "Other available" : "Available",
+                      kits: others,
+                    });
+                    return sections.map(section => (
+                      <div key={section.label}>
+                        {sections.length > 1 && (
+                          <div style={{
+                            fontSize: 9, fontFamily: "'DM Mono',monospace",
+                            color: "var(--t3)", letterSpacing: "0.08em",
+                            textTransform: "uppercase", padding: "8px 0 6px 4px",
+                          }}>{section.label} ({section.kits.length})</div>
                         )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {section.kits.map(kit => {
+                            const components = data.assets.filter(a => kit.componentIds.includes(a.id));
+                            const isOpen = expandedKits[kit.id];
+                            const isSelected = selectedKitIds.has(kit.id);
+                            const hasFlagged = components.some(c => c.serviceFlag);
+                            return (
+                              <div key={kit.id} style={{
+                                background: isSelected ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                                border: `1px solid ${isSelected ? "var(--acc)" : "var(--b1)"}`,
+                                borderRadius: 8, overflow: "hidden",
+                              }}>
+                                <div style={{ display: "flex", alignItems: "stretch", minHeight: 56 }}>
+                                  {/* Checkbox column */}
+                                  <button
+                                    onClick={() => toggleKitSelected(kit.id)}
+                                    style={{
+                                      padding: "0 14px",
+                                      background: "transparent", border: "none",
+                                      cursor: "pointer", display: "flex",
+                                      alignItems: "center", justifyContent: "center",
+                                    }}
+                                    aria-label={isSelected ? "Deselect" : "Select"}
+                                  >
+                                    <div style={{
+                                      width: 22, height: 22, borderRadius: 5,
+                                      border: `2px solid ${isSelected ? "var(--acc)" : "var(--b2)"}`,
+                                      background: isSelected ? "var(--acc)" : "transparent",
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      color: "var(--bg)", fontSize: 14, fontWeight: 700,
+                                    }}>
+                                      {isSelected ? "✓" : ""}
+                                    </div>
+                                  </button>
+                                  {/* Kit details — click to expand */}
+                                  <div onClick={() => toggleKit(kit.id)} style={{
+                                    flex: 1, padding: "12px 14px 12px 0", cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                  }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+                                        {kit.name}
+                                        {hasFlagged && <span style={{ color: "var(--red)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
+                                      </div>
+                                      <div style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t2)" }}>
+                                        {kit.barcode} · {kit.componentIds.length} items
+                                      </div>
+                                    </div>
+                                    <span style={{
+                                      fontSize: 11, color: "var(--t3)",
+                                      transition: "transform 0.15s",
+                                      transform: isOpen ? "rotate(0)" : "rotate(-90deg)",
+                                      flexShrink: 0,
+                                    }}>▾</span>
+                                  </div>
+                                </div>
+                                {isOpen && (
+                                  <div style={{ borderTop: "1px solid var(--b1)", padding: "6px 0" }}>
+                                    {components.map(c => (
+                                      <div key={c.id} style={{ padding: "5px 14px 5px 50px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--t2)", display: "flex", alignItems: "center", gap: 7 }}>
+                                        <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--b2)", flexShrink: 0 }} />
+                                        {c.name}
+                                        {c.serviceFlag && <span style={{ color: "var(--red)", fontSize: 10, marginLeft: 4 }}>⚠ {c.serviceFlag.severity}</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    );
-                  })}
+                    ));
+                  })()}
                 </div>
-                {data.assets.some(a => a.serviceFlag?.severity === "critical" && kitsForCheckout.some(k => k.componentIds.includes(a.id))) && (
-                  <div style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.25)", borderRadius: 7, padding: "10px 12px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--amber)" }}>
-                    ⚠ One or more components have a critical service flag and may be blocked at checkout.
+
+                {/* Critical-flag warning */}
+                {kitsForCheckout.some(k => {
+                  const components = data.assets.filter(a => k.componentIds.includes(a.id));
+                  return components.some(c => c.serviceFlag?.severity === "critical");
+                }) && (
+                  <div style={{ background: "rgba(255,79,79,0.08)", border: "1px solid rgba(255,79,79,0.25)", borderRadius: 7, padding: "10px 12px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--red)" }}>
+                    ⚠ One or more selected kits contain a critical-flagged component and will be blocked at checkout.
                   </div>
                 )}
               </div>
@@ -552,7 +680,17 @@ export default function KioskPage() {
                 <button onClick={() => goStep(3)} style={{ background: "var(--acc)", color: "var(--bg)", border: "none", padding: "12px 24px", borderRadius: 7, fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif", cursor: "pointer", minHeight: 44 }}>Continue →</button>
               )}
               {step === 3 && (
-                <button onClick={() => goStep(4)} style={{ background: "var(--acc)", color: "var(--bg)", border: "none", padding: "12px 24px", borderRadius: 7, fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif", cursor: "pointer", minHeight: 44 }}>Continue →</button>
+                <button
+                  onClick={() => goStep(4)}
+                  disabled={selectedKitIds.size === 0}
+                  style={{
+                    background: selectedKitIds.size === 0 ? "var(--s3)" : "var(--acc)",
+                    color: selectedKitIds.size === 0 ? "var(--t3)" : "var(--bg)",
+                    border: "none", padding: "12px 24px", borderRadius: 7,
+                    fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif",
+                    cursor: selectedKitIds.size === 0 ? "not-allowed" : "pointer",
+                    minHeight: 44,
+                  }}>Continue →</button>
               )}
               {step === 4 && (
                 <button onClick={() => {

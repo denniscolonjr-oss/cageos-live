@@ -289,25 +289,28 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   /** Remove an asset entirely. Cleans up kit membership and any open flags too. */
-  const deleteAsset = useCallback((assetId: string) => {
-    if (isReadOnly) return;
+  const deleteAsset = useCallback((assetId: string): (() => void) | null => {
+    if (isReadOnly) return null;
+    let snapshot: WorkspaceData | null = null;
     updateUserData(d => {
       const target = d.assets.find(a => a.id === assetId);
       if (!target) return d;
+      snapshot = d; // capture pre-delete state
       const next = {
         ...d,
         assets: d.assets.filter(a => a.id !== assetId),
-        // Remove from any kit that referenced it
         kits: d.kits.map(k => k.componentIds.includes(assetId)
           ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
           : k),
-        // Resolve any open flags for this asset
         flags: d.flags.map(f => f.assetId === assetId && f.status !== "resolved"
           ? { ...f, status: "resolved" as const, resolvedAtISO: new Date().toISOString(), resolvedBy: "system", resolutionSummary: "Asset deleted." }
           : f),
       };
       return appendEvent(next, "asset_added", `Deleted ${target.name}`, { detail: target.barcode });
     });
+    if (!snapshot) return null;
+    const captured = snapshot;
+    return () => updateUserData(() => appendEvent(captured, "asset_added", `Restored deleted asset`));
   }, [isReadOnly, updateUserData]);
 
   /** Patch a kit's fields. */
@@ -322,22 +325,26 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   /** Delete a kit. Components stay in inventory but lose their kitId reference. */
-  const deleteKit = useCallback((kitId: string) => {
-    if (isReadOnly) return;
+  const deleteKit = useCallback((kitId: string): (() => void) | null => {
+    if (isReadOnly) return null;
+    let snapshot: WorkspaceData | null = null;
     updateUserData(d => {
       const target = d.kits.find(k => k.id === kitId);
       if (!target) return d;
+      snapshot = d;
       const next = {
         ...d,
         kits: d.kits.filter(k => k.id !== kitId),
         assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
-        // Also unlink from any shoot's assignedKits
         shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
           ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
           : s),
       };
       return appendEvent(next, "kit_added", `Deleted ${target.name}`, { detail: target.barcode });
     });
+    if (!snapshot) return null;
+    const captured = snapshot;
+    return () => updateUserData(() => appendEvent(captured, "kit_added", `Restored deleted kit`));
   }, [isReadOnly, updateUserData]);
 
   /** Attach a single asset to a kit. Removes from any prior kit first. */
@@ -401,6 +408,17 @@ function useWorkspaceImpl() {
     ));
   }, [isReadOnly, updateUserData]);
 
+  /** Patch any subset of a profile's fields. */
+  const updateProfile = useCallback((profileId: string, patch: Partial<UserProfile>) => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const before = d.profiles.find(p => p.id === profileId);
+      if (!before) return d;
+      const next = { ...d, profiles: d.profiles.map(p => p.id === profileId ? { ...p, ...patch } : p) };
+      return appendEvent(next, "team_added", `Updated ${before.name}'s profile`, { detail: before.initials });
+    });
+  }, [isReadOnly, updateUserData]);
+
   const updateOrg = useCallback((orgName: string, orgLocation: string) => {
     if (isReadOnly) return;
     updateUserData(d => ({ ...d, orgName, orgLocation }));
@@ -453,14 +471,19 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
-  const deleteShoot = useCallback((id: string) => {
-    if (isReadOnly) return;
+  const deleteShoot = useCallback((id: string): (() => void) | null => {
+    if (isReadOnly) return null;
+    let snapshot: WorkspaceData | null = null;
     updateUserData(d => {
       const target = d.shoots.find(s => s.id === id);
+      if (!target) return d;
+      snapshot = d;
       const next = { ...d, shoots: d.shoots.filter(s => s.id !== id) };
-      if (!target) return next;
       return appendEvent(next, "shoot_deleted", `Deleted ${target.title}`);
     });
+    if (!snapshot) return null;
+    const captured = snapshot;
+    return () => updateUserData(() => appendEvent(captured, "shoot_scheduled", `Restored deleted shoot`));
   }, [isReadOnly, updateUserData]);
 
   // --- Service flag mutators ---
@@ -693,6 +716,26 @@ function useWorkspaceImpl() {
     return c.status === "active" || c.status === "overdue";
   });
 
+  /**
+   * Compute kit status from its components instead of trusting the stored field.
+   * - All components "in" → "available"
+   * - All components "out" → "out"
+   * - Mixed → "partial"
+   * - No components → "available" (empty kits)
+   */
+  function computeKitStatus(kit: Kit): "available" | "out" | "partial" {
+    if (kit.componentIds.length === 0) return "available";
+    const components = data.assets.filter(a => kit.componentIds.includes(a.id));
+    if (components.length === 0) return "available";
+    const out = components.filter(a => a.status === "out").length;
+    if (out === 0) return "available";
+    if (out === components.length) return "out";
+    return "partial";
+  }
+
+  /** All kits with their status field overridden by the computed value. */
+  const kits = data.kits.map(k => ({ ...k, status: computeKitStatus(k) }));
+
   /** All open or in-repair flags (anything not yet resolved). */
   const openFlags = data.flags.filter(f => f.status !== "resolved");
 
@@ -732,8 +775,11 @@ function useWorkspaceImpl() {
     knownInventoryValue: data.assets.reduce((sum, a) => sum + (a.cost || 0), 0),
   };
 
+  // Override kits in returned data with computed-status versions
+  const dataWithComputedKits: WorkspaceData = { ...data, kits };
+
   return {
-    data,
+    data: dataWithComputedKits,
     mode,
     hydrated,
     isReadOnly,
@@ -752,6 +798,7 @@ function useWorkspaceImpl() {
     detachAssetFromKit,
     addProfile,
     addProfiles,
+    updateProfile,
     addShoot,
     updateShoot,
     deleteShoot,

@@ -9,7 +9,6 @@ const TABS = [
   { href: "/dashboard", label: "Dashboard", short: "Dash" },
   { href: "/kiosk", label: "Kiosk", short: "Kiosk" },
   { href: "/profile", label: "Team", short: "Team" },
-  { href: "/product", label: "Product", short: "Product" },
 ];
 
 export default function TopNav() {

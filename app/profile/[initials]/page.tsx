@@ -1,13 +1,14 @@
 "use client";
 import { use, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { formatShootRange } from "@/lib/timezone";
+import { toast } from "@/components/ui/Toast";
 import AssignToShootModal from "@/components/forms/AssignToShootModal";
 
 const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
@@ -17,11 +18,19 @@ const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
   master: { pct: 100, color: "var(--acc)" },
 };
 
+const COLOR_OPTIONS = [
+  "#e2f55c", "#5aa0f0", "#a78bfa", "#4ade80",
+  "#f5a623", "#ff4f4f", "#ec4899", "#14b8a6",
+];
+
 export default function ProfileDetailPage({ params }: { params: Promise<{ initials: string }> }) {
   const isMobile = useIsMobile();
-  const { data, hydrated } = useWorkspace();
+  const router = useRouter();
+  const { data, hydrated, isReadOnly, updateProfile } = useWorkspace();
   const { initials } = use(params);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   if (!hydrated) {
     return (
@@ -38,6 +47,67 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
   if (!profile) return notFound();
 
   const nextLevel = profile.expertise.find(e => e.level !== "master");
+
+  // ===== Computed data from real workspace state =====
+
+  // Audit events involving this person — actor matches name
+  const profileEvents = data.events
+    .filter(e => e.actor === profile.name)
+    .slice(0, 20);
+
+  // Shoots this person was assigned to
+  const profileShoots = data.shoots
+    .filter(s => s.assignedTeam.includes(profile.initials) || s.leadInitials === profile.initials)
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+
+  // Computed collaborators: count co-occurrences with other team members across shoots
+  const collaboratorCounts = new Map<string, number>();
+  for (const shoot of data.shoots) {
+    if (!shoot.assignedTeam.includes(profile.initials)) continue;
+    for (const otherInitials of shoot.assignedTeam) {
+      if (otherInitials === profile.initials) continue;
+      collaboratorCounts.set(otherInitials, (collaboratorCounts.get(otherInitials) ?? 0) + 1);
+    }
+  }
+  const computedCollaborators = Array.from(collaboratorCounts.entries())
+    .map(([initials, sharedShoots]) => {
+      const p = data.profiles.find(pp => pp.initials === initials);
+      return p ? { name: p.name, initials: p.initials, color: p.color, sharedShoots } : null;
+    })
+    .filter((x): x is { name: string; initials: string; color: string; sharedShoots: number } => x !== null)
+    .sort((a, b) => b.sharedShoots - a.sharedShoots)
+    .slice(0, 6);
+
+  // Use real collaborators if available, otherwise the baked-in ones (demo data still has them)
+  const collaboratorsToShow = computedCollaborators.length > 0 ? computedCollaborators : profile.frequentCollaborators;
+
+  // Use real shoots+events to derive history if profile.history is empty
+  const hasRealActivity = profileShoots.length > 0 || profileEvents.length > 0;
+
+  // ===== Edit helpers =====
+
+  function startEdit(field: string, current: string) {
+    setEditingField(field);
+    setEditValue(current);
+  }
+
+  function commitEdit(field: string) {
+    if (isReadOnly) { setEditingField(null); return; }
+    updateProfile(profile!.id, { [field]: editValue.trim() });
+    toast(`${field} updated`);
+    setEditingField(null);
+  }
+
+  function cancelEdit() {
+    setEditingField(null);
+    setEditValue("");
+  }
+
+  function setColor(color: string) {
+    if (isReadOnly) return;
+    updateProfile(profile!.id, { color });
+    toast("Color updated");
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -170,7 +240,19 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                   )}
                 </div>
                 <Card>
-                  {profile.expertise.map((e, i) => (
+                  {profile.expertise.length === 0 ? (
+                    <div style={{ padding: 28, textAlign: "center" }}>
+                      <div style={{ fontSize: 22, opacity: 0.4, marginBottom: 10 }}>◇</div>
+                      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+                        Expertise tracking coming soon
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto" }}>
+                        Once {profile.name.split(" ")[0]} starts checking out gear, we&apos;ll
+                        surface their go-to categories, signature assets, and skill
+                        levels here automatically.
+                      </div>
+                    </div>
+                  ) : profile.expertise.map((e, i) => (
                     <div key={e.category} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < profile.expertise.length - 1 ? "1px solid var(--b1)" : "none" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -241,10 +323,59 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                 <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Activity</div>
                 <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Recent shoots</div>
                 <Card>
-                  {profile.history.length === 0 && (
-                    <div style={{ padding: 32, textAlign: "center", fontSize: 12, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>No shoot history yet</div>
+                  {profileShoots.length === 0 && profile.history.length === 0 && (
+                    <div style={{ padding: 32, textAlign: "center" }}>
+                      <div style={{ fontSize: 22, opacity: 0.4, marginBottom: 10 }}>◇</div>
+                      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+                        No shoots yet
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto" }}>
+                        Once {profile.name.split(" ")[0]} is assigned to a shoot, it
+                        will appear here with the kits used and the outcome.
+                      </div>
+                    </div>
                   )}
-                  {profile.history.map((h, i) => (
+                  {/* Real shoots from workspace data — preferred when available */}
+                  {profileShoots.length > 0 && profileShoots.slice(0, 12).map((s, i) => {
+                    const statusColor =
+                      s.status === "active" ? "var(--green)" :
+                      s.status === "scheduled" ? "var(--blue)" :
+                      s.status === "completed" ? "var(--t3)" : "var(--red)";
+                    const startDate = new Date(s.startsAt);
+                    const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(startDate);
+                    const isLead = s.leadInitials === profile.initials;
+                    return (
+                      <div key={s.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < Math.min(profileShoots.length, 12) - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12 }}>
+                        <div style={{ width: 4, flexShrink: 0, background: statusColor, borderRadius: 2 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8, flexWrap: "wrap" }}>
+                            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 600 }}>{s.title}</div>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)" }}>{dateLabel}</div>
+                          </div>
+                          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--t2)", marginBottom: 6 }}>
+                            {s.client} · {s.assignedKits.length} kit{s.assignedKits.length !== 1 ? "s" : ""}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            <Badge variant={s.status === "active" ? "green" : s.status === "scheduled" ? "blue" : s.status === "completed" ? "gray" : "red"}>
+                              {s.status}
+                            </Badge>
+                            {isLead && <Badge variant="blue" style={{ fontSize: 9 }}>LEAD</Badge>}
+                            {s.assignedKits.slice(0, 3).map(id => {
+                              const kit = data.kits.find(k => k.id === id);
+                              if (!kit) return null;
+                              return (
+                                <span key={id} style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t2)", background: "var(--s2)", padding: "2px 7px", borderRadius: 3 }}>
+                                  {kit.name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Demo-baked history fallback (only when no real shoots exist) */}
+                  {profileShoots.length === 0 && profile.history.map((h, i) => (
                     <div key={h.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < profile.history.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12 }}>
                       <div style={{ width: 4, flexShrink: 0, background: h.incident?.severity === "major" ? "var(--red)" : h.incident?.severity === "minor" ? "var(--amber)" : h.notesAdded ? "var(--acc)" : "var(--b2)", borderRadius: 2 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
