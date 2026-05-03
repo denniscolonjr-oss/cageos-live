@@ -440,6 +440,31 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
+  /**
+   * Permanently delete an asset. No archive, no undo. Use sparingly.
+   *
+   * Removes the asset row, strips it from any kit's componentIds, and
+   * leaves audit log entries intact (they reference the id but the row
+   * is gone — that's intentional). Caller is responsible for confirming
+   * with the user; the mutator just executes.
+   */
+  const permanentDeleteAsset = useCallback((assetId: string, actor: string = "—") => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.assets.find(a => a.id === assetId);
+      if (!target) return d;
+      const next = {
+        ...d,
+        assets: d.assets.filter(a => a.id !== assetId),
+        kits: d.kits.map(k => k.componentIds.includes(assetId)
+          ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
+          : k),
+        flags: d.flags.filter(f => f.assetId !== assetId),
+      };
+      return appendEvent(next, "asset_archived", `Permanently deleted ${target.name}`, { actor, detail: target.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
   /** Patch a kit's fields. */
   const updateKit = useCallback((kitId: string, patch: Partial<Kit>) => {
     if (isReadOnly) return;
@@ -545,6 +570,26 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
+  /** Permanently delete a kit. No archive, no undo. Components stay in inventory. */
+  const permanentDeleteKit = useCallback((kitId: string, actor: string = "—") => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.kits.find(k => k.id === kitId);
+      if (!target) return d;
+      const next = {
+        ...d,
+        kits: d.kits.filter(k => k.id !== kitId),
+        // Strip kit reference from any assets that pointed to it
+        assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
+        // Strip from any shoots' assignedKits
+        shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
+          ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
+          : s),
+      };
+      return appendEvent(next, "kit_archived", `Permanently deleted ${target.name}`, { actor, detail: target.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
   /** Attach a single asset to a kit. Removes from any prior kit first. */
   const attachAssetToKit = useCallback((assetId: string, kitId: string) => {
     if (isReadOnly) return;
@@ -635,35 +680,67 @@ function useWorkspaceImpl() {
    * Swap one component in a kit for another. Atomic operation: old leaves,
    * new joins, single audit event documents both sides of the change.
    */
+  /**
+   * Swap one component in a kit for another. The old leaves, the new joins.
+   * Implemented as one atomic state update for a single audit event.
+   *
+   * NOTE: This is a critical kit-prep path — when buggy, kits silently lose
+   * components and shoots blow up. Logs are kept on so failures surface in
+   * console rather than hiding silently.
+   */
   const swapKitComponent = useCallback((oldAssetId: string, newAssetId: string, actor: string = "—") => {
-    if (isReadOnly) return;
+    if (isReadOnly) {
+      console.warn("[swapKitComponent] blocked: workspace is read-only");
+      return;
+    }
     updateUserData(d => {
       const oldAsset = d.assets.find(a => a.id === oldAssetId);
       const newAsset = d.assets.find(a => a.id === newAssetId);
-      if (!oldAsset || !newAsset) return d;
-      // Find kit by walking componentIds — don't rely on oldAsset.kitId being in sync
+      if (!oldAsset) {
+        console.warn("[swapKitComponent] oldAsset not found:", oldAssetId);
+        return d;
+      }
+      if (!newAsset) {
+        console.warn("[swapKitComponent] newAsset not found:", newAssetId);
+        return d;
+      }
+      // Find target kit by walking componentIds — don't trust asset.kitId
       const kit = d.kits.find(k => k.componentIds.includes(oldAssetId));
-      if (!kit) return d;
-      const next = {
-        ...d,
-        assets: d.assets.map(a => {
-          if (a.id === oldAssetId) return { ...a, kitId: null };
-          if (a.id === newAssetId) return { ...a, kitId: kit.id };
-          return a;
-        }),
-        kits: d.kits.map(k => {
-          // Remove new asset from any other kit it might have been in
-          if (k.id !== kit.id && k.componentIds.includes(newAssetId)) {
-            return { ...k, componentIds: k.componentIds.filter(id => id !== newAssetId) };
-          }
-          // Update target kit: swap the IDs
-          if (k.id === kit.id) {
-            const updated = k.componentIds.map(id => id === oldAssetId ? newAssetId : id);
-            return { ...k, componentIds: updated };
-          }
-          return k;
-        }),
-      };
+      if (!kit) {
+        console.warn("[swapKitComponent] no kit contains oldAsset:", oldAssetId, "; available kits had components:", d.kits.map(k => ({ id: k.id, name: k.name, n: k.componentIds.length })));
+        return d;
+      }
+      // Compose the new state in two passes for clarity:
+      // 1. Update assets: clear oldAsset.kitId, set newAsset.kitId
+      const nextAssets = d.assets.map(a => {
+        if (a.id === oldAssetId) return { ...a, kitId: null };
+        if (a.id === newAssetId) return { ...a, kitId: kit.id };
+        return a;
+      });
+      // 2. Update kits:
+      //    - target kit: replace oldAssetId with newAssetId in componentIds
+      //    - any other kit that had newAssetId: remove it
+      const nextKits = d.kits.map(k => {
+        if (k.id === kit.id) {
+          // Replace old with new. If new was already in this kit somehow, dedupe.
+          const replaced = k.componentIds
+            .map(id => id === oldAssetId ? newAssetId : id)
+            .filter((id, i, arr) => arr.indexOf(id) === i);
+          return { ...k, componentIds: replaced };
+        }
+        if (k.componentIds.includes(newAssetId)) {
+          return { ...k, componentIds: k.componentIds.filter(id => id !== newAssetId) };
+        }
+        return k;
+      });
+      const next: WorkspaceData = { ...d, assets: nextAssets, kits: nextKits };
+      console.log("[swapKitComponent] success:", {
+        kit: kit.name,
+        old: oldAsset.name,
+        new: newAsset.name,
+        kitComponentsBefore: kit.componentIds,
+        kitComponentsAfter: nextKits.find(k => k.id === kit.id)?.componentIds,
+      });
       return appendEvent(next, "kit_composition_changed",
         `Swapped ${oldAsset.name} for ${newAsset.name} in ${kit.name}`,
         { actor, detail: kit.barcode });
@@ -1096,10 +1173,12 @@ function useWorkspaceImpl() {
     updateAsset,
     deleteAsset,
     restoreAsset,
+    permanentDeleteAsset,
     addKit,
     updateKit,
     deleteKit,
     restoreKit,
+    permanentDeleteKit,
     attachAssetToKit,
     attachAssetsToKit,
     swapKitComponent,

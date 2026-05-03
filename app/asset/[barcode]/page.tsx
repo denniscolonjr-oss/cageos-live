@@ -21,8 +21,9 @@ const LIFECYCLE_OPTIONS = ["active", "retired", "lost"] as const;
 export default function AssetDetailPage({ params }: { params: Promise<{ barcode: string }> }) {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateAsset, deleteAsset, restoreAsset, detachAssetFromKit } = useWorkspace();
+  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateAsset, deleteAsset, restoreAsset, permanentDeleteAsset, detachAssetFromKit } = useWorkspace();
   const { activeWorkspaceId } = useAuth();
+  const auth = useAuth();
   const { barcode } = use(params);
 
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -35,7 +36,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
 
   const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
 
-  if (!hydrated) {
+  if (!hydrated || auth.loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <TopNav />
@@ -99,36 +100,25 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
     setEditValue("");
   }
 
-  function handleDelete() {
+  function handleArchive() {
     if (!asset) return;
-    // Probe first — the new deleteAsset returns a result object so we know
-    // whether to confirm "delete" vs "archive" copy.
-    const everUsed = data.checkouts.some(c => {
-      const ac = c as { assetIds?: string[] };
-      return ac.assetIds?.includes(asset.id);
-    }) || data.flags.some(f => f.assetId === asset.id) || rawKits.some(k => k.componentIds.includes(asset.id));
-    const verb = everUsed ? "Archive" : "Delete";
-    const explainer = everUsed
-      ? "This asset has history (checkouts, flags, or kit membership). It will be moved to the Archived list and removed from active inventory. You can restore it later."
-      : "This asset has no history yet. It will be permanently removed.";
-    if (!confirm(`${verb} "${asset.name}"?\n\n${explainer}`)) return;
+    if (!confirm(`Archive "${asset.name}"?\n\nIt will be hidden from active inventory but kept for audit trail. You can restore it anytime from the Archived view.`)) return;
 
     const assetName = asset.name;
     const assetId = asset.id;
     const result = deleteAsset(assetId, "Manager");
-
-    if (!result) return; // read-only or asset not found
+    if (!result) return;
 
     if (result.kind === "blocked") {
-      toast(`Cannot ${verb.toLowerCase()} ${assetName}`, { variant: "error", detail: result.reason });
+      toast(`Cannot archive ${assetName}`, { variant: "error", detail: result.reason });
       return;
     }
 
-    // Hard delete or archive — both are reversible. Navigate first to avoid
-    // 404 flash, then delete and offer Undo.
+    // The deleteAsset mutator decides hard-delete vs archive based on history.
+    // For the Archive button specifically, we treat both outcomes as "archived"
+    // from the user's perspective — recoverable via Undo or the Archived tab.
     router.push("/dashboard");
-    const verbPast = result.kind === "deleted" ? "deleted" : "archived";
-    toast(`${assetName} ${verbPast}`, {
+    toast(`${assetName} archived`, {
       action: {
         label: "Undo",
         onClick: () => { result.undo(); toast(`${assetName} restored`); },
@@ -136,11 +126,43 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
     });
   }
 
+  function handlePermanentDelete() {
+    if (!asset) return;
+    // Two-step confirm because there's no undo for permanent deletes.
+    if (!confirm(`PERMANENTLY DELETE "${asset.name}"?\n\nThis cannot be undone. The asset, its history, and any references will be removed forever.\n\nIf you might want to recover this later, use Archive instead.`)) return;
+    if (!confirm(`Are you absolutely sure you want to permanently delete ${asset.name}? Type cancel to back out.`)) return;
+
+    // Safety check: replicate the same "blocked" guards as deleteAsset.
+    const inActiveCheckout = data.checkouts.some(c => {
+      if (c.status !== "active" && c.status !== "overdue") return false;
+      const ac = c as { assetIds?: string[] };
+      if (ac.assetIds?.includes(asset.id)) return true;
+      if (asset.kitId) {
+        const ck = c as { kitIds?: string[] };
+        if (ck.kitIds?.includes(asset.kitId)) return true;
+      }
+      return false;
+    });
+    if (inActiveCheckout) {
+      toast(`Cannot delete ${asset.name}`, { variant: "error", detail: "Asset is in an active checkout. Return it first." });
+      return;
+    }
+
+    const assetName = asset.name;
+    const assetId = asset.id;
+    router.push("/dashboard");
+    permanentDeleteAsset(assetId, "Manager");
+    toast(`${assetName} permanently deleted`, { variant: "error" });
+  }
+
   function handleRestore() {
     if (!asset || !isArchived) return;
     restoreAsset(asset.id, "Manager");
     toast(`${asset.name} restored`);
   }
+
+  // legacy handler retained for any callers; now routes to archive
+  function handleDelete() { handleArchive(); }
 
   function handleDetachFromKit() {
     if (!kit) return;
@@ -662,25 +684,46 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                     <div style={{ padding: "16px 18px" }}>
                       <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
-                        {blocked && inActiveCheckout && "Cannot archive — asset is part of an active checkout. Return it first."}
-                        {blocked && !inActiveCheckout && upcomingShoots.length > 0 && `Cannot archive — asset's kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
-                        {!blocked && everUsed && "This asset has history. It will be archived (hidden from active inventory but kept for audit trail). You can restore it anytime."}
-                        {!blocked && !everUsed && "This asset has no history. It will be permanently removed."}
+                        {blocked && inActiveCheckout && "This asset is part of an active checkout. Return it first to archive or delete."}
+                        {blocked && !inActiveCheckout && upcomingShoots.length > 0 && `This asset's kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {!blocked && "Archive moves the asset to the Archived list (recoverable). Permanent delete removes it forever (no undo)."}
                       </div>
-                      <button
-                        onClick={handleDelete}
-                        disabled={blocked}
-                        style={{
-                          width: "100%",
-                          padding: "10px 16px", borderRadius: 6,
-                          background: "transparent",
-                          border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
-                          color: blocked ? "var(--t3)" : "var(--red)",
-                          cursor: blocked ? "not-allowed" : "pointer",
-                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
-                        }}>
-                        {blocked ? `Cannot ${verb.toLowerCase()}` : `${verb} asset`}
-                      </button>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button
+                          onClick={handleArchive}
+                          disabled={blocked}
+                          title="Hide from active inventory but keep audit history. Recoverable from the Archived view."
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px", borderRadius: 6,
+                            background: blocked ? "var(--s2)" : "var(--s2)",
+                            border: `1px solid ${blocked ? "var(--b1)" : "var(--amber)"}`,
+                            color: blocked ? "var(--t3)" : "var(--amber)",
+                            cursor: blocked ? "not-allowed" : "pointer",
+                            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                            minHeight: 40,
+                          }}>
+                          ⏸ Archive asset {!blocked && <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(recoverable)</span>}
+                        </button>
+
+                        <button
+                          onClick={handlePermanentDelete}
+                          disabled={blocked}
+                          title="Permanently remove. No undo. Cannot be recovered."
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px", borderRadius: 6,
+                            background: "transparent",
+                            border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
+                            color: blocked ? "var(--t3)" : "var(--red)",
+                            cursor: blocked ? "not-allowed" : "pointer",
+                            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                            minHeight: 40,
+                          }}>
+                          ✕ Permanently delete {!blocked && <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(no undo)</span>}
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 );

@@ -9,13 +9,15 @@ import AddComponentsModal from "@/components/forms/AddComponentsModal";
 import SwapComponentModal from "@/components/forms/SwapComponentModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
 import { formatShootRange } from "@/lib/timezone";
 
 export default function KitDetailPage({ params }: { params: Promise<{ barcode: string }> }) {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateKit, deleteKit, restoreKit, detachAssetFromKit, openFlags } = useWorkspace();
+  const auth = useAuth();
+  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateKit, deleteKit, restoreKit, permanentDeleteKit, detachAssetFromKit, openFlags } = useWorkspace();
   const { barcode } = use(params);
 
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   const [showAddComponents, setShowAddComponents] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{ assetId: string; category: string } | null>(null);
 
-  if (!hydrated) {
+  if (!hydrated || auth.loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <TopNav />
@@ -79,21 +81,9 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
     toast(`Removed ${assetName} from kit`);
   }
 
-  function handleDelete() {
+  function handleArchive() {
     if (!kit) return;
-
-    const everCheckedOut = data.checkouts.some(c => {
-      const ck = c as { kitIds?: string[] };
-      return ck.kitIds?.includes(kit.id);
-    });
-    const hasComponents = kit.componentIds.length > 0;
-    const hasHistory = everCheckedOut || hasComponents;
-
-    const verb = hasHistory ? "Archive" : "Delete";
-    const explainer = hasHistory
-      ? "This kit has history (checkouts or components). It will be moved to the Archived list and removed from active inventory. Components stay available. You can restore it later."
-      : "This kit has no history yet. It will be permanently removed.";
-    if (!confirm(`${verb} "${kit.name}"?\n\n${explainer}`)) return;
+    if (!confirm(`Archive "${kit.name}"?\n\nIt will be hidden from active inventory but kept for audit trail. Components stay available. You can restore it anytime.`)) return;
 
     const kitName = kit.name;
     const kitId = kit.id;
@@ -101,13 +91,12 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
     if (!result) return;
 
     if (result.kind === "blocked") {
-      toast(`Cannot ${verb.toLowerCase()} ${kitName}`, { variant: "error", detail: result.reason });
+      toast(`Cannot archive ${kitName}`, { variant: "error", detail: result.reason });
       return;
     }
 
     router.push("/dashboard");
-    const verbPast = result.kind === "deleted" ? "deleted" : "archived";
-    toast(`${kitName} ${verbPast}`, {
+    toast(`${kitName} archived`, {
       action: {
         label: "Undo",
         onClick: () => { result.undo(); toast(`${kitName} restored`); },
@@ -115,11 +104,36 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
     });
   }
 
+  function handlePermanentDelete() {
+    if (!kit) return;
+    if (!confirm(`PERMANENTLY DELETE "${kit.name}"?\n\nThis cannot be undone. The kit will be removed forever. Components stay in inventory.\n\nIf you might want to recover this later, use Archive instead.`)) return;
+    if (!confirm(`Are you absolutely sure you want to permanently delete ${kit.name}?`)) return;
+
+    const isCheckedOut = data.checkouts.some(c => {
+      if (c.status !== "active" && c.status !== "overdue") return false;
+      const ck = c as { kitIds?: string[] };
+      return ck.kitIds?.includes(kit.id) ?? false;
+    });
+    if (isCheckedOut) {
+      toast(`Cannot delete ${kit.name}`, { variant: "error", detail: "Kit is currently checked out. Return it first." });
+      return;
+    }
+
+    const kitName = kit.name;
+    const kitId = kit.id;
+    router.push("/dashboard");
+    permanentDeleteKit(kitId, "Manager");
+    toast(`${kitName} permanently deleted`, { variant: "error" });
+  }
+
   function handleRestore() {
     if (!kit || !isArchived) return;
     restoreKit(kit.id, "Manager");
     toast(`${kit.name} restored`);
   }
+
+  // Legacy alias
+  function handleDelete() { handleArchive(); }
 
   function openSwap(assetId: string, category: string) {
     setSwapTarget({ assetId, category });
@@ -449,25 +463,46 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                     <div style={{ padding: "16px 18px" }}>
                       <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
-                        {blocked && isCheckedOut && "Cannot archive — kit is currently checked out. Return it first."}
-                        {blocked && !isCheckedOut && upcomingShoots.length > 0 && `Cannot archive — kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
-                        {!blocked && hasHistory && "This kit has history. It will be archived (hidden from active inventory but kept for audit trail). Components stay in inventory. You can restore it anytime."}
-                        {!blocked && !hasHistory && "This kit has no history yet. It will be permanently removed."}
+                        {blocked && isCheckedOut && "This kit is currently checked out. Return it first to archive or delete."}
+                        {blocked && !isCheckedOut && upcomingShoots.length > 0 && `This kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {!blocked && "Archive moves the kit to the Archived list (recoverable). Permanent delete removes it forever (no undo). Components stay in inventory either way."}
                       </div>
-                      <button
-                        onClick={handleDelete}
-                        disabled={blocked}
-                        style={{
-                          width: "100%",
-                          padding: "10px 16px", borderRadius: 6,
-                          background: "transparent",
-                          border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
-                          color: blocked ? "var(--t3)" : "var(--red)",
-                          cursor: blocked ? "not-allowed" : "pointer",
-                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
-                        }}>
-                        {blocked ? `Cannot ${verb.toLowerCase()}` : `${verb} kit`}
-                      </button>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button
+                          onClick={handleArchive}
+                          disabled={blocked}
+                          title="Hide from active inventory but keep audit history. Recoverable from the Archived view."
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px", borderRadius: 6,
+                            background: "var(--s2)",
+                            border: `1px solid ${blocked ? "var(--b1)" : "var(--amber)"}`,
+                            color: blocked ? "var(--t3)" : "var(--amber)",
+                            cursor: blocked ? "not-allowed" : "pointer",
+                            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                            minHeight: 40,
+                          }}>
+                          ⏸ Archive kit {!blocked && <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(recoverable)</span>}
+                        </button>
+
+                        <button
+                          onClick={handlePermanentDelete}
+                          disabled={blocked}
+                          title="Permanently remove. No undo. Cannot be recovered."
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px", borderRadius: 6,
+                            background: "transparent",
+                            border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
+                            color: blocked ? "var(--t3)" : "var(--red)",
+                            cursor: blocked ? "not-allowed" : "pointer",
+                            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                            minHeight: 40,
+                          }}>
+                          ✕ Permanently delete {!blocked && <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(no undo)</span>}
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 );

@@ -16,6 +16,7 @@ import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
 import type { Shoot } from "@/lib/hooks/workspaceTypes";
 import type { Asset } from "@/lib/data";
@@ -37,6 +38,7 @@ const PAGES: Record<string, string> = {
 export default function DashboardPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
+  const auth = useAuth();
   const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode, archivedAssets, archivedKits, restoreAsset, restoreKit } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
@@ -189,7 +191,10 @@ export default function DashboardPage() {
     </>
   );
 
-  if (!hydrated) {
+  // Gate the dashboard render on BOTH auth.loading completing AND workspace hydration.
+  // Without auth.loading we'd render with the localStorage adapter's empty state
+  // briefly before the Supabase adapter takes over, causing a "demo flash" effect.
+  if (!hydrated || auth.loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <TopNav />
