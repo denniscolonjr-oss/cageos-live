@@ -576,16 +576,24 @@ function useWorkspaceImpl() {
     if (isReadOnly) return;
     updateUserData(d => {
       const asset = d.assets.find(a => a.id === assetId);
-      if (!asset || !asset.kitId) return d;
-      const kit = d.kits.find(k => k.id === asset.kitId);
+      if (!asset) return d;
+      // Find kit by walking componentIds — don't rely on asset.kitId being in sync
+      const kit = d.kits.find(k => k.componentIds.includes(assetId));
+      if (!kit) {
+        // Asset isn't in any kit, but clear stale kitId if set
+        if (asset.kitId) {
+          return { ...d, assets: d.assets.map(a => a.id === assetId ? { ...a, kitId: null } : a) };
+        }
+        return d;
+      }
       const next = {
         ...d,
-        kits: d.kits.map(k => k.id === asset.kitId
+        kits: d.kits.map(k => k.id === kit.id
           ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
           : k),
         assets: d.assets.map(a => a.id === assetId ? { ...a, kitId: null } : a),
       };
-      return appendEvent(next, "kit_composition_changed", `Removed ${asset.name} from ${kit?.name ?? "kit"}`, { detail: kit?.barcode });
+      return appendEvent(next, "kit_composition_changed", `Removed ${asset.name} from ${kit.name}`, { detail: kit.barcode });
     });
   }, [isReadOnly, updateUserData]);
 
@@ -632,8 +640,9 @@ function useWorkspaceImpl() {
     updateUserData(d => {
       const oldAsset = d.assets.find(a => a.id === oldAssetId);
       const newAsset = d.assets.find(a => a.id === newAssetId);
-      if (!oldAsset || !newAsset || !oldAsset.kitId) return d;
-      const kit = d.kits.find(k => k.id === oldAsset.kitId);
+      if (!oldAsset || !newAsset) return d;
+      // Find kit by walking componentIds — don't rely on oldAsset.kitId being in sync
+      const kit = d.kits.find(k => k.componentIds.includes(oldAssetId));
       if (!kit) return d;
       const next = {
         ...d,
