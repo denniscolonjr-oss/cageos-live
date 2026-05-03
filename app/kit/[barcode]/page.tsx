@@ -5,6 +5,8 @@ import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
+import AddComponentsModal from "@/components/forms/AddComponentsModal";
+import SwapComponentModal from "@/components/forms/SwapComponentModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { toast } from "@/components/ui/Toast";
@@ -13,11 +15,13 @@ import { formatShootRange } from "@/lib/timezone";
 export default function KitDetailPage({ params }: { params: Promise<{ barcode: string }> }) {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { data, hydrated, isReadOnly, updateKit, deleteKit, detachAssetFromKit, openFlags } = useWorkspace();
+  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateKit, deleteKit, restoreKit, detachAssetFromKit, openFlags } = useWorkspace();
   const { barcode } = use(params);
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [showAddComponents, setShowAddComponents] = useState(false);
+  const [swapTarget, setSwapTarget] = useState<{ assetId: string; category: string } | null>(null);
 
   if (!hydrated) {
     return (
@@ -30,11 +34,14 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
     );
   }
 
+  // Search RAW kits so URLs to archived kits resolve
   const decoded = decodeURIComponent(barcode);
-  const kit = data.kits.find(k => k.barcode === decoded || k.id === decoded);
+  const kit = rawKits.find(k => k.barcode === decoded || k.id === decoded);
   if (!kit) return notFound();
 
-  const components = data.assets.filter(a => kit.componentIds.includes(a.id));
+  const isArchived = !!kit.archivedAt;
+  // Use rawAssets so archived components don't disappear; we'll mark them
+  const components = rawAssets.filter(a => kit.componentIds.includes(a.id));
   const blockedComponents = components.filter(c => openFlags.some(f => f.assetId === c.id));
 
   // Shoots that have this kit assigned
@@ -73,19 +80,49 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   }
 
   function handleDelete() {
-    if (!confirm(`Delete "${kit!.name}"? Components stay in inventory but lose their kit assignment.`)) return;
-    const kitName = kit!.name;
-    const kitId = kit!.id;
-    // Navigate FIRST so we don't render the now-missing kit's detail page
-    // and trigger a 404 flash before the redirect lands.
-    router.push("/dashboard");
-    const undo = deleteKit(kitId);
-    toast(`${kitName} deleted`, {
-      action: undo ? { label: "Undo", onClick: () => {
-        undo();
-        toast(`${kitName} restored`);
-      } } : undefined,
+    if (!kit) return;
+
+    const everCheckedOut = data.checkouts.some(c => {
+      const ck = c as { kitIds?: string[] };
+      return ck.kitIds?.includes(kit.id);
     });
+    const hasComponents = kit.componentIds.length > 0;
+    const hasHistory = everCheckedOut || hasComponents;
+
+    const verb = hasHistory ? "Archive" : "Delete";
+    const explainer = hasHistory
+      ? "This kit has history (checkouts or components). It will be moved to the Archived list and removed from active inventory. Components stay available. You can restore it later."
+      : "This kit has no history yet. It will be permanently removed.";
+    if (!confirm(`${verb} "${kit.name}"?\n\n${explainer}`)) return;
+
+    const kitName = kit.name;
+    const kitId = kit.id;
+    const result = deleteKit(kitId, "Manager");
+    if (!result) return;
+
+    if (result.kind === "blocked") {
+      toast(`Cannot ${verb.toLowerCase()} ${kitName}`, { variant: "error", detail: result.reason });
+      return;
+    }
+
+    router.push("/dashboard");
+    const verbPast = result.kind === "deleted" ? "deleted" : "archived";
+    toast(`${kitName} ${verbPast}`, {
+      action: {
+        label: "Undo",
+        onClick: () => { result.undo(); toast(`${kitName} restored`); },
+      },
+    });
+  }
+
+  function handleRestore() {
+    if (!kit || !isArchived) return;
+    restoreKit(kit.id, "Manager");
+    toast(`${kit.name} restored`);
+  }
+
+  function openSwap(assetId: string, category: string) {
+    setSwapTarget({ assetId, category });
   }
 
   const statusVariant: "green" | "amber" | "red" =
@@ -143,6 +180,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                   >{kit.name}</h1>
                 )}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  {isArchived && <Badge variant="gray">⏸ archived</Badge>}
                   <Badge variant={statusVariant}>{kit.status}</Badge>
                   <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)" }}>
                     {components.length} component{components.length === 1 ? "" : "s"}
@@ -151,6 +189,20 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                     <Badge variant="red">⚠ {blockedComponents.length} flagged</Badge>
                   )}
                 </div>
+                {isArchived && (
+                  <div style={{
+                    marginTop: 14,
+                    padding: "10px 13px",
+                    background: "rgba(140,136,128,0.08)",
+                    border: "1px solid var(--b1)",
+                    borderRadius: 7,
+                    fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", lineHeight: 1.5,
+                  }}>
+                    Archived {kit.archivedAt ? new Date(kit.archivedAt).toLocaleString() : ""}
+                    {kit.archivedBy && ` by ${kit.archivedBy}`}.
+                    Hidden from active inventory and the kiosk picker.
+                  </div>
+                )}
               </div>
 
               {!isReadOnly && (
@@ -223,6 +275,19 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                   <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700 }}>
                     Components ({components.length})
                   </div>
+                  {!isReadOnly && !isArchived && (
+                    <button
+                      onClick={() => setShowAddComponents(true)}
+                      style={{
+                        padding: "6px 12px", borderRadius: 6,
+                        background: "var(--acc)", border: "none",
+                        color: "var(--bg)", cursor: "pointer",
+                        fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                        minHeight: 32,
+                      }}>
+                      + Add components
+                    </button>
+                  )}
                 </div>
                 {components.length === 0 ? (
                   <div style={{ padding: "24px 18px", textAlign: "center", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
@@ -231,16 +296,19 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                 ) : (
                   components.map((c, i) => {
                     const flagged = openFlags.find(f => f.assetId === c.id);
+                    const componentArchived = !!c.archivedAt;
                     return (
                       <div key={c.id} style={{
                         padding: "12px 18px",
                         borderBottom: i < components.length - 1 ? "1px solid var(--b1)" : "none",
                         display: "flex", gap: 10, alignItems: "center",
+                        opacity: componentArchived ? 0.5 : 1,
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Link href={`/asset/${encodeURIComponent(c.barcode)}`} style={{ textDecoration: "none" }}>
                             <div style={{ fontSize: 13, color: "var(--t1)", marginBottom: 3 }}>
                               {c.name}
+                              {componentArchived && <span style={{ color: "var(--t3)", marginLeft: 6, fontSize: 11 }}>(archived)</span>}
                               {flagged && (
                                 <span title={`Flagged ${flagged.severity}`} style={{ color: "var(--red)", marginLeft: 6, fontSize: 11 }}>⚠</span>
                               )}
@@ -251,19 +319,33 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                           </Link>
                         </div>
                         <Badge variant={c.status === "in" ? "green" : c.status === "out" ? "amber" : "red"}>{c.status}</Badge>
-                        {!isReadOnly && (
-                          <button
-                            onClick={() => handleDetach(c.id, c.name)}
-                            title="Remove from kit"
-                            style={{
-                              padding: "5px 10px", borderRadius: 5,
-                              background: "transparent", border: "1px solid var(--b1)",
-                              color: "var(--t3)", cursor: "pointer",
-                              fontFamily: "'DM Mono',monospace", fontSize: 10,
-                              minHeight: 32,
-                            }}>
-                            Remove
-                          </button>
+                        {!isReadOnly && !isArchived && (
+                          <>
+                            <button
+                              onClick={() => openSwap(c.id, c.category)}
+                              title="Swap for another asset of the same category"
+                              style={{
+                                padding: "5px 10px", borderRadius: 5,
+                                background: "transparent", border: "1px solid var(--b1)",
+                                color: "var(--t1)", cursor: "pointer",
+                                fontFamily: "'DM Mono',monospace", fontSize: 10,
+                                minHeight: 32,
+                              }}>
+                              ⇄ Swap
+                            </button>
+                            <button
+                              onClick={() => handleDetach(c.id, c.name)}
+                              title="Remove from kit"
+                              style={{
+                                padding: "5px 10px", borderRadius: 5,
+                                background: "transparent", border: "1px solid var(--b1)",
+                                color: "var(--t3)", cursor: "pointer",
+                                fontFamily: "'DM Mono',monospace", fontSize: 10,
+                                minHeight: 32,
+                              }}>
+                              Remove
+                            </button>
+                          </>
                         )}
                       </div>
                     );
@@ -324,27 +406,90 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                 </div>
               </Card>
 
-              {!isReadOnly && data.managerMode && (
-                <Card>
-                  <div style={{ padding: "16px 18px" }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
-                      Components remain in inventory but lose their kit assignment.
+              {!isReadOnly && data.managerMode && (() => {
+                if (isArchived) {
+                  return (
+                    <Card>
+                      <div style={{ padding: "16px 18px" }}>
+                        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Restore kit</div>
+                        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
+                          This kit is archived and hidden from active inventory.
+                          Restoring returns it to active status. Components remain unattached.
+                        </div>
+                        <button onClick={handleRestore} style={{
+                          width: "100%",
+                          padding: "10px 16px", borderRadius: 6,
+                          background: "transparent", border: "1px solid var(--green)",
+                          color: "var(--green)", cursor: "pointer",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                        }}>↺ Restore to active inventory</button>
+                      </div>
+                    </Card>
+                  );
+                }
+
+                const isCheckedOut = data.checkouts.some(c => {
+                  if (c.status !== "active" && c.status !== "overdue") return false;
+                  const ck = c as { kitIds?: string[] };
+                  return ck.kitIds?.includes(kit.id) ?? false;
+                });
+                const upcomingShoots = data.shoots.filter(s =>
+                  (s.status === "scheduled" || s.status === "active") && s.assignedKits.includes(kit.id),
+                );
+                const blocked = isCheckedOut || upcomingShoots.length > 0;
+                const everCheckedOut = data.checkouts.some(c => {
+                  const ck = c as { kitIds?: string[] };
+                  return ck.kitIds?.includes(kit.id);
+                });
+                const hasHistory = everCheckedOut || kit.componentIds.length > 0;
+                const verb = hasHistory ? "Archive" : "Delete";
+
+                return (
+                  <Card>
+                    <div style={{ padding: "16px 18px" }}>
+                      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
+                        {blocked && isCheckedOut && "Cannot archive — kit is currently checked out. Return it first."}
+                        {blocked && !isCheckedOut && upcomingShoots.length > 0 && `Cannot archive — kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {!blocked && hasHistory && "This kit has history. It will be archived (hidden from active inventory but kept for audit trail). Components stay in inventory. You can restore it anytime."}
+                        {!blocked && !hasHistory && "This kit has no history yet. It will be permanently removed."}
+                      </div>
+                      <button
+                        onClick={handleDelete}
+                        disabled={blocked}
+                        style={{
+                          width: "100%",
+                          padding: "10px 16px", borderRadius: 6,
+                          background: "transparent",
+                          border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
+                          color: blocked ? "var(--t3)" : "var(--red)",
+                          cursor: blocked ? "not-allowed" : "pointer",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                        }}>
+                        {blocked ? `Cannot ${verb.toLowerCase()}` : `${verb} kit`}
+                      </button>
                     </div>
-                    <button onClick={handleDelete} style={{
-                      width: "100%",
-                      padding: "10px 16px", borderRadius: 6,
-                      background: "transparent", border: "1px solid var(--red)",
-                      color: "var(--red)", cursor: "pointer",
-                      fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
-                    }}>Delete kit</button>
-                  </div>
-                </Card>
-              )}
+                  </Card>
+                );
+              })()}
             </div>
           </div>
         </div>
       </div>
+
+      <AddComponentsModal
+        open={showAddComponents}
+        onClose={() => setShowAddComponents(false)}
+        kitId={kit.id}
+        kitName={kit.name}
+      />
+      <SwapComponentModal
+        open={!!swapTarget}
+        onClose={() => setSwapTarget(null)}
+        oldAssetId={swapTarget?.assetId ?? null}
+        category={swapTarget?.category ?? null}
+        kitName={kit.name}
+      />
     </div>
   );
 }

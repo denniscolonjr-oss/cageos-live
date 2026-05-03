@@ -23,6 +23,12 @@ export interface Asset {
   notes?: string;
   /** Photo URL from Supabase Storage. One photo per asset. */
   photoUrl?: string;
+  /** ISO timestamp — set when asset is soft-deleted (archived). Undefined = active. */
+  archivedAt?: string;
+  /** Name of the actor who archived this asset. */
+  archivedBy?: string;
+  /** Optional reason supplied at archive time. */
+  archivedReason?: string;
 }
 
 export interface Kit {
@@ -32,6 +38,10 @@ export interface Kit {
   status: "available" | "out" | "partial";
   location: string;
   componentIds: string[];
+  /** ISO timestamp — set when kit is soft-deleted (archived). Undefined = active. */
+  archivedAt?: string;
+  archivedBy?: string;
+  archivedReason?: string;
 }
 
 export interface CheckoutRecord {

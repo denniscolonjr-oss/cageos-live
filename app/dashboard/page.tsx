@@ -37,7 +37,7 @@ const PAGES: Record<string, string> = {
 export default function DashboardPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode, archivedAssets, archivedKits, restoreAsset, restoreKit } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -122,6 +122,9 @@ export default function DashboardPage() {
       { label: "Kits", key: "kits", count: data.kits.length || null, countStyle: null },
       { label: "Shoots", key: "shoots", count: data.shoots.length || null, countStyle: null },
       { label: "Service flags", key: "flags", count: stats.serviceFlags || null, countStyle: stats.serviceFlags > 0 ? "alert" : null },
+      ...(data.managerMode && (archivedAssets.length > 0 || archivedKits.length > 0)
+        ? [{ label: "Archived", key: "archived", count: archivedAssets.length + archivedKits.length, countStyle: null }]
+        : []),
     ]},
     { section: "Add", items: [
       { label: "+ Asset", key: "_asset", count: null, countStyle: null, action: "asset" },
@@ -918,6 +921,99 @@ export default function DashboardPage() {
                   </>
                 );
               })()}
+            </div>
+          )}
+
+          {activeKey === "archived" && data.managerMode && (
+            <div className="animate-fade-up" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+                <h2 style={{ fontFamily: "'Syne',sans-serif", fontSize: 18, fontWeight: 700 }}>Archived</h2>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
+                  {archivedAssets.length} asset{archivedAssets.length === 1 ? "" : "s"} · {archivedKits.length} kit{archivedKits.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              {archivedAssets.length === 0 && archivedKits.length === 0 ? (
+                <Card>
+                  <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'DM Mono',monospace", fontSize: 12, color: "var(--t3)" }}>
+                    Nothing archived yet. Archived assets and kits will appear here for review or restoration.
+                  </div>
+                </Card>
+              ) : (
+                <>
+                  {archivedAssets.length > 0 && (
+                    <Card>
+                      <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--b1)", fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700 }}>
+                        Archived assets ({archivedAssets.length})
+                      </div>
+                      {archivedAssets.map((a, i) => (
+                        <div key={a.id} style={{
+                          padding: "12px 18px",
+                          borderBottom: i < archivedAssets.length - 1 ? "1px solid var(--b1)" : "none",
+                          display: "flex", gap: 12, alignItems: "center",
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <Link href={`/asset/${encodeURIComponent(a.barcode)}`} style={{ textDecoration: "none" }}>
+                              <div style={{ fontSize: 13, color: "var(--t1)", marginBottom: 3 }}>{a.name}</div>
+                              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
+                                {a.barcode} · {a.category} · archived {a.archivedAt ? new Date(a.archivedAt).toLocaleDateString() : ""}
+                                {a.archivedBy && ` by ${a.archivedBy}`}
+                              </div>
+                            </Link>
+                          </div>
+                          <button
+                            onClick={() => { restoreAsset(a.id, "Manager"); }}
+                            style={{
+                              padding: "6px 12px", borderRadius: 5,
+                              background: "transparent", border: "1px solid var(--green)",
+                              color: "var(--green)", cursor: "pointer",
+                              fontFamily: "'DM Mono',monospace", fontSize: 11,
+                              minHeight: 32,
+                            }}>
+                            ↺ Restore
+                          </button>
+                        </div>
+                      ))}
+                    </Card>
+                  )}
+
+                  {archivedKits.length > 0 && (
+                    <Card>
+                      <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--b1)", fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700 }}>
+                        Archived kits ({archivedKits.length})
+                      </div>
+                      {archivedKits.map((k, i) => (
+                        <div key={k.id} style={{
+                          padding: "12px 18px",
+                          borderBottom: i < archivedKits.length - 1 ? "1px solid var(--b1)" : "none",
+                          display: "flex", gap: 12, alignItems: "center",
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <Link href={`/kit/${encodeURIComponent(k.barcode)}`} style={{ textDecoration: "none" }}>
+                              <div style={{ fontSize: 13, color: "var(--t1)", marginBottom: 3 }}>{k.name}</div>
+                              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
+                                {k.barcode} · archived {k.archivedAt ? new Date(k.archivedAt).toLocaleDateString() : ""}
+                                {k.archivedBy && ` by ${k.archivedBy}`}
+                              </div>
+                            </Link>
+                          </div>
+                          <button
+                            onClick={() => { restoreKit(k.id, "Manager"); }}
+                            style={{
+                              padding: "6px 12px", borderRadius: 5,
+                              background: "transparent", border: "1px solid var(--green)",
+                              color: "var(--green)", cursor: "pointer",
+                              fontFamily: "'DM Mono',monospace", fontSize: 11,
+                              minHeight: 32,
+                            }}>
+                            ↺ Restore
+                          </button>
+                        </div>
+                      ))}
+                    </Card>
+                  )}
+                </>
+              )}
             </div>
           )}
 

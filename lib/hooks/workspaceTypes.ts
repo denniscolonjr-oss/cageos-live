@@ -64,7 +64,12 @@ export type AuditCategory =
   | "checkout"
   | "return"
   | "asset_added"
+  | "asset_archived"
+  | "asset_restored"
   | "kit_added"
+  | "kit_archived"
+  | "kit_restored"
+  | "kit_composition_changed"
   | "team_added"
   | "shoot_scheduled"
   | "shoot_updated"
@@ -75,6 +80,12 @@ export type AuditCategory =
   | "flag_status_changed"
   | "flag_note_added"
   | "flag_resolved";
+
+/** Result returned by deleteAsset / deleteKit to communicate what happened. */
+export type DeleteResult =
+  | { kind: "blocked"; reason: string }
+  | { kind: "deleted"; undo: () => void }
+  | { kind: "archived"; undo: () => void };
 
 export type FlagStatus = "open" | "in_repair" | "resolved";
 export type FlagSeverity = "critical" | "warning";

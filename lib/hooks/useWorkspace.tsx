@@ -15,10 +15,10 @@ import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/loca
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
-import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working
-export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity };
+export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult };
 
 const modeAdapter = localStorageModeAdapter;
 
@@ -322,28 +322,122 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   /** Remove an asset entirely. Cleans up kit membership and any open flags too. */
-  const deleteAsset = useCallback((assetId: string): (() => void) | null => {
+  /**
+   * Delete an asset.
+   *
+   * Returns a result object indicating what happened:
+   * - { kind: "blocked", reason } — asset is checked out or in upcoming shoots, no action taken
+   * - { kind: "deleted", undo } — asset had no history, hard-deleted, undo restores
+   * - { kind: "archived", undo } — asset had history, soft-deleted, undo restores to active
+   *
+   * Returns null if not allowed (read-only mode).
+   */
+  const deleteAsset = useCallback((assetId: string, actor: string = "—"): DeleteResult | null => {
     if (isReadOnly) return null;
+    const target = data.assets.find(a => a.id === assetId);
+    if (!target) return null;
+
+    // Safety check: asset in active checkout?
+    const inActiveCheckout = data.checkouts.some(c => {
+      if (c.status !== "active" && c.status !== "overdue") return false;
+      const ac = c as { assetIds?: string[] };
+      // Also check if the asset is in a kit that's currently checked out
+      const kitContainingThis = data.kits.find(k => k.componentIds.includes(assetId));
+      if (kitContainingThis) {
+        const ck = c as { kitIds?: string[] };
+        if (ck.kitIds?.includes(kitContainingThis.id)) return true;
+      }
+      return ac.assetIds?.includes(assetId) ?? false;
+    });
+    if (inActiveCheckout) {
+      return { kind: "blocked", reason: `${target.name} is part of an active checkout. Return it first.` };
+    }
+
+    // Safety check: kit containing this asset is assigned to upcoming/active shoots?
+    const kitContainingThis = data.kits.find(k => k.componentIds.includes(assetId));
+    if (kitContainingThis) {
+      const upcomingShoots = data.shoots.filter(s =>
+        (s.status === "scheduled" || s.status === "active") &&
+        s.assignedKits.includes(kitContainingThis.id),
+      );
+      if (upcomingShoots.length > 0) {
+        return {
+          kind: "blocked",
+          reason: `${target.name} is in ${kitContainingThis.name} which is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`,
+        };
+      }
+    }
+
+    // Decide between hard delete and archive.
+    // Hard delete only if: never checked out, no flags ever, not in any kit
+    const everCheckedOut = data.checkouts.some(c => {
+      const ac = c as { assetIds?: string[] };
+      return ac.assetIds?.includes(assetId);
+    });
+    const everFlagged = data.flags.some(f => f.assetId === assetId);
+    const isInAnyKit = data.kits.some(k => k.componentIds.includes(assetId));
+    const hasHistory = everCheckedOut || everFlagged || isInAnyKit;
+
+    if (!hasHistory) {
+      // Hard delete path
+      let snapshot: WorkspaceData | null = null;
+      updateUserData(d => {
+        snapshot = d;
+        const next = { ...d, assets: d.assets.filter(a => a.id !== assetId) };
+        return appendEvent(next, "asset_archived", `Deleted ${target.name}`, { actor, detail: target.barcode });
+      });
+      if (!snapshot) return null;
+      const captured = snapshot;
+      return {
+        kind: "deleted",
+        undo: () => updateUserData(() => appendEvent(captured, "asset_restored", `Restored ${target.name}`, { actor })),
+      };
+    }
+
+    // Archive path
     let snapshot: WorkspaceData | null = null;
+    const now = new Date().toISOString();
     updateUserData(d => {
-      const target = d.assets.find(a => a.id === assetId);
-      if (!target) return d;
-      snapshot = d; // capture pre-delete state
+      snapshot = d;
       const next = {
         ...d,
-        assets: d.assets.filter(a => a.id !== assetId),
+        // Mark archived but keep the row
+        assets: d.assets.map(a => a.id === assetId
+          ? { ...a, archivedAt: now, archivedBy: actor, kitId: null }
+          : a),
+        // Auto-detach from any kit
         kits: d.kits.map(k => k.componentIds.includes(assetId)
           ? { ...k, componentIds: k.componentIds.filter(id => id !== assetId) }
           : k),
+        // Resolve any open flags
         flags: d.flags.map(f => f.assetId === assetId && f.status !== "resolved"
-          ? { ...f, status: "resolved" as const, resolvedAtISO: new Date().toISOString(), resolvedBy: "system", resolutionSummary: "Asset deleted." }
+          ? { ...f, status: "resolved" as const, resolvedAtISO: now, resolvedBy: actor, resolutionSummary: "Asset archived." }
           : f),
       };
-      return appendEvent(next, "asset_added", `Deleted ${target.name}`, { detail: target.barcode });
+      return appendEvent(next, "asset_archived", `Archived ${target.name}`, { actor, detail: target.barcode });
     });
     if (!snapshot) return null;
     const captured = snapshot;
-    return () => updateUserData(() => appendEvent(captured, "asset_added", `Restored deleted asset`));
+    return {
+      kind: "archived",
+      undo: () => updateUserData(() => appendEvent(captured, "asset_restored", `Restored ${target.name}`, { actor })),
+    };
+  }, [isReadOnly, updateUserData, data]);
+
+  /** Restore a previously archived asset to active inventory. */
+  const restoreAsset = useCallback((assetId: string, actor: string = "—") => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.assets.find(a => a.id === assetId);
+      if (!target || !target.archivedAt) return d;
+      const next = {
+        ...d,
+        assets: d.assets.map(a => a.id === assetId
+          ? { ...a, archivedAt: undefined, archivedBy: undefined, archivedReason: undefined, status: "in" as const }
+          : a),
+      };
+      return appendEvent(next, "asset_restored", `Restored ${target.name} to active inventory`, { actor, detail: target.barcode });
+    });
   }, [isReadOnly, updateUserData]);
 
   /** Patch a kit's fields. */
@@ -357,27 +451,98 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
-  /** Delete a kit. Components stay in inventory but lose their kitId reference. */
-  const deleteKit = useCallback((kitId: string): (() => void) | null => {
+  /**
+   * Delete a kit. Same safety + archival pattern as deleteAsset.
+   */
+  const deleteKit = useCallback((kitId: string, actor: string = "—"): DeleteResult | null => {
     if (isReadOnly) return null;
+    const target = data.kits.find(k => k.id === kitId);
+    if (!target) return null;
+
+    // Safety: kit currently checked out?
+    const isCheckedOut = data.checkouts.some(c => {
+      if (c.status !== "active" && c.status !== "overdue") return false;
+      const ck = c as { kitIds?: string[] };
+      return ck.kitIds?.includes(kitId) ?? false;
+    });
+    if (isCheckedOut) {
+      return { kind: "blocked", reason: `${target.name} is currently checked out. Return it first.` };
+    }
+
+    // Safety: assigned to upcoming/active shoots?
+    const upcomingShoots = data.shoots.filter(s =>
+      (s.status === "scheduled" || s.status === "active") && s.assignedKits.includes(kitId),
+    );
+    if (upcomingShoots.length > 0) {
+      return {
+        kind: "blocked",
+        reason: `${target.name} is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`,
+      };
+    }
+
+    // Hard delete only if kit has no checkout history AND no components
+    const everCheckedOut = data.checkouts.some(c => {
+      const ck = c as { kitIds?: string[] };
+      return ck.kitIds?.includes(kitId);
+    });
+    const hasHistory = everCheckedOut || target.componentIds.length > 0;
+
+    if (!hasHistory) {
+      let snapshot: WorkspaceData | null = null;
+      updateUserData(d => {
+        snapshot = d;
+        const next = { ...d, kits: d.kits.filter(k => k.id !== kitId) };
+        return appendEvent(next, "kit_archived", `Deleted ${target.name}`, { actor, detail: target.barcode });
+      });
+      if (!snapshot) return null;
+      const captured = snapshot;
+      return {
+        kind: "deleted",
+        undo: () => updateUserData(() => appendEvent(captured, "kit_restored", `Restored ${target.name}`, { actor })),
+      };
+    }
+
+    // Archive path
     let snapshot: WorkspaceData | null = null;
+    const now = new Date().toISOString();
     updateUserData(d => {
-      const target = d.kits.find(k => k.id === kitId);
-      if (!target) return d;
       snapshot = d;
       const next = {
         ...d,
-        kits: d.kits.filter(k => k.id !== kitId),
+        kits: d.kits.map(k => k.id === kitId
+          ? { ...k, archivedAt: now, archivedBy: actor }
+          : k),
+        // Detach assets from this kit
         assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
+        // Remove from any shoots
         shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
           ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
           : s),
       };
-      return appendEvent(next, "kit_added", `Deleted ${target.name}`, { detail: target.barcode });
+      return appendEvent(next, "kit_archived", `Archived ${target.name}`, { actor, detail: target.barcode });
     });
     if (!snapshot) return null;
     const captured = snapshot;
-    return () => updateUserData(() => appendEvent(captured, "kit_added", `Restored deleted kit`));
+    return {
+      kind: "archived",
+      undo: () => updateUserData(() => appendEvent(captured, "kit_restored", `Restored ${target.name}`, { actor })),
+    };
+  }, [isReadOnly, updateUserData, data]);
+
+  /** Restore a previously archived kit. */
+  const restoreKit = useCallback((kitId: string, actor: string = "—") => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const target = d.kits.find(k => k.id === kitId);
+      if (!target || !target.archivedAt) return d;
+      const next = {
+        ...d,
+        kits: d.kits.map(k => k.id === kitId
+          ? { ...k, archivedAt: undefined, archivedBy: undefined, archivedReason: undefined }
+          : k),
+      };
+      return appendEvent(next, "kit_restored", `Restored ${target.name}`, { actor, detail: target.barcode });
+    });
   }, [isReadOnly, updateUserData]);
 
   /** Attach a single asset to a kit. Removes from any prior kit first. */
@@ -420,7 +585,79 @@ function useWorkspaceImpl() {
           : k),
         assets: d.assets.map(a => a.id === assetId ? { ...a, kitId: null } : a),
       };
-      return appendEvent(next, "kit_added", `Removed ${asset.name} from ${kit?.name ?? "kit"}`, { detail: kit?.barcode });
+      return appendEvent(next, "kit_composition_changed", `Removed ${asset.name} from ${kit?.name ?? "kit"}`, { detail: kit?.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /**
+   * Attach multiple assets to a kit at once. Each asset is removed from any
+   * prior kit it belonged to. One audit event for the whole batch.
+   */
+  const attachAssetsToKit = useCallback((assetIds: string[], kitId: string, actor: string = "—") => {
+    if (isReadOnly || assetIds.length === 0) return;
+    updateUserData(d => {
+      const kit = d.kits.find(k => k.id === kitId);
+      if (!kit) return d;
+      const idSet = new Set(assetIds);
+      const next = {
+        ...d,
+        // Mark each attached asset's kitId
+        assets: d.assets.map(a => idSet.has(a.id) ? { ...a, kitId } : a),
+        // Update each kit: remove these assets if they were elsewhere, add to target
+        kits: d.kits.map(k => {
+          if (k.id === kitId) {
+            const merged = Array.from(new Set([...k.componentIds, ...assetIds]));
+            return { ...k, componentIds: merged };
+          }
+          // Strip from other kits
+          if (k.componentIds.some(id => idSet.has(id))) {
+            return { ...k, componentIds: k.componentIds.filter(id => !idSet.has(id)) };
+          }
+          return k;
+        }),
+      };
+      const summary = assetIds.length === 1
+        ? `Added 1 component to ${kit.name}`
+        : `Added ${assetIds.length} components to ${kit.name}`;
+      return appendEvent(next, "kit_composition_changed", summary, { actor, detail: kit.barcode });
+    });
+  }, [isReadOnly, updateUserData]);
+
+  /**
+   * Swap one component in a kit for another. Atomic operation: old leaves,
+   * new joins, single audit event documents both sides of the change.
+   */
+  const swapKitComponent = useCallback((oldAssetId: string, newAssetId: string, actor: string = "—") => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const oldAsset = d.assets.find(a => a.id === oldAssetId);
+      const newAsset = d.assets.find(a => a.id === newAssetId);
+      if (!oldAsset || !newAsset || !oldAsset.kitId) return d;
+      const kit = d.kits.find(k => k.id === oldAsset.kitId);
+      if (!kit) return d;
+      const next = {
+        ...d,
+        assets: d.assets.map(a => {
+          if (a.id === oldAssetId) return { ...a, kitId: null };
+          if (a.id === newAssetId) return { ...a, kitId: kit.id };
+          return a;
+        }),
+        kits: d.kits.map(k => {
+          // Remove new asset from any other kit it might have been in
+          if (k.id !== kit.id && k.componentIds.includes(newAssetId)) {
+            return { ...k, componentIds: k.componentIds.filter(id => id !== newAssetId) };
+          }
+          // Update target kit: swap the IDs
+          if (k.id === kit.id) {
+            const updated = k.componentIds.map(id => id === oldAssetId ? newAssetId : id);
+            return { ...k, componentIds: updated };
+          }
+          return k;
+        }),
+      };
+      return appendEvent(next, "kit_composition_changed",
+        `Swapped ${oldAsset.name} for ${newAsset.name} in ${kit.name}`,
+        { actor, detail: kit.barcode });
     });
   }, [isReadOnly, updateUserData]);
 
@@ -770,8 +1007,17 @@ function useWorkspaceImpl() {
     return "partial";
   }
 
-  /** All kits with their status field overridden by the computed value. */
-  const kits = data.kits.map(k => ({ ...k, status: computeKitStatus(k) }));
+  /** Active (non-archived) kits with computed status. Used everywhere except detail page lookup. */
+  const kits = data.kits
+    .filter(k => !k.archivedAt)
+    .map(k => ({ ...k, status: computeKitStatus(k) }));
+
+  /** Active (non-archived) assets. */
+  const assets = data.assets.filter(a => !a.archivedAt);
+
+  /** Archived items, for the dashboard's Archived tab. */
+  const archivedAssets = data.assets.filter(a => !!a.archivedAt);
+  const archivedKits = data.kits.filter(k => !!k.archivedAt);
 
   /** All open or in-repair flags (anything not yet resolved). */
   const openFlags = data.flags.filter(f => f.status !== "resolved");
@@ -803,20 +1049,32 @@ function useWorkspaceImpl() {
   }, [data.flags, data.kits, data.assets]);
 
   const stats = mode === "demo" ? DEMO_STATS : {
-    totalAssets: data.assets.length,
-    checkedIn: data.assets.filter(a => a.status === "in").length,
-    checkedOut: data.assets.filter(a => a.status === "out").length,
+    totalAssets: assets.length,
+    checkedIn: assets.filter(a => a.status === "in").length,
+    checkedOut: assets.filter(a => a.status === "out").length,
     serviceFlags: openFlags.length,
     criticalFlags: openFlags.filter(f => f.severity === "critical").length,
     kitDriftEvents: 0,
-    knownInventoryValue: data.assets.reduce((sum, a) => sum + (a.cost || 0), 0),
+    knownInventoryValue: assets.reduce((sum, a) => sum + (a.cost || 0), 0),
   };
 
-  // Override kits in returned data with computed-status versions
-  const dataWithComputedKits: WorkspaceData = { ...data, kits };
+  /**
+   * `dataWithComputedKits` is the *active view* of workspace data. Most
+   * surfaces should consume this — dashboard table, kit picker, kiosk, etc.
+   *
+   * Detail pages (asset/[barcode], kit/[barcode]) need to see archived items
+   * too so URLs stay valid. They access `rawAssets` / `rawKits` instead.
+   */
+  const dataWithComputedKits: WorkspaceData = { ...data, assets, kits };
 
   return {
     data: dataWithComputedKits,
+    /** Raw, unfiltered assets — includes archived. Detail pages use this for lookup. */
+    rawAssets: data.assets,
+    /** Raw, unfiltered kits — includes archived. Detail pages use this for lookup. */
+    rawKits: data.kits,
+    archivedAssets,
+    archivedKits,
     mode,
     hydrated,
     isReadOnly,
@@ -828,10 +1086,14 @@ function useWorkspaceImpl() {
     addAssets,
     updateAsset,
     deleteAsset,
+    restoreAsset,
     addKit,
     updateKit,
     deleteKit,
+    restoreKit,
     attachAssetToKit,
+    attachAssetsToKit,
+    swapKitComponent,
     detachAssetFromKit,
     addProfile,
     addProfiles,

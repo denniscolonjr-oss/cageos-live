@@ -21,7 +21,7 @@ const LIFECYCLE_OPTIONS = ["active", "retired", "lost"] as const;
 export default function AssetDetailPage({ params }: { params: Promise<{ barcode: string }> }) {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { data, hydrated, isReadOnly, updateAsset, deleteAsset, detachAssetFromKit } = useWorkspace();
+  const { data, rawAssets, rawKits, hydrated, isReadOnly, updateAsset, deleteAsset, restoreAsset, detachAssetFromKit } = useWorkspace();
   const { activeWorkspaceId } = useAuth();
   const { barcode } = use(params);
 
@@ -46,12 +46,15 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
     );
   }
 
-  // URL barcode is the asset's barcode field (which is also the asset id in our data model)
+  // URL barcode is the asset's barcode field (which is also the asset id in our data model).
+  // Search RAW assets (includes archived) so URLs to archived items resolve cleanly
+  // instead of 404'ing.
   const decoded = decodeURIComponent(barcode);
-  const asset = data.assets.find(a => a.barcode === decoded || a.id === decoded);
+  const asset = rawAssets.find(a => a.barcode === decoded || a.id === decoded);
   if (!asset) return notFound();
 
-  const kit = asset.kitId ? data.kits.find(k => k.id === asset.kitId) ?? null : null;
+  const isArchived = !!asset.archivedAt;
+  const kit = asset.kitId ? rawKits.find(k => k.id === asset.kitId) ?? null : null;
 
   // Flag history for this asset
   const flagHistory = data.flags
@@ -97,21 +100,46 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   }
 
   function handleDelete() {
-    if (!confirm(`Delete "${asset!.name}"? This removes it from any kit and resolves any open flags.`)) return;
-    const assetName = asset!.name;
-    const assetId = asset!.id;
-    // Navigate FIRST so we don't render the now-missing asset's detail page
-    // and trigger a 404 flash before the redirect lands.
+    if (!asset) return;
+    // Probe first — the new deleteAsset returns a result object so we know
+    // whether to confirm "delete" vs "archive" copy.
+    const everUsed = data.checkouts.some(c => {
+      const ac = c as { assetIds?: string[] };
+      return ac.assetIds?.includes(asset.id);
+    }) || data.flags.some(f => f.assetId === asset.id) || rawKits.some(k => k.componentIds.includes(asset.id));
+    const verb = everUsed ? "Archive" : "Delete";
+    const explainer = everUsed
+      ? "This asset has history (checkouts, flags, or kit membership). It will be moved to the Archived list and removed from active inventory. You can restore it later."
+      : "This asset has no history yet. It will be permanently removed.";
+    if (!confirm(`${verb} "${asset.name}"?\n\n${explainer}`)) return;
+
+    const assetName = asset.name;
+    const assetId = asset.id;
+    const result = deleteAsset(assetId, "Manager");
+
+    if (!result) return; // read-only or asset not found
+
+    if (result.kind === "blocked") {
+      toast(`Cannot ${verb.toLowerCase()} ${assetName}`, { variant: "error", detail: result.reason });
+      return;
+    }
+
+    // Hard delete or archive — both are reversible. Navigate first to avoid
+    // 404 flash, then delete and offer Undo.
     router.push("/dashboard");
-    // Then delete — the dashboard will reflect the change instantly via the
-    // shared workspace state.
-    const undo = deleteAsset(assetId);
-    toast(`${assetName} deleted`, {
-      action: undo ? { label: "Undo", onClick: () => {
-        undo();
-        toast(`${assetName} restored`);
-      } } : undefined,
+    const verbPast = result.kind === "deleted" ? "deleted" : "archived";
+    toast(`${assetName} ${verbPast}`, {
+      action: {
+        label: "Undo",
+        onClick: () => { result.undo(); toast(`${assetName} restored`); },
+      },
     });
+  }
+
+  function handleRestore() {
+    if (!asset || !isArchived) return;
+    restoreAsset(asset.id, "Manager");
+    toast(`${asset.name} restored`);
   }
 
   function handleDetachFromKit() {
@@ -177,6 +205,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   >{asset.name}</h1>
                 )}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  {isArchived && <Badge variant="gray">⏸ archived</Badge>}
                   <Badge variant={statusVariant}>{asset.status}</Badge>
                   <Badge variant={asset.lifecycle === "active" ? "blue" : asset.lifecycle === "retired" ? "gray" : "red"}>
                     {asset.lifecycle}
@@ -187,6 +216,20 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                     </Badge>
                   )}
                 </div>
+                {isArchived && (
+                  <div style={{
+                    marginTop: 14,
+                    padding: "10px 13px",
+                    background: "rgba(140,136,128,0.08)",
+                    border: "1px solid var(--b1)",
+                    borderRadius: 7,
+                    fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", lineHeight: 1.5,
+                  }}>
+                    Archived {asset.archivedAt ? new Date(asset.archivedAt).toLocaleString() : ""}
+                    {asset.archivedBy && ` by ${asset.archivedBy}`}.
+                    Hidden from active inventory. Active checkout records still link here.
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -567,24 +610,81 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                 )}
               </Card>
 
-              {/* Manager-only delete */}
-              {!isReadOnly && data.managerMode && (
-                <Card>
-                  <div style={{ padding: "16px 18px" }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
-                      Removes the asset from inventory and resolves any open flags.
+              {/* Manager-only danger zone — shows context-appropriate action */}
+              {!isReadOnly && data.managerMode && (() => {
+                if (isArchived) {
+                  return (
+                    <Card>
+                      <div style={{ padding: "16px 18px" }}>
+                        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Restore asset</div>
+                        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
+                          This asset is archived and hidden from active inventory.
+                          Restoring returns it to active status.
+                        </div>
+                        <button onClick={handleRestore} style={{
+                          width: "100%",
+                          padding: "10px 16px", borderRadius: 6,
+                          background: "transparent", border: "1px solid var(--green)",
+                          color: "var(--green)", cursor: "pointer",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                        }}>↺ Restore to active inventory</button>
+                      </div>
+                    </Card>
+                  );
+                }
+
+                // Compute current state for accurate copy
+                const inActiveCheckout = data.checkouts.some(c => {
+                  if (c.status !== "active" && c.status !== "overdue") return false;
+                  const ac = c as { assetIds?: string[] };
+                  if (ac.assetIds?.includes(asset.id)) return true;
+                  if (asset.kitId) {
+                    const ck = c as { kitIds?: string[] };
+                    if (ck.kitIds?.includes(asset.kitId)) return true;
+                  }
+                  return false;
+                });
+                const upcomingShoots = asset.kitId ? data.shoots.filter(s =>
+                  (s.status === "scheduled" || s.status === "active") &&
+                  s.assignedKits.includes(asset.kitId!),
+                ) : [];
+
+                const everUsed = data.checkouts.some(c => {
+                  const ac = c as { assetIds?: string[] };
+                  return ac.assetIds?.includes(asset.id);
+                }) || data.flags.some(f => f.assetId === asset.id) || rawKits.some(k => k.componentIds.includes(asset.id));
+
+                const blocked = inActiveCheckout || upcomingShoots.length > 0;
+                const verb = everUsed ? "Archive" : "Delete";
+
+                return (
+                  <Card>
+                    <div style={{ padding: "16px 18px" }}>
+                      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
+                        {blocked && inActiveCheckout && "Cannot archive — asset is part of an active checkout. Return it first."}
+                        {blocked && !inActiveCheckout && upcomingShoots.length > 0 && `Cannot archive — asset's kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {!blocked && everUsed && "This asset has history. It will be archived (hidden from active inventory but kept for audit trail). You can restore it anytime."}
+                        {!blocked && !everUsed && "This asset has no history. It will be permanently removed."}
+                      </div>
+                      <button
+                        onClick={handleDelete}
+                        disabled={blocked}
+                        style={{
+                          width: "100%",
+                          padding: "10px 16px", borderRadius: 6,
+                          background: "transparent",
+                          border: `1px solid ${blocked ? "var(--b1)" : "var(--red)"}`,
+                          color: blocked ? "var(--t3)" : "var(--red)",
+                          cursor: blocked ? "not-allowed" : "pointer",
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
+                        }}>
+                        {blocked ? `Cannot ${verb.toLowerCase()}` : `${verb} asset`}
+                      </button>
                     </div>
-                    <button onClick={handleDelete} style={{
-                      width: "100%",
-                      padding: "10px 16px", borderRadius: 6,
-                      background: "transparent", border: "1px solid var(--red)",
-                      color: "var(--red)", cursor: "pointer",
-                      fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
-                    }}>Delete asset</button>
-                  </div>
-                </Card>
-              )}
+                  </Card>
+                );
+              })()}
 
             </div>
           </div>
