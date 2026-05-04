@@ -83,7 +83,7 @@ export default function AssignToShootModal({ open, onClose, profileInitials, pro
                     <span style={{
                       fontSize: 9, padding: "2px 6px", borderRadius: 3,
                       fontFamily: "'DM Mono',monospace", textTransform: "uppercase",
-                      background: s.status === "active" ? "rgba(74,222,128,0.12)" : "rgba(90,160,240,0.12)",
+                      background: s.status === "active" ? "rgba(109,238,159,0.12)" : "rgba(122,181,245,0.12)",
                       color: s.status === "active" ? "var(--green)" : "var(--blue)",
                     }}>{s.status}</span>
                   </div>

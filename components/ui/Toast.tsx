@@ -97,8 +97,8 @@ export default function ToastHost() {
           }}>
             <div style={{
               width: 22, height: 22, borderRadius: 5,
-              background: t.variant === "success" ? "rgba(74,222,128,0.12)" :
-                          t.variant === "error" ? "rgba(255,79,79,0.12)" : "rgba(90,160,240,0.12)",
+              background: t.variant === "success" ? "rgba(109,238,159,0.12)" :
+                          t.variant === "error" ? "rgba(255,122,122,0.12)" : "rgba(122,181,245,0.12)",
               color: accent,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13, fontWeight: 700, flexShrink: 0,

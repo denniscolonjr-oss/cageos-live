@@ -2,22 +2,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0c0c0c;
-  --s1: #141414;
-  --s2: #1c1c1c;
-  --s3: #242424;
-  --b1: #2c2c2c;
-  --b2: #383838;
-  --t1: #f2efe9;
-  --t2: #8c8880;
-  --t3: #4c4a46;
-  --acc: #e2f55c;
-  --acc2: #c8dc46;
-  --red: #ff4f4f;
-  --amber: #f5a623;
-  --green: #4ade80;
-  --blue: #5aa0f0;
-  --purple: #a78bfa;
+  /* Iter-13 palette — Bolder. Bumped contrast for legibility while preserving
+     the moody dark broadcast-engineer aesthetic. WCAG AA across the board. */
+  --bg: #0e0e0e;
+  --s1: #181818;
+  --s2: #222222;
+  --s3: #2e2e2e;
+  --b1: #424242;
+  --b2: #555555;
+  --t1: #fafaf6;
+  --t2: #cdc8bc;
+  --t3: #9c9789;
+  --acc: #ecff70;
+  --acc2: #d6e85f;
+  --red: #ff7a7a;
+  --amber: #fbc25c;
+  --green: #6dee9f;
+  --blue: #7ab5f5;
+  --purple: #b89dfc;
 
   /* Safe areas for iOS notch */
   --safe-top: env(safe-area-inset-top, 0px);

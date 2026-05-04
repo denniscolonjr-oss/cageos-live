@@ -195,8 +195,8 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
       <Modal open={open} onClose={handleClose} title={`Resolve flag · ${asset.name}`} maxWidth={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{
-            padding: "10px 12px", background: "rgba(74,222,128,0.06)",
-            border: "1px solid rgba(74,222,128,0.25)", borderRadius: 7,
+            padding: "10px 12px", background: "rgba(109,238,159,0.06)",
+            border: "1px solid rgba(109,238,159,0.25)", borderRadius: 7,
             fontSize: 12, color: "var(--green)", lineHeight: 1.5,
           }}>
             Resolving this flag returns the asset to active inventory and removes any out-of-service block on its kits at the kiosk.
@@ -343,7 +343,7 @@ export default function FlagDetailModal({ open, onClose, flag }: Props) {
           <div>
             <div style={labelStyle}>Resolution</div>
             <div style={{
-              background: "rgba(74,222,128,0.05)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 7,
+              background: "rgba(109,238,159,0.05)", border: "1px solid rgba(109,238,159,0.2)", borderRadius: 7,
               padding: "11px 13px",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>

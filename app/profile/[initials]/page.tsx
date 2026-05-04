@@ -19,8 +19,8 @@ const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
 };
 
 const COLOR_OPTIONS = [
-  "#e2f55c", "#5aa0f0", "#a78bfa", "#4ade80",
-  "#f5a623", "#ff4f4f", "#ec4899", "#14b8a6",
+  "#ecff70", "#7ab5f5", "#b89dfc", "#6dee9f",
+  "#fbc25c", "#ff7a7a", "#f476b8", "#3ad6c5",
 ];
 
 export default function ProfileDetailPage({ params }: { params: Promise<{ initials: string }> }) {
@@ -408,7 +408,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                           )}
                         </div>
                         {h.incident && (
-                          <div style={{ marginTop: 8, padding: "7px 10px", background: h.incident.severity === "major" ? "rgba(255,79,79,0.06)" : "rgba(245,166,35,0.06)", border: `1px solid ${h.incident.severity === "major" ? "rgba(255,79,79,0.2)" : "rgba(245,166,35,0.2)"}`, borderRadius: 5, fontSize: 11, color: h.incident.severity === "major" ? "var(--red)" : "var(--amber)", fontFamily: "'DM Mono', monospace", lineHeight: 1.4 }}>
+                          <div style={{ marginTop: 8, padding: "7px 10px", background: h.incident.severity === "major" ? "rgba(255,122,122,0.06)" : "rgba(251,194,92,0.06)", border: `1px solid ${h.incident.severity === "major" ? "rgba(255,122,122,0.2)" : "rgba(251,194,92,0.2)"}`, borderRadius: 5, fontSize: 11, color: h.incident.severity === "major" ? "var(--red)" : "var(--amber)", fontFamily: "'DM Mono', monospace", lineHeight: 1.4 }}>
                             {h.incident.note}
                           </div>
                         )}

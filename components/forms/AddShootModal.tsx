@@ -47,6 +47,51 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
     setAssignedKits(next);
   }
 
+  /**
+   * For each kit currently assigned in the form, find any other shoot whose time range
+   * overlaps with this new shoot's time range. Returns conflicts as {kitId, kitName, conflicts[]}.
+   *
+   * Time ranges: each shoot has startsAt (ISO) and optionally endsAt (ISO). If endsAt is missing,
+   * we treat the shoot as 8 hours long. We exclude completed and cancelled shoots — they
+   * don't represent active claims on gear.
+   */
+  const kitConflicts = useMemo(() => {
+    const newStart = new Date(startsAt).getTime();
+    const newEndRaw = endsAt ? new Date(endsAt).getTime() : null;
+    const newEnd = newEndRaw ?? newStart + 8 * 60 * 60 * 1000;
+
+    const conflicts: { kitId: string; kitName: string; conflicts: { shootTitle: string; range: string }[] }[] = [];
+
+    for (const kitId of assignedKits) {
+      const kit = data.kits.find(k => k.id === kitId);
+      if (!kit) continue;
+      const overlapping: { shootTitle: string; range: string }[] = [];
+      for (const otherShoot of data.shoots) {
+        if (otherShoot.status === "completed" || otherShoot.status === "cancelled") continue;
+        if (!otherShoot.assignedKits.includes(kitId)) continue;
+        const otherStart = new Date(otherShoot.startsAt).getTime();
+        const otherEnd = otherShoot.endsAt
+          ? new Date(otherShoot.endsAt).getTime()
+          : otherStart + 8 * 60 * 60 * 1000;
+        // Overlap: newStart < otherEnd AND newEnd > otherStart
+        if (newStart < otherEnd && newEnd > otherStart) {
+          const startLabel = new Date(otherShoot.startsAt).toLocaleString([], {
+            month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+          });
+          const endLabel = otherShoot.endsAt
+            ? new Date(otherShoot.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+            : "+8h";
+          overlapping.push({ shootTitle: otherShoot.title, range: `${startLabel} – ${endLabel}` });
+        }
+      }
+      if (overlapping.length > 0) {
+        conflicts.push({ kitId, kitName: kit.name, conflicts: overlapping });
+      }
+    }
+
+    return conflicts;
+  }, [assignedKits, startsAt, endsAt, data.shoots, data.kits]);
+
   function handleSubmit() {
     if (!title.trim()) return;
     const shoot: Shoot = {
@@ -175,7 +220,7 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
                 <div key={p.initials} onClick={() => toggleTeam(p.initials)} style={{
                   padding: "10px 12px", borderBottom: "1px solid var(--b1)",
                   cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-                  background: selected ? "rgba(226,245,92,0.07)" : "transparent",
+                  background: selected ? "rgba(236,255,112,0.07)" : "transparent",
                   minHeight: 44,
                 }}>
                   <div style={{
@@ -203,29 +248,63 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
             <div style={{ maxHeight: 180, overflowY: "auto", background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 7 }}>
               {data.kits.map(k => {
                 const selected = assignedKits.has(k.id);
+                const hasConflict = kitConflicts.some(c => c.kitId === k.id);
                 return (
                   <div key={k.id} onClick={() => toggleKit(k.id)} style={{
                     padding: "10px 12px", borderBottom: "1px solid var(--b1)",
                     cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-                    background: selected ? "rgba(226,245,92,0.07)" : "transparent",
+                    background: selected ? (hasConflict ? "rgba(251,194,92,0.07)" : "rgba(236,255,112,0.07)") : "transparent",
                     minHeight: 44,
                   }}>
                     <div style={{
                       width: 18, height: 18, borderRadius: 4,
-                      border: `1.5px solid ${selected ? "var(--acc)" : "var(--b2)"}`,
-                      background: selected ? "var(--acc)" : "transparent",
+                      border: `1.5px solid ${selected ? (hasConflict ? "var(--amber)" : "var(--acc)") : "var(--b2)"}`,
+                      background: selected ? (hasConflict ? "var(--amber)" : "var(--acc)") : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0,
                       color: "var(--bg)", fontSize: 11, fontWeight: 700,
                     }}>{selected && "✓"}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: "var(--t1)" }}>{k.name}</div>
+                      <div style={{ fontSize: 13, color: "var(--t1)" }}>
+                        {k.name}
+                        {hasConflict && <span title="Time conflict with another shoot" style={{ color: "var(--amber)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
+                      </div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{k.barcode} · {k.componentIds.length} components</div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* Conflict warnings */}
+            {kitConflicts.length > 0 && (
+              <div style={{
+                background: "rgba(251,194,92,0.08)",
+                border: "1px solid rgba(251,194,92,0.25)",
+                borderRadius: 7, padding: "10px 12px", marginTop: 8,
+              }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--amber)", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>
+                  ⚠ Kit time conflict{kitConflicts.length === 1 ? "" : "s"}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {kitConflicts.map(c => (
+                    <div key={c.kitId} style={{ fontSize: 11, color: "var(--t1)", lineHeight: 1.5 }}>
+                      <span style={{ fontWeight: 600 }}>{c.kitName}</span> is already on{" "}
+                      {c.conflicts.map((cc, i) => (
+                        <span key={i}>
+                          {i > 0 && ", "}
+                          <span style={{ color: "var(--t1)" }}>{cc.shootTitle}</span>{" "}
+                          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>({cc.range})</span>
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 6, lineHeight: 1.4 }}>
+                  You can still save — but only one shoot will be able to actually check out the kit.
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -126,7 +126,7 @@ export default function AddComponentsModal({ open, onClose, kitId, kitName }: Pr
                     borderBottom: i < candidates.length - 1 ? "1px solid var(--b1)" : "none",
                     display: "flex", gap: 12, alignItems: "center",
                     cursor: "pointer",
-                    background: isSelected ? "rgba(226,245,92,0.08)" : "transparent",
+                    background: isSelected ? "rgba(236,255,112,0.08)" : "transparent",
                   }}>
                   <div style={{
                     width: 18, height: 18, borderRadius: 4,

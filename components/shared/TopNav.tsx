@@ -16,7 +16,7 @@ export default function TopNav() {
   const path = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const { mode, data, switchMode } = useWorkspace();
+  const { mode, data, switchMode, canUseDemo } = useWorkspace();
   const { session, user, supabaseEnabled, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -98,8 +98,8 @@ export default function TopNav() {
           fontFamily: "'DM Mono',monospace",
           fontSize: isMobile ? 9 : 11,
           color: mode === "demo" ? "var(--acc)" : "var(--t3)",
-          background: mode === "demo" ? "rgba(226,245,92,0.08)" : "var(--s1)",
-          border: `1px solid ${mode === "demo" ? "rgba(226,245,92,0.3)" : "var(--b1)"}`,
+          background: mode === "demo" ? "rgba(236,255,112,0.08)" : "var(--s1)",
+          border: `1px solid ${mode === "demo" ? "rgba(236,255,112,0.3)" : "var(--b1)"}`,
           padding: "5px 10px",
           borderRadius: 4,
           whiteSpace: "nowrap",
@@ -140,22 +140,24 @@ export default function TopNav() {
                   Your workspace · saved on this device
                 </div>
               </button>
-              <button onClick={() => handleSwitch("demo")} style={{
-                display: "block", width: "100%", textAlign: "left",
-                padding: "10px 12px",
-                background: mode === "demo" ? "var(--s2)" : "transparent",
-                border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer",
-                color: "var(--t1)", fontFamily: "'DM Sans',sans-serif",
-                fontSize: 13, minHeight: 44,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 500 }}>MMG Production · DC</span>
-                  {mode === "demo" && <span style={{ color: "var(--acc)", fontSize: 11 }}>✓ active</span>}
-                </div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
-                  Sample data · read-only example
-                </div>
-              </button>
+              {canUseDemo && (
+                <button onClick={() => handleSwitch("demo")} style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "10px 12px",
+                  background: mode === "demo" ? "var(--s2)" : "transparent",
+                  border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer",
+                  color: "var(--t1)", fontFamily: "'DM Sans',sans-serif",
+                  fontSize: 13, minHeight: 44,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontWeight: 500 }}>MMG Production · DC</span>
+                    {mode === "demo" && <span style={{ color: "var(--acc)", fontSize: 11 }}>✓ active</span>}
+                  </div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+                    Sample data · admin only
+                  </div>
+                </button>
+              )}
 
               {supabaseEnabled && (
                 <>

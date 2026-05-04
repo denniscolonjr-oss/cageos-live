@@ -33,6 +33,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   // Editing state — manager mode required for sensitive fields
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
 
@@ -52,7 +53,24 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   // instead of 404'ing.
   const decoded = decodeURIComponent(barcode);
   const asset = rawAssets.find(a => a.barcode === decoded || a.id === decoded);
-  if (!asset) return notFound();
+
+  // If the asset isn't found AND we're not in the middle of a delete operation,
+  // it's truly gone (stale URL or never existed) — return real 404.
+  // If we ARE deleting, render a graceful "deleted" state for the brief gap
+  // before the redirect to /dashboard lands.
+  if (!asset && !isDeleting) return notFound();
+  if (!asset && isDeleting) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t2)", fontFamily: "'DM Mono',monospace", fontSize: 12 }}>
+          Returning to dashboard...
+        </div>
+      </div>
+    );
+  }
+  // After this point, asset is guaranteed defined.
+  if (!asset) return null; // unreachable, satisfies TS
 
   const isArchived = !!asset.archivedAt;
   const kit = asset.kitId ? rawKits.find(k => k.id === asset.kitId) ?? null : null;
@@ -117,6 +135,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
     // The deleteAsset mutator decides hard-delete vs archive based on history.
     // For the Archive button specifically, we treat both outcomes as "archived"
     // from the user's perspective — recoverable via Undo or the Archived tab.
+    setIsDeleting(true);
     router.push("/dashboard");
     toast(`${assetName} archived`, {
       action: {
@@ -150,6 +169,9 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
 
     const assetName = asset.name;
     const assetId = asset.id;
+    // Set flag so the page renders a graceful "Returning to dashboard..."
+    // state for the brief gap between mutator firing and router.push landing.
+    setIsDeleting(true);
     router.push("/dashboard");
     permanentDeleteAsset(assetId, "Manager");
     toast(`${assetName} permanently deleted`, { variant: "error" });
@@ -242,7 +264,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   <div style={{
                     marginTop: 14,
                     padding: "10px 13px",
-                    background: "rgba(140,136,128,0.08)",
+                    background: "rgba(205,200,188,0.08)",
                     border: "1px solid var(--b1)",
                     borderRadius: 7,
                     fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", lineHeight: 1.5,
@@ -319,7 +341,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   <div style={{ padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div style={{
                       width: 36, height: 36, borderRadius: 7, flexShrink: 0,
-                      background: openFlag.severity === "critical" ? "rgba(255,79,79,0.12)" : "rgba(245,166,35,0.12)",
+                      background: openFlag.severity === "critical" ? "rgba(255,122,122,0.12)" : "rgba(251,194,92,0.12)",
                       color: openFlag.severity === "critical" ? "var(--red)" : "var(--amber)",
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
                     }}>⚠</div>

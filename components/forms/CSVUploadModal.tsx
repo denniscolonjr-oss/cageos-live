@@ -242,7 +242,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
               padding: "40px 20px",
               textAlign: "center",
               cursor: "pointer",
-              background: dragOver ? "rgba(226,245,92,0.04)" : "var(--s2)",
+              background: dragOver ? "rgba(236,255,112,0.04)" : "var(--s2)",
               transition: "all 0.15s",
             }}>
             <div style={{ fontSize: 32, marginBottom: 10, opacity: 0.6 }}>⬡</div>
@@ -251,7 +251,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
             <input ref={fileRef} type="file" accept=".csv,.tsv,text/csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && processFile(e.target.files[0])} />
           </div>
           {error && (
-            <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(255,79,79,0.08)", border: "1px solid rgba(255,79,79,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)", fontFamily: "'DM Mono',monospace" }}>
+            <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(255,122,122,0.08)", border: "1px solid rgba(255,122,122,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)", fontFamily: "'DM Mono',monospace" }}>
               {error}
             </div>
           )}
@@ -286,7 +286,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
             ))}
           </div>
           {error && (
-            <div style={{ marginBottom: 12, padding: "10px 12px", background: "rgba(255,79,79,0.08)", border: "1px solid rgba(255,79,79,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)" }}>
+            <div style={{ marginBottom: 12, padding: "10px 12px", background: "rgba(255,122,122,0.08)", border: "1px solid rgba(255,122,122,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)" }}>
               {error}
             </div>
           )}
@@ -378,7 +378,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
               return (
                 <label key={opt.key} onClick={() => toggleFilter(opt.key)} style={{
                   padding: "12px 14px",
-                  background: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                  background: active ? "rgba(236,255,112,0.06)" : "var(--s2)",
                   border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
                   borderRadius: 7,
                   cursor: "pointer",
@@ -419,7 +419,7 @@ export default function CSVUploadModal({ open, onClose }: { open: boolean; onClo
 
       {stage === "done" && (
         <div style={{ textAlign: "center", padding: "16px 0" }}>
-          <div className="animate-pop" style={{ width: 64, height: 64, background: "rgba(74,222,128,0.1)", border: "1px solid var(--green)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 14px" }}>✓</div>
+          <div className="animate-pop" style={{ width: 64, height: 64, background: "rgba(109,238,159,0.1)", border: "1px solid var(--green)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 14px" }}>✓</div>
           <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Imported {importedCount} assets</div>
           <div style={{ fontSize: 13, color: "var(--t2)", marginBottom: 18 }}>Your workspace now has {data.assets.length} total assets.</div>
           <button onClick={handleClose} style={{

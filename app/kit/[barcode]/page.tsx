@@ -24,6 +24,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   const [editValue, setEditValue] = useState("");
   const [showAddComponents, setShowAddComponents] = useState(false);
   const [swapTarget, setSwapTarget] = useState<{ assetId: string; category: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!hydrated || auth.loading) {
     return (
@@ -39,7 +40,21 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   // Search RAW kits so URLs to archived kits resolve
   const decoded = decodeURIComponent(barcode);
   const kit = rawKits.find(k => k.barcode === decoded || k.id === decoded);
-  if (!kit) return notFound();
+
+  // Same pattern as asset detail: while a delete is in flight, render a graceful
+  // "going away" state instead of 404.
+  if (!kit && !isDeleting) return notFound();
+  if (!kit && isDeleting) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t2)", fontFamily: "'DM Mono',monospace", fontSize: 12 }}>
+          Returning to dashboard...
+        </div>
+      </div>
+    );
+  }
+  if (!kit) return null;
 
   const isArchived = !!kit.archivedAt;
   // Use rawAssets so archived components don't disappear; we'll mark them
@@ -96,6 +111,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
     }
 
     router.push("/dashboard");
+    setIsDeleting(true);
     toast(`${kitName} archived`, {
       action: {
         label: "Undo",
@@ -121,6 +137,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
 
     const kitName = kit.name;
     const kitId = kit.id;
+    setIsDeleting(true);
     router.push("/dashboard");
     permanentDeleteKit(kitId, "Manager");
     toast(`${kitName} permanently deleted`, { variant: "error" });
@@ -207,7 +224,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                   <div style={{
                     marginTop: 14,
                     padding: "10px 13px",
-                    background: "rgba(140,136,128,0.08)",
+                    background: "rgba(205,200,188,0.08)",
                     border: "1px solid var(--b1)",
                     borderRadius: 7,
                     fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", lineHeight: 1.5,

@@ -208,22 +208,27 @@ function useWorkspaceImpl() {
     if (auth.loading) return; // Wait for auth to resolve before loading
     let cancelled = false;
     setHydrated(false);
-    const m = modeAdapter.loadMode();
+    // Mode resolution rules:
+    // - If signed in → ALWAYS "user" mode (Supabase data wins; never flash demo)
+    // - If signed out → respect stored mode (could be "user" or "demo")
+    const storedMode = modeAdapter.loadMode();
+    const resolvedMode: WorkspaceMode = auth.session ? "user" : storedMode;
     adapter.load().then(stored => {
       if (cancelled) return;
       if (stored) setUserData(stored);
       else setUserData(EMPTY_WORKSPACE);
-      setMode(m);
+      setMode(resolvedMode);
       setHydrated(true);
     }).catch(err => {
       console.error("Workspace load failed:", err);
       if (!cancelled) {
         setUserData(EMPTY_WORKSPACE);
+        setMode(resolvedMode);
         setHydrated(true);
       }
     });
     return () => { cancelled = true; };
-  }, [adapter, auth.loading]);
+  }, [adapter, auth.loading, auth.session]);
 
   // Cross-tab + real-time sync.
   // For localStorage: listens to the browser's storage event.
@@ -256,10 +261,32 @@ function useWorkspaceImpl() {
   const data: WorkspaceData = mode === "demo" ? buildDemoWorkspace() : userData;
   const isReadOnly = mode === "demo";
 
+  /**
+   * Demo mode is gated to an email allowlist. Set NEXT_PUBLIC_DEMO_USERS
+   * (comma-separated emails) in your env to control which accounts can enter
+   * demo mode. Signed-out visitors cannot enter demo mode — keeps prospects
+   * from accidentally landing in the populated sample on first visit.
+   */
+  const canUseDemo = useMemo(() => {
+    const allowlist = (process.env.NEXT_PUBLIC_DEMO_USERS ?? "")
+      .split(",")
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (allowlist.length === 0) return false;
+    const email = auth.user?.email?.toLowerCase() ?? "";
+    if (!email) return false;
+    return allowlist.includes(email);
+  }, [auth.user?.email]);
+
   const switchMode = useCallback((m: WorkspaceMode) => {
+    // Block demo mode for users not on the allowlist
+    if (m === "demo" && !canUseDemo) {
+      console.warn("[switchMode] demo mode is not available for this account");
+      return;
+    }
     setMode(m);
     modeAdapter.saveMode(m);
-  }, []);
+  }, [canUseDemo]);
 
   const updateUserData = useCallback((updater: (d: WorkspaceData) => WorkspaceData) => {
     setUserData(prev => {
@@ -1165,6 +1192,7 @@ function useWorkspaceImpl() {
     hydrated,
     isReadOnly,
     isEmpty: mode !== "demo" && data.assets.length === 0 && data.profiles.length === 0,
+    canUseDemo,
     stats,
     activeCheckouts,
     switchMode,

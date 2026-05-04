@@ -126,7 +126,7 @@ export default function AddKitModal({ open, onClose }: { open: boolean; onClose:
                   borderBottom: "1px solid var(--b1)",
                   cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 10,
-                  background: selected ? "rgba(226,245,92,0.07)" : "transparent",
+                  background: selected ? "rgba(236,255,112,0.07)" : "transparent",
                   minHeight: 44,
                 }}>
                   <div style={{

@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/supabase/AuthContext";
 export default function Home() {
   const router = useRouter();
   const isMobile = useIsMobile();
-  const { mode, hydrated, switchMode } = useWorkspace();
+  const { mode, hydrated, switchMode, canUseDemo } = useWorkspace();
   const { session, loading: authLoading, supabaseEnabled, activeWorkspaceId } = useAuth();
 
   useEffect(() => {
@@ -83,15 +83,7 @@ export default function Home() {
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
               }}>Sign in</Link>
             </div>
-            <div style={{ marginBottom: 18 }}>
-              <button onClick={tryDemo} style={{
-                background: "transparent", color: "var(--t2)", border: "none",
-                padding: "8px 16px", fontFamily: "'DM Mono',monospace",
-                fontSize: 12, cursor: "pointer", textDecoration: "underline",
-              }}>Or try the demo without signing up</button>
-            </div>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", lineHeight: 1.6 }}>
-              Demo mode lets you explore CageOS with sample data.<br />
               Sign up to start tracking your real inventory.
             </div>
           </>

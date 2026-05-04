@@ -65,7 +65,7 @@ export default function FlagItemModal({ open, onClose, asset }: Props) {
             <button onClick={() => setSeverity("warning")} style={{
               padding: "12px 14px", borderRadius: 7,
               border: `1px solid ${severity === "warning" ? "var(--amber)" : "var(--b1)"}`,
-              background: severity === "warning" ? "rgba(245,166,35,0.08)" : "var(--s2)",
+              background: severity === "warning" ? "rgba(251,194,92,0.08)" : "var(--s2)",
               color: severity === "warning" ? "var(--amber)" : "var(--t2)",
               cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 44,
               textAlign: "left",
@@ -76,7 +76,7 @@ export default function FlagItemModal({ open, onClose, asset }: Props) {
             <button onClick={() => setSeverity("critical")} style={{
               padding: "12px 14px", borderRadius: 7,
               border: `1px solid ${severity === "critical" ? "var(--red)" : "var(--b1)"}`,
-              background: severity === "critical" ? "rgba(255,79,79,0.08)" : "var(--s2)",
+              background: severity === "critical" ? "rgba(255,122,122,0.08)" : "var(--s2)",
               color: severity === "critical" ? "var(--red)" : "var(--t2)",
               cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 44,
               textAlign: "left",

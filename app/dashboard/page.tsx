@@ -273,7 +273,7 @@ export default function DashboardPage() {
 
           {isReadOnly && (
             <div style={{
-              background: "rgba(226,245,92,0.06)", border: "1px solid rgba(226,245,92,0.2)",
+              background: "rgba(236,255,112,0.06)", border: "1px solid rgba(236,255,112,0.2)",
               borderRadius: 8, padding: "10px 14px", marginBottom: 14,
               display: "flex", alignItems: "center", justifyContent: "space-between",
               gap: 10, flexWrap: "wrap",
@@ -382,7 +382,7 @@ export default function DashboardPage() {
                             <button key={f} onClick={() => setAssetFilter(f)} style={{
                               padding: "5px 10px", borderRadius: 4, fontSize: 11, fontFamily: "'DM Mono', monospace",
                               border: `1px solid ${assetFilter === f ? "var(--acc)" : "var(--b1)"}`,
-                              background: assetFilter === f ? "rgba(226,245,92,0.08)" : "transparent",
+                              background: assetFilter === f ? "rgba(236,255,112,0.08)" : "transparent",
                               color: assetFilter === f ? "var(--acc)" : "var(--t3)",
                               cursor: "pointer", flexShrink: 0, minHeight: 32, whiteSpace: "nowrap",
                             }}>{f}</button>
@@ -441,7 +441,7 @@ export default function DashboardPage() {
                       {data.alerts.map(al => (
                         <div key={al.id} style={{ padding: "11px 14px", borderBottom: "1px solid var(--b1)", display: "flex", gap: 10 }}>
                           <div style={{ width: 28, height: 28, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0,
-                            background: al.type === "critical" ? "rgba(255,79,79,0.12)" : al.type === "warning" ? "rgba(245,166,35,0.12)" : "rgba(90,160,240,0.12)" }}>
+                            background: al.type === "critical" ? "rgba(255,122,122,0.12)" : al.type === "warning" ? "rgba(251,194,92,0.12)" : "rgba(122,181,245,0.12)" }}>
                             {al.type === "critical" ? "⚠" : al.type === "warning" ? "⚑" : "ℹ"}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -468,7 +468,7 @@ export default function DashboardPage() {
                 />
                 <div className="scroll-x" style={{ display: "flex", gap: 8 }}>
                   {(["all","in","out","flagged"] as const).map(f => (
-                    <button key={f} onClick={() => setAssetFilter(f)} style={{ padding: "9px 14px", borderRadius: 6, fontSize: 12, fontFamily: "'DM Mono', monospace", border: `1px solid ${assetFilter === f ? "var(--acc)" : "var(--b1)"}`, background: assetFilter === f ? "rgba(226,245,92,0.08)" : "transparent", color: assetFilter === f ? "var(--acc)" : "var(--t2)", cursor: "pointer", flexShrink: 0, minHeight: 40, whiteSpace: "nowrap" }}>{f}</button>
+                    <button key={f} onClick={() => setAssetFilter(f)} style={{ padding: "9px 14px", borderRadius: 6, fontSize: 12, fontFamily: "'DM Mono', monospace", border: `1px solid ${assetFilter === f ? "var(--acc)" : "var(--b1)"}`, background: assetFilter === f ? "rgba(236,255,112,0.08)" : "transparent", color: assetFilter === f ? "var(--acc)" : "var(--t2)", cursor: "pointer", flexShrink: 0, minHeight: 40, whiteSpace: "nowrap" }}>{f}</button>
                   ))}
                 </div>
               </div>
@@ -494,13 +494,13 @@ export default function DashboardPage() {
                             borderRadius: 6, fontSize: 12,
                             fontFamily: "'DM Mono',monospace",
                             border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
-                            backgroundColor: active ? "rgba(226,245,92,0.06)" : "var(--s2)",
+                            backgroundColor: active ? "rgba(236,255,112,0.06)" : "var(--s2)",
                             color: active ? "var(--acc)" : "var(--t2)",
                             cursor: "pointer", minHeight: 36,
                             appearance: "none",
                             WebkitAppearance: "none",
                             colorScheme: "dark",
-                            backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238c8880' stroke-width='1.5' fill='none'/></svg>\")",
+                            backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23cdc8bc' stroke-width='1.5' fill='none'/></svg>\")",
                             backgroundRepeat: "no-repeat",
                             backgroundPosition: "right 10px center",
                           }}
@@ -838,7 +838,7 @@ export default function DashboardPage() {
                             padding: "8px 14px", borderRadius: 6, fontSize: 11,
                             fontFamily: "'DM Mono',monospace",
                             border: `1px solid ${isActive ? "var(--acc)" : "var(--b1)"}`,
-                            background: isActive ? "rgba(226,245,92,0.08)" : "transparent",
+                            background: isActive ? "rgba(236,255,112,0.08)" : "transparent",
                             color: isActive ? "var(--acc)" : "var(--t2)",
                             cursor: "pointer", flexShrink: 0, minHeight: 36, whiteSpace: "nowrap",
                           }}>
@@ -1090,7 +1090,7 @@ export default function DashboardPage() {
                             padding: "8px 14px", borderRadius: 6, fontSize: 12,
                             fontFamily: "'DM Mono',monospace",
                             border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
-                            background: active ? "rgba(226,245,92,0.06)" : "transparent",
+                            background: active ? "rgba(236,255,112,0.06)" : "transparent",
                             color: active ? "var(--acc)" : "var(--t3)",
                             cursor: "pointer", minHeight: 36,
                           }}>
@@ -1143,7 +1143,7 @@ export default function DashboardPage() {
                       onClick={() => setManagerMode(!data.managerMode)}
                       style={{
                         padding: "10px 16px", borderRadius: 6,
-                        background: data.managerMode ? "rgba(226,245,92,0.08)" : "transparent",
+                        background: data.managerMode ? "rgba(236,255,112,0.08)" : "transparent",
                         border: `1px solid ${data.managerMode ? "var(--acc)" : "var(--b1)"}`,
                         color: data.managerMode ? "var(--acc)" : "var(--t2)",
                         cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
@@ -1217,7 +1217,7 @@ export default function DashboardPage() {
                             padding: "8px 14px", borderRadius: 6, fontSize: 11,
                             fontFamily: "'DM Mono',monospace",
                             border: `1px solid ${isActive ? "var(--acc)" : "var(--b1)"}`,
-                            background: isActive ? "rgba(226,245,92,0.08)" : "transparent",
+                            background: isActive ? "rgba(236,255,112,0.08)" : "transparent",
                             color: isActive ? "var(--acc)" : "var(--t2)",
                             cursor: "pointer", flexShrink: 0, minHeight: 36, whiteSpace: "nowrap",
                           }}>

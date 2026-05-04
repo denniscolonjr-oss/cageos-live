@@ -13,7 +13,7 @@ const ROLES = [
 
 const DEPARTMENTS = ["Production", "Post", "Creative", "Leadership", "Guest", "Other"];
 
-const COLORS = ["#60a5fa", "#f59e0b", "#4ade80", "#a78bfa", "#5aa0f0", "#ff8c42"];
+const COLORS = ["#7ab5f5", "#fbc25c", "#6dee9f", "#b89dfc", "#5aa0f0", "#ff9d57"];
 
 export default function AddTeamMemberModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { addProfile, data } = useWorkspace();
