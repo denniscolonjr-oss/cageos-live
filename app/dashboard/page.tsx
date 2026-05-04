@@ -854,7 +854,7 @@ export default function DashboardPage() {
                         <div style={{ padding: 36, textAlign: "center" }}>
                           <div style={{ fontSize: 28, marginBottom: 10 }}>{flagFilter === "open" ? "✓" : "—"}</div>
                           <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-                            {flagFilter === "open" ? "All clear" : `No ${flagFilter === "all" ? "" : flagFilter + " "}flags`}
+                            {flagFilter === "open" ? "All clear" : `No ${flagFilter === "all" ? "" : flagFilter === "in_repair" ? "in-repair " : flagFilter + " "}flags`}
                           </div>
                           <div style={{ fontSize: 12, color: "var(--t2)" }}>
                             {flagFilter === "open"

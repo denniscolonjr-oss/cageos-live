@@ -206,6 +206,14 @@ function useWorkspaceImpl() {
   // Initial load + reload whenever the adapter changes (e.g., user logs in or switches workspace)
   useEffect(() => {
     if (auth.loading) return; // Wait for auth to resolve before loading
+    // CRITICAL: when we have a session but activeWorkspaceId is still being
+    // populated (refreshWorkspaces is async), the adapter is still localStorage.
+    // Don't load from localStorage in that gap — it would cause a brief
+    // empty-state flash before the Supabase adapter takes over.
+    if (auth.session && !auth.activeWorkspaceId) {
+      setHydrated(false);
+      return;
+    }
     let cancelled = false;
     setHydrated(false);
     // Mode resolution rules:
@@ -228,7 +236,7 @@ function useWorkspaceImpl() {
       }
     });
     return () => { cancelled = true; };
-  }, [adapter, auth.loading, auth.session]);
+  }, [adapter, auth.loading, auth.session, auth.activeWorkspaceId]);
 
   // Cross-tab + real-time sync.
   // For localStorage: listens to the browser's storage event.
