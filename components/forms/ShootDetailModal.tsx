@@ -42,25 +42,15 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
     }
   }, [shoot]);
 
-  if (!shoot) return null;
-
-  const teamProfiles = shoot.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
-  const kits = shoot.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
-  const lead = shoot.leadInitials ? data.profiles.find(p => p.initials === shoot.leadInitials) : null;
-  const tz = data.timezone;
-
-  function toggleTeam(initials: string) {
-    const next = new Set(assignedTeam);
-    if (next.has(initials)) next.delete(initials); else next.add(initials);
-    setAssignedTeam(next);
-  }
-  function toggleKit(id: string) {
-    const next = new Set(assignedKits);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setAssignedKits(next);
-  }
-
-  /** Conflicts with OTHER shoots only (not this one being edited). */
+  /**
+   * Conflicts with OTHER shoots only (not this one being edited).
+   *
+   * IMPORTANT: This hook MUST be declared before any early returns.
+   * Hooks must run in the same order on every render — the previous version
+   * of this file declared this useMemo AFTER `if (!shoot) return null;`,
+   * which crashed React with error #310 (rendered more hooks than previous
+   * render) the first time the modal opened with a non-null shoot.
+   */
   const kitConflicts = useMemo(() => {
     if (!shoot) return [];
     if (!startsAt) return [];
@@ -75,7 +65,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
       if (!kit) continue;
       const overlapping: { shootTitle: string; range: string }[] = [];
       for (const otherShoot of data.shoots) {
-        if (otherShoot.id === shoot.id) continue; // exclude the shoot being edited
+        if (otherShoot.id === shoot.id) continue;
         if (otherShoot.status === "completed" || otherShoot.status === "cancelled") continue;
         if (!otherShoot.assignedKits.includes(kitId)) continue;
         const otherStart = new Date(otherShoot.startsAt).getTime();
@@ -99,6 +89,24 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
 
     return conflicts;
   }, [assignedKits, startsAt, endsAt, data.shoots, data.kits, shoot]);
+
+  if (!shoot) return null;
+
+  const teamProfiles = shoot.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
+  const kits = shoot.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
+  const lead = shoot.leadInitials ? data.profiles.find(p => p.initials === shoot.leadInitials) : null;
+  const tz = data.timezone;
+
+  function toggleTeam(initials: string) {
+    const next = new Set(assignedTeam);
+    if (next.has(initials)) next.delete(initials); else next.add(initials);
+    setAssignedTeam(next);
+  }
+  function toggleKit(id: string) {
+    const next = new Set(assignedKits);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setAssignedKits(next);
+  }
 
   function handleSaveEdit() {
     if (!shoot) return;
