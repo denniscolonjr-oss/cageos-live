@@ -39,7 +39,7 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
   const auth = useAuth();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, setManagerMode, archivedAssets, archivedKits, restoreAsset, restoreKit } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, archivedAssets, archivedKits, restoreAsset, restoreKit, role } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -340,7 +340,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {activeCheckouts.map(co => (
-                        <Link key={co.id} href={`/profile/${co.initials}`} style={{ textDecoration: "none", color: "inherit" }}>
+                        <Link key={co.id} href={`/profile/${encodeURIComponent(co.initials)}`} style={{ textDecoration: "none", color: "inherit" }}>
                           <div style={{
                             padding: isMobile ? "13px 16px" : "11px 16px", borderBottom: "1px solid var(--b1)",
                             display: "flex", alignItems: "center", gap: 11,
@@ -717,7 +717,7 @@ export default function DashboardPage() {
                                 {teamProfiles.map(p => (
                                   <Link
                                     key={p!.initials}
-                                    href={`/profile/${p!.initials}`}
+                                    href={`/profile/${encodeURIComponent(p!.initials)}`}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{ textDecoration: "none" }}
                                   >
@@ -1137,24 +1137,27 @@ export default function DashboardPage() {
                 </Card>
               )}
 
-              {!isReadOnly && (
+              {!isReadOnly && role && (
                 <Card>
                   <div style={{ padding: 20 }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Manager mode</div>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
-                      Reveal reliability scores, condition scores, and drift incident counts on team profiles. Off by default — these stats are sensitive and shouldn&apos;t be visible to crew browsing each other&apos;s profiles.
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Your role</div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.55 }}>
+                      {role === "owner" && "You're the workspace Owner. You have full control: inventory, settings, member management, and billing."}
+                      {role === "manager" && "You're a Manager. Full control over inventory and settings. Cannot change billing or other members' roles."}
+                      {role === "crew" && "You're Crew. You can check gear in and out, flag service issues, and view the audit log."}
+                      {role === "viewer" && "You're a Viewer. Read-only access across the workspace."}
                     </div>
-                    <button
-                      onClick={() => setManagerMode(!data.managerMode)}
-                      style={{
-                        padding: "10px 16px", borderRadius: 6,
-                        background: data.managerMode ? "rgba(236,255,112,0.08)" : "transparent",
-                        border: `1px solid ${data.managerMode ? "var(--acc)" : "var(--b1)"}`,
-                        color: data.managerMode ? "var(--acc)" : "var(--t2)",
-                        cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontSize: 13, minHeight: 40,
-                      }}>
-                      {data.managerMode ? "✓ Manager mode is ON" : "Turn on manager mode"}
-                    </button>
+                    <div style={{
+                      display: "inline-block",
+                      padding: "6px 12px", borderRadius: 6,
+                      background: "rgba(236,255,112,0.08)",
+                      border: "1px solid var(--acc)",
+                      color: "var(--acc)",
+                      fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
+                      letterSpacing: "0.04em", textTransform: "uppercase",
+                    }}>
+                      {role}
+                    </div>
                   </div>
                 </Card>
               )}

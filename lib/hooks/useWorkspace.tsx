@@ -266,8 +266,30 @@ function useWorkspaceImpl() {
     return () => window.removeEventListener("storage", handleStorage);
   }, [adapter]);
 
-  const data: WorkspaceData = mode === "demo" ? buildDemoWorkspace() : userData;
-  const isReadOnly = mode === "demo";
+  /**
+   * Role-based access derivation. The previous `data.managerMode` boolean
+   * (toggled in Settings) is now derived from the user's role in the active
+   * workspace:
+   *
+   *   - Owner   → managerMode = true (full control)
+   *   - Manager → managerMode = true
+   *   - Crew    → managerMode = false (kiosk + flagging only)
+   *   - Viewer  → managerMode = false AND isReadOnly = true (cannot mutate)
+   *
+   * Demo mode forces isReadOnly = true regardless of role. Existing UI
+   * checks like `data.managerMode && !isReadOnly` keep working without
+   * modification — they read the derived value.
+   */
+  const role = auth.currentRole;
+  const isManagerByRole = role === "owner" || role === "manager";
+  const isViewerOrAbsent = role === "viewer" || role === null;
+
+  // Demo mode produces a read-only data view; otherwise use real userData.
+  // managerMode is OVERRIDDEN by the derived role-based value, ignoring whatever
+  // is stored in the workspace JSON.
+  const rawData = mode === "demo" ? buildDemoWorkspace() : userData;
+  const data: WorkspaceData = { ...rawData, managerMode: isManagerByRole };
+  const isReadOnly = mode === "demo" || isViewerOrAbsent;
 
   /**
    * Demo mode is gated to an email allowlist. Set NEXT_PUBLIC_DEMO_USERS
@@ -485,6 +507,12 @@ function useWorkspaceImpl() {
    */
   const permanentDeleteAsset = useCallback((assetId: string, actor: string = "—") => {
     if (isReadOnly) return;
+    // Permanent delete is destructive and irrecoverable — Owner only.
+    // Managers can archive (recoverable); only Owners can hard-delete.
+    if (role !== "owner") {
+      console.warn("[permanentDeleteAsset] denied — owner role required");
+      return;
+    }
     updateUserData(d => {
       const target = d.assets.find(a => a.id === assetId);
       if (!target) return d;
@@ -498,7 +526,7 @@ function useWorkspaceImpl() {
       };
       return appendEvent(next, "asset_archived", `Permanently deleted ${target.name}`, { actor, detail: target.barcode });
     });
-  }, [isReadOnly, updateUserData]);
+  }, [isReadOnly, role, updateUserData]);
 
   /** Patch a kit's fields. */
   const updateKit = useCallback((kitId: string, patch: Partial<Kit>) => {
@@ -605,25 +633,27 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
-  /** Permanently delete a kit. No archive, no undo. Components stay in inventory. */
+  /** Permanently delete a kit. No archive, no undo. Owner only. */
   const permanentDeleteKit = useCallback((kitId: string, actor: string = "—") => {
     if (isReadOnly) return;
+    if (role !== "owner") {
+      console.warn("[permanentDeleteKit] denied — owner role required");
+      return;
+    }
     updateUserData(d => {
       const target = d.kits.find(k => k.id === kitId);
       if (!target) return d;
       const next = {
         ...d,
         kits: d.kits.filter(k => k.id !== kitId),
-        // Strip kit reference from any assets that pointed to it
         assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
-        // Strip from any shoots' assignedKits
         shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
           ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
           : s),
       };
       return appendEvent(next, "kit_archived", `Permanently deleted ${target.name}`, { actor, detail: target.barcode });
     });
-  }, [isReadOnly, updateUserData]);
+  }, [isReadOnly, role, updateUserData]);
 
   /** Attach a single asset to a kit. Removes from any prior kit first. */
   const attachAssetToKit = useCallback((assetId: string, kitId: string) => {
@@ -830,13 +860,18 @@ function useWorkspaceImpl() {
     updateUserData(d => ({ ...d, timezone: tz }));
   }, [isReadOnly, updateUserData]);
 
-  const setManagerMode = useCallback((on: boolean) => {
-    if (isReadOnly) return;
-    updateUserData(d => appendEvent(
-      { ...d, managerMode: on },
-      "manager_mode", on ? "Manager mode turned ON" : "Manager mode turned OFF",
-    ));
-  }, [isReadOnly, updateUserData]);
+  /**
+   * @deprecated Manager mode is now derived from your workspace role.
+   * Owners and Managers always have full access. Crew and Viewer cannot
+   * elevate themselves. This setter remains as a no-op so existing UI
+   * call sites don't crash; the toggle has been removed from Settings.
+   */
+  const setManagerMode = useCallback((_on: boolean) => {
+    // No-op. Role determines manager access.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[setManagerMode] deprecated — manager mode is derived from role");
+    }
+  }, []);
 
   const addShoot = useCallback((shoot: Shoot) => {
     if (isReadOnly) return;
@@ -1201,6 +1236,8 @@ function useWorkspaceImpl() {
     isReadOnly,
     isEmpty: mode !== "demo" && data.assets.length === 0 && data.profiles.length === 0,
     canUseDemo,
+    /** Current user's role in the active workspace. Null when no workspace. */
+    role,
     stats,
     activeCheckouts,
     switchMode,
