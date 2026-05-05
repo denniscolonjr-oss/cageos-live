@@ -23,10 +23,12 @@ import { getSupabaseClient, isSupabaseConfigured } from "./client";
 
 const ACTIVE_WORKSPACE_KEY = "cageos:activeWorkspace:v1";
 
+export type WorkspaceRole = "owner" | "manager" | "crew" | "viewer";
+
 export interface WorkspaceMembership {
   id: string;          // workspace id
   name: string;        // org name
-  role: "owner" | "manager" | "crew";
+  role: WorkspaceRole;
 }
 
 interface AuthContextValue {
@@ -36,6 +38,8 @@ interface AuthContextValue {
   workspaces: WorkspaceMembership[];
   activeWorkspaceId: string | null;
   setActiveWorkspaceId: (id: string | null) => void;
+  /** Role of the current user in the active workspace. Null when no active workspace. */
+  currentRole: WorkspaceRole | null;
   refreshWorkspaces: () => Promise<void>;
   signOut: () => Promise<void>;
   /** True when the env vars are set. Lets the app fall back to localStorage gracefully in dev. */
@@ -85,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .map((row: { role: string; workspaces: { id: string; name: string } | null }) => {
         const ws = row.workspaces;
         if (!ws) return null;
-        return { id: ws.id, name: ws.name, role: row.role as "owner" | "manager" | "crew" };
+        return { id: ws.id, name: ws.name, role: row.role as WorkspaceRole };
       })
       .filter((x: WorkspaceMembership | null): x is WorkspaceMembership => x !== null);
 
@@ -144,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       loading, session, user: session?.user ?? null,
       workspaces, activeWorkspaceId, setActiveWorkspaceId,
+      currentRole: workspaces.find(w => w.id === activeWorkspaceId)?.role ?? null,
       refreshWorkspaces, signOut, supabaseEnabled,
     }}>
       {children}
