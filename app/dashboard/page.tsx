@@ -715,7 +715,12 @@ export default function DashboardPage() {
                               <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Team ({teamProfiles.length})</div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                                 {teamProfiles.map(p => (
-                                  <Link key={p!.initials} href={`/profile/${p!.initials}`} style={{ textDecoration: "none" }}>
+                                  <Link
+                                    key={p!.initials}
+                                    href={`/profile/${p!.initials}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ textDecoration: "none" }}
+                                  >
                                     <div title={p!.name} style={{
                                       display: "flex", alignItems: "center", gap: 5,
                                       padding: "4px 8px 4px 4px", borderRadius: 14,
