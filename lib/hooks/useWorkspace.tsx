@@ -829,6 +829,86 @@ function useWorkspaceImpl() {
     ));
   }, [isReadOnly, updateUserData]);
 
+  /**
+   * Ensure the currently signed-in user has a team profile in this workspace.
+   * If not, auto-create a placeholder with `pendingSetup: true` so the
+   * dashboard can prompt them to fill in their real details.
+   *
+   * Idempotent — safe to call multiple times. Skips entirely if the user
+   * already has a profile, if there's no auth user, or if the workspace is
+   * read-only.
+   */
+  const ensureMyProfile = useCallback(() => {
+    if (isReadOnly) return;
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    const userEmail = auth.user.email ?? "";
+    // Check if profile already exists (must use raw data, not derived)
+    const existing = userData.profiles.find(p => p.userId === userId);
+    if (existing) return;
+
+    // Build a placeholder. Name and initials are blank until first-time setup.
+    const placeholder: UserProfile = {
+      id: `prof-${userId.slice(0, 8)}-${Date.now().toString(36)}`,
+      userId,
+      pendingSetup: true,
+      name: "",
+      initials: "",
+      color: "#cdc8bc",
+      role: auth.currentRole ?? "crew",
+      joinedAt: new Date().toISOString(),
+      email: userEmail,
+      badgeCount: 0,
+      department: "",
+      location: "",
+      totalCheckouts: 0,
+      totalHours: 0,
+      shootsWorkedThisYear: 0,
+      conditionScore: 0,
+      reliabilityScore: 0,
+      driftIncidents: 0,
+      sopsContributed: 0,
+      expertise: [],
+      history: [],
+      frequentCollaborators: [],
+      certifications: [],
+    };
+    updateUserData(d => {
+      // Double-check inside updater in case another path already created one
+      if (d.profiles.find(p => p.userId === userId)) return d;
+      return appendEvent(
+        { ...d, profiles: [...d.profiles, placeholder] },
+        "team_added", `${userEmail || "New member"} joined the workspace`,
+        { actor: userEmail, detail: placeholder.role },
+      );
+    });
+  }, [isReadOnly, auth.user, auth.currentRole, userData.profiles, updateUserData]);
+
+  /**
+   * Mark the current user's profile as fully set up (name, initials, color
+   * filled in). Called from the first-time setup modal after they save.
+   */
+  const completeMyProfile = useCallback((patch: Partial<UserProfile>) => {
+    if (isReadOnly || !auth.user) return;
+    const userId = auth.user.id;
+    updateUserData(d => {
+      const idx = d.profiles.findIndex(p => p.userId === userId);
+      if (idx === -1) return d;
+      const updated = {
+        ...d.profiles[idx],
+        ...patch,
+        pendingSetup: false,
+      };
+      const profiles = [...d.profiles];
+      profiles[idx] = updated;
+      return appendEvent(
+        { ...d, profiles },
+        "team_added", `${updated.name} completed their profile`,
+        { actor: updated.name, detail: updated.initials },
+      );
+    });
+  }, [isReadOnly, auth.user, updateUserData]);
+
   /** Patch any subset of a profile's fields. */
   const updateProfile = useCallback((profileId: string, patch: Partial<UserProfile>) => {
     if (isReadOnly) return;
@@ -1135,9 +1215,17 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   const resetWorkspace = useCallback(() => {
+    // CRITICAL: Reset is destructive and irreversible. Owner-only.
+    // Crew/Manager/Viewer must not be able to wipe the workspace even if
+    // some UI surface accidentally shows the button — this is the last line
+    // of defense against catastrophic data loss.
+    if (role !== "owner") {
+      console.warn("[resetWorkspace] denied — owner role required");
+      return;
+    }
     adapter.clear().catch(err => console.error("Reset failed:", err));
     setUserData(EMPTY_WORKSPACE);
-  }, [adapter]);
+  }, [adapter, role]);
 
   // --- Computed ---
 
@@ -1258,6 +1346,8 @@ function useWorkspaceImpl() {
     detachAssetFromKit,
     addProfile,
     addProfiles,
+    ensureMyProfile,
+    completeMyProfile,
     updateProfile,
     addShoot,
     updateShoot,

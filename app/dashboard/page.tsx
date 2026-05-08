@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
@@ -16,6 +16,7 @@ import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import MembersCard from "@/components/shared/MembersCard";
 import PasscodesCard from "@/components/shared/PasscodesCard";
+import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -41,7 +42,7 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
   const auth = useAuth();
-  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, archivedAssets, archivedKits, restoreAsset, restoreKit, role } = useWorkspace();
+  const { data, mode, hydrated, isReadOnly, isEmpty, stats, activeCheckouts, openFlags, resetWorkspace, setBarcodePrefix, setFilterableFields, setTimezone, archivedAssets, archivedKits, restoreAsset, restoreKit, role, ensureMyProfile } = useWorkspace();
   const [activeKey, setActiveKey] = useState("cage");
   const [assetFilter, setAssetFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -192,6 +193,16 @@ export default function DashboardPage() {
       ))}
     </>
   );
+
+  // Auto-create the current user's team profile if they don't have one yet.
+  // Runs whenever the workspace finishes hydrating and we have an authed user.
+  // No-op if the profile already exists. Critical for the invite/passcode flow:
+  // newly-joined members get a placeholder profile they fill in on first login.
+  useEffect(() => {
+    if (hydrated && !auth.loading && auth.user && !isReadOnly) {
+      ensureMyProfile();
+    }
+  }, [hydrated, auth.loading, auth.user, isReadOnly, ensureMyProfile]);
 
   // Gate the dashboard render on BOTH auth.loading completing AND workspace hydration.
   // Without auth.loading we'd render with the localStorage adapter's empty state
@@ -1168,7 +1179,8 @@ export default function DashboardPage() {
               {!isReadOnly && <MembersCard />}
               {!isReadOnly && <PasscodesCard />}
 
-              {!isReadOnly && (
+              {/* Reset is Owner-only — destructive and irreversible. */}
+              {!isReadOnly && role === "owner" && (
                 <Card>
                   <div style={{ padding: 20 }}>
                     <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Reset</div>
@@ -1329,6 +1341,8 @@ export default function DashboardPage() {
       <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} shoot={selectedShoot} />
       <FlagItemModal open={!!flagAssetTarget} onClose={() => setFlagAssetTarget(null)} asset={flagAssetTarget} />
       <FlagDetailModal open={!!selectedFlag} onClose={() => setSelectedFlagId(null)} flag={selectedFlag} />
+      {/* Self-gates on pendingSetup; renders nothing if profile already complete */}
+      <FirstTimeProfileModal />
     </div>
   );
 }

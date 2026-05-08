@@ -18,6 +18,19 @@ export default function AuthCallbackPage() {
     const client = getSupabaseClient();
     const { data: { subscription } } = client.auth.onAuthStateChange(async (event: string, session: import("@supabase/supabase-js").Session | null) => {
       if (event === "SIGNED_IN" && session) {
+        // Honor a pending invite token if one was stashed before signup.
+        // /invite/[token] sets this when the user clicks "Sign up" from the
+        // invite page so we know to send them BACK to the invite after their
+        // account is confirmed.
+        let pendingInvite: string | null = null;
+        try { pendingInvite = localStorage.getItem("cageos:pendingInvite"); }
+        catch { /* ignore */ }
+        if (pendingInvite) {
+          try { localStorage.removeItem("cageos:pendingInvite"); } catch { /* ignore */ }
+          router.replace(`/invite/${pendingInvite}`);
+          return;
+        }
+
         // Check if user has any workspaces yet
         const { data: memberships } = await client
           .from("workspace_members")

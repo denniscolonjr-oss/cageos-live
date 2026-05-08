@@ -64,19 +64,23 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
     .eq("workspace_id", workspaceId);
   if (error || !rows) return [];
 
-  // Resolve user emails. We only have access to our own auth.users row directly,
-  // but a SECURITY DEFINER view would be needed for full email visibility.
-  // For now, return what we can — the UI shows "(unknown email)" as fallback.
+  // Resolve user emails through the optional `public_user_emails` view if it
+  // exists. The view is created by the optional iter-14 push 3 SQL migration.
+  // If the view doesn't exist, the query throws an error — we catch it silently
+  // and use "—" as the email placeholder. The member row still gets returned
+  // with their userId and role intact so the Members UI never drops members.
   const members: WorkspaceMember[] = await Promise.all(rows.map(async (row: { user_id: string; role: string; created_at: string }) => {
     let email = "—";
-    // Try to read from a public_user_emails view if present (push 4 may add one).
-    // Falls back to "—" otherwise.
-    const { data: u } = await sb
-      .from("public_user_emails")
-      .select("email")
-      .eq("id", row.user_id)
-      .maybeSingle();
-    if (u?.email) email = u.email;
+    try {
+      const { data: u } = await sb
+        .from("public_user_emails")
+        .select("email")
+        .eq("id", row.user_id)
+        .maybeSingle();
+      if (u?.email) email = u.email;
+    } catch {
+      // View doesn't exist or query failed; keep "—" placeholder
+    }
     return {
       userId: row.user_id,
       email,

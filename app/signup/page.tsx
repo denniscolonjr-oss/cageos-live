@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { AuthShell } from "../login/page";
@@ -14,9 +14,22 @@ import { AuthShell } from "../login/page";
  * code in localStorage during signup; AuthContext picks it up and redeems it
  * after the session is live (handles the email-confirmation-required case
  * where session activation is delayed until the user clicks the verify link).
+ *
+ * Honors `?next=<path>` so the invite-link flow can hand control back to
+ * `/invite/[token]` after the new account is created. Wrapped in Suspense
+ * because Next 15 requires it for any page reading useSearchParams.
  */
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<AuthShell title="Loading..."><div /></AuthShell>}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session, supabaseEnabled, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,11 +39,15 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // If `next` is set (e.g. /invite/<token>), bounce there once authenticated.
+  // Otherwise default to /onboarding for fresh accounts.
+  const next = searchParams.get("next");
+
   useEffect(() => {
     if (!authLoading && session) {
-      router.replace("/onboarding");
+      router.replace(next ?? "/onboarding");
     }
-  }, [authLoading, session, router]);
+  }, [authLoading, session, router, next]);
 
   async function handleSignup() {
     if (!email || !password) {

@@ -54,9 +54,16 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
     return () => { cancelled = true; };
   }, [authLoading, session, token, router, refreshWorkspaces, setActiveWorkspaceId]);
 
-  // Build sign-in URL that preserves return path back to this invite
+  // Build sign-in URL that preserves return path back to this invite.
+  // We also stash the token in localStorage as a backup, because Supabase's
+  // email-confirmation flow strips query params on the redirect callback —
+  // the auth callback page reads the stashed token to send the user back here.
   const signInRedirect = `/login?next=${encodeURIComponent(`/invite/${token}`)}`;
   const signUpRedirect = `/signup?next=${encodeURIComponent(`/invite/${token}`)}`;
+
+  function stashTokenForCallback() {
+    try { localStorage.setItem("cageos:pendingInvite", token); } catch { /* ignore */ }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -80,7 +87,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
               Sign in to your CageOS account to accept this invitation, or create one if this is your first time.
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <Link href={signInRedirect} style={{
+              <Link href={signInRedirect} onClick={stashTokenForCallback} style={{
                 padding: "11px 22px", borderRadius: 7,
                 background: "var(--acc)", color: "var(--bg)",
                 fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
@@ -88,7 +95,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
               }}>
                 Sign in
               </Link>
-              <Link href={signUpRedirect} style={{
+              <Link href={signUpRedirect} onClick={stashTokenForCallback} style={{
                 padding: "11px 22px", borderRadius: 7,
                 background: "transparent", color: "var(--t1)",
                 border: "1px solid var(--b2)",
