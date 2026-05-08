@@ -17,7 +17,7 @@ export default function TopNav() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { mode, data, switchMode, canUseDemo } = useWorkspace();
-  const { session, user, supabaseEnabled, signOut } = useAuth();
+  const { session, user, supabaseEnabled, signOut, workspaces, activeWorkspaceId, setActiveWorkspaceId } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleSignOut() {
@@ -122,24 +122,64 @@ export default function TopNav() {
               boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
             }}>
               <div style={{ padding: "8px 12px 6px", fontFamily: "'DM Mono',monospace", fontSize: 9, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                Workspace
+                Workspaces
               </div>
-              <button onClick={() => handleSwitch("user")} style={{
-                display: "block", width: "100%", textAlign: "left",
-                padding: "10px 12px",
-                background: mode === "user" ? "var(--s2)" : "transparent",
-                border: "none", cursor: "pointer",
-                color: "var(--t1)", fontFamily: "'DM Sans',sans-serif",
-                fontSize: 13, minHeight: 44,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 500 }}>{data.orgName}</span>
-                  {mode === "user" && <span style={{ color: "var(--acc)", fontSize: 11 }}>✓ active</span>}
-                </div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
-                  Your workspace · saved on this device
-                </div>
-              </button>
+              {/*
+               * Multi-workspace switcher. Each row is one workspace the user is a
+               * member of. Clicking switches the active workspace, which causes
+               * useWorkspace to reload data via the new adapter (see iter-9).
+               * Falls back to "Your workspace" placeholder when running without
+               * Supabase (local dev).
+               */}
+              {workspaces.length > 0 ? (
+                workspaces.map((ws, idx) => {
+                  const isActive = mode === "user" && ws.id === activeWorkspaceId;
+                  return (
+                    <button
+                      key={ws.id}
+                      onClick={() => {
+                        setActiveWorkspaceId(ws.id);
+                        if (mode !== "user") handleSwitch("user");
+                        setMenuOpen(false);
+                      }}
+                      style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "10px 12px",
+                        background: isActive ? "var(--s2)" : "transparent",
+                        border: "none",
+                        borderTop: idx > 0 ? "1px solid var(--b1)" : "none",
+                        cursor: "pointer",
+                        color: "var(--t1)", fontFamily: "'DM Sans',sans-serif",
+                        fontSize: 13, minHeight: 44,
+                      }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ws.name}</span>
+                        {isActive && <span style={{ color: "var(--acc)", fontSize: 11, flexShrink: 0 }}>✓ active</span>}
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                        {ws.role}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <button onClick={() => handleSwitch("user")} style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "10px 12px",
+                  background: mode === "user" ? "var(--s2)" : "transparent",
+                  border: "none", cursor: "pointer",
+                  color: "var(--t1)", fontFamily: "'DM Sans',sans-serif",
+                  fontSize: 13, minHeight: 44,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontWeight: 500 }}>{data.orgName}</span>
+                    {mode === "user" && <span style={{ color: "var(--acc)", fontSize: 11 }}>✓ active</span>}
+                  </div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+                    Your workspace
+                  </div>
+                </button>
+              )}
               {canUseDemo && (
                 <button onClick={() => handleSwitch("demo")} style={{
                   display: "block", width: "100%", textAlign: "left",

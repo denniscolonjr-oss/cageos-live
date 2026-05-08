@@ -14,6 +14,8 @@ import AddShootModal from "@/components/forms/AddShootModal";
 import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
+import MembersCard from "@/components/shared/MembersCard";
+import PasscodesCard from "@/components/shared/PasscodesCard";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -1161,6 +1163,10 @@ export default function DashboardPage() {
                   </div>
                 </Card>
               )}
+
+              {/* Multi-user: members + passcodes management. Only renders when there's an active workspace; PasscodesCard self-gates to Owner only. */}
+              {!isReadOnly && <MembersCard />}
+              {!isReadOnly && <PasscodesCard />}
 
               {!isReadOnly && (
                 <Card>

@@ -144,6 +144,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [supabaseEnabled, refreshWorkspaces, setActiveWorkspaceId]);
 
+  /**
+   * Pending passcode redemption.
+   *
+   * The signup page may stash a passcode in localStorage if the user entered
+   * one alongside their email/password. We can't redeem it until their session
+   * is live (Supabase requires authenticated calls for the RPC). When email
+   * confirmation is required, "live" doesn't happen until they click the verify
+   * link, so this effect is what bridges that gap — it watches for session
+   * presence and redeems any stored code, then refreshes workspaces so the
+   * new membership shows up immediately.
+   */
+  useEffect(() => {
+    if (!session || !supabaseEnabled) return;
+    let cancelled = false;
+    const code = (() => {
+      try { return localStorage.getItem("cageos:pendingPasscode"); }
+      catch { return null; }
+    })();
+    if (!code) return;
+
+    (async () => {
+      const { redeemPasscode } = await import("./membership");
+      const result = await redeemPasscode(code);
+      if (cancelled) return;
+      try { localStorage.removeItem("cageos:pendingPasscode"); } catch { /* ignore */ }
+      if (result.ok) {
+        await refreshWorkspaces();
+        setActiveWorkspaceId(result.workspaceId);
+      } else {
+        console.warn("[pending passcode] redemption failed:", result.error);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [session, supabaseEnabled, refreshWorkspaces, setActiveWorkspaceId]);
+
   return (
     <AuthContext.Provider value={{
       loading, session, user: session?.user ?? null,
