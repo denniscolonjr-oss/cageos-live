@@ -32,6 +32,11 @@ export default function FirstTimeProfileModal() {
   const [initials, setInitials] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [department, setDepartment] = useState("");
+  // Tracks whether the user has manually edited initials. Used to suppress
+  // the auto-suggest from name once they've typed their own. MUST be declared
+  // here above any early returns — moving it below `if (!myProfile?.pendingSetup)`
+  // crashes React with error #310 (rendered more hooks than previous render).
+  const [initialsTouched, setInitialsTouched] = useState(false);
 
   // Only render if there's a profile awaiting setup. Otherwise stay invisible.
   if (!myProfile?.pendingSetup) return null;
@@ -42,7 +47,6 @@ export default function FirstTimeProfileModal() {
 
   // Auto-derive initials suggestion from name as user types (only if user
   // hasn't manually edited the initials field yet)
-  const [initialsTouched, setInitialsTouched] = useState(false);
   function handleNameChange(v: string) {
     setName(v);
     if (!initialsTouched) {
