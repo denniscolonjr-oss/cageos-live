@@ -13,7 +13,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import {
-  listMembers, listInvitations, createInvitation, revokeInvitation,
+  listMembers, listInvitations, createInvitation, revokeInvitation, resendInvitation,
   changeRole, removeMember,
   type WorkspaceMember, type Invitation,
 } from "@/lib/supabase/membership";
@@ -121,6 +121,11 @@ export default function MembersCard() {
                       const url = `${origin}/invite/${inv.token}`;
                       navigator.clipboard.writeText(url);
                       toast("Invite link copied to clipboard");
+                    }}
+                    onResend={async () => {
+                      const r = await resendInvitation(inv.id);
+                      if (r.ok) toast(`Re-sent to ${inv.email}`);
+                      else toast(`Couldn't resend: ${r.error}`, { variant: "error" });
                     }}
                     onRevoke={async () => {
                       if (!confirm(`Revoke invitation to ${inv.email}? The link will stop working immediately.`)) return;
@@ -230,12 +235,13 @@ function MemberRow({
 }
 
 function InviteRow({
-  invite, canRevoke, onCopyLink, onRevoke,
+  invite, canRevoke, onCopyLink, onRevoke, onResend,
 }: {
   invite: Invitation;
   canRevoke: boolean;
   onCopyLink: () => void;
   onRevoke: () => void;
+  onResend: () => void;
 }) {
   const expiresIn = Math.max(0, Math.ceil((new Date(invite.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
   return (
@@ -250,6 +256,14 @@ function InviteRow({
           {roleLabel(invite.role)} · expires in {expiresIn}d
         </div>
       </div>
+      <button onClick={onResend} title="Resend the invitation email" style={{
+        padding: "5px 10px", borderRadius: 5,
+        background: "var(--s3)", border: "1px solid var(--b1)",
+        color: "var(--t1)", cursor: "pointer",
+        fontFamily: "'DM Mono',monospace", fontSize: 10,
+      }}>
+        Resend
+      </button>
       <button onClick={onCopyLink} style={{
         padding: "5px 10px", borderRadius: 5,
         background: "var(--s3)", border: "1px solid var(--b1)",
@@ -282,6 +296,7 @@ function InviteModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Exclude<WorkspaceRole, "owner">>("crew");
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
@@ -294,6 +309,13 @@ function InviteModal({
       return;
     }
     setGeneratedUrl(result.url);
+    setEmailSent(result.emailSent);
+    if (result.emailSent) {
+      toast(`Invite sent to ${email.trim()}`);
+    } else if (result.emailError) {
+      // Send failed but invitation exists — Owner can still copy link manually
+      console.warn("[invite] email failed:", result.emailError);
+    }
   }
 
   function handleClose() {
@@ -312,13 +334,17 @@ function InviteModal({
         maxWidth: 480, width: "100%", padding: 24,
       }}>
         <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 6, color: "var(--t1)" }}>
-          {generatedUrl ? "Invitation created" : "Invite a teammate"}
+          {generatedUrl ? (emailSent ? "Invitation sent" : "Invitation created") : "Invite a teammate"}
         </div>
 
         {generatedUrl ? (
           <>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.55 }}>
-              Send this link to <strong style={{ color: "var(--t1)" }}>{email}</strong> via email, Slack, text — whatever you use. They&apos;ll be added as <strong style={{ color: "var(--t1)" }}>{roleLabel(role)}</strong> when they accept.
+              {emailSent ? (
+                <>We emailed an invitation to <strong style={{ color: "var(--t1)" }}>{email}</strong>. They&apos;ll join as <strong style={{ color: "var(--t1)" }}>{roleLabel(role)}</strong> when they click the link. You can also copy the link below to share via another channel.</>
+              ) : (
+                <>Email delivery wasn&apos;t available — share this link with <strong style={{ color: "var(--t1)" }}>{email}</strong> manually (Slack, text, etc). They&apos;ll be added as <strong style={{ color: "var(--t1)" }}>{roleLabel(role)}</strong> when they accept.</>
+              )}
             </div>
             <div style={{
               padding: 12, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 6,

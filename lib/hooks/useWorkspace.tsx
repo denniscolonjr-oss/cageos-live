@@ -13,7 +13,7 @@ import {
 } from "@/lib/data";
 import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { useAuth } from "@/lib/supabase/AuthContext";
+import { useAuth, type WorkspaceRole } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
 import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult } from "./workspaceTypes";
 
@@ -887,10 +887,17 @@ function useWorkspaceImpl() {
   /**
    * Mark the current user's profile as fully set up (name, initials, color
    * filled in). Called from the first-time setup modal after they save.
+   *
+   * Also fires off a branded welcome email via the /api/send-welcome route.
+   * Email send is fire-and-forget — it doesn't block profile completion or
+   * fail the operation if it errors out.
    */
   const completeMyProfile = useCallback((patch: Partial<UserProfile>) => {
     if (isReadOnly || !auth.user) return;
     const userId = auth.user.id;
+    let savedName = "";
+    let savedRole: WorkspaceRole | null = null;
+    let workspaceName = "your team";
     updateUserData(d => {
       const idx = d.profiles.findIndex(p => p.userId === userId);
       if (idx === -1) return d;
@@ -901,13 +908,34 @@ function useWorkspaceImpl() {
       };
       const profiles = [...d.profiles];
       profiles[idx] = updated;
+      savedName = updated.name;
+      savedRole = (updated.role as WorkspaceRole) ?? auth.currentRole ?? "crew";
+      workspaceName = d.orgName || "your team";
       return appendEvent(
         { ...d, profiles },
         "team_added", `${updated.name} completed their profile`,
         { actor: updated.name, detail: updated.initials },
       );
     });
-  }, [isReadOnly, auth.user, updateUserData]);
+
+    // Fire the welcome email AFTER the state update. The import is dynamic
+    // to avoid pulling Supabase code into bundles that don't need it.
+    if (savedName && savedRole) {
+      void (async () => {
+        try {
+          const { sendWelcomeEmail } = await import("@/lib/supabase/membership");
+          await sendWelcomeEmail({
+            workspaceName,
+            memberName: savedName,
+            role: savedRole!,
+          });
+        } catch (e) {
+          // Email send failures are non-fatal — profile is already saved.
+          console.warn("[completeMyProfile] welcome email failed:", e);
+        }
+      })();
+    }
+  }, [isReadOnly, auth.user, auth.currentRole, updateUserData]);
 
   /** Patch any subset of a profile's fields. */
   const updateProfile = useCallback((profileId: string, patch: Partial<UserProfile>) => {

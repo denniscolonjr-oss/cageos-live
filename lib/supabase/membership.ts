@@ -158,13 +158,23 @@ function randomToken(): string {
   return Array.from(bytes, b => b.toString(36).padStart(2, "0")).join("").slice(0, 32);
 }
 
-/** Create an invitation. Returns the full invitation including the redeem URL. */
+/** Create an invitation. Returns the full invitation including the redeem URL.
+ *
+ * Also fires off a branded email via the /api/send-invite route. The email
+ * send is non-blocking — if it fails (network issue, Resend down, domain not
+ * verified yet), the invitation still exists and the link can be manually
+ * shared. The returned `emailSent` flag tells the UI whether to display
+ * a "We sent the invite to <email>" toast or fall back to "Copy link".
+ */
 export async function createInvitation(args: {
   workspaceId: string;
   email: string;
   role: Exclude<WorkspaceRole, "owner">;
   expiresInDays?: number;
-}): Promise<{ ok: true; invitation: Invitation; url: string } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; invitation: Invitation; url: string; emailSent: boolean; emailError?: string }
+  | { ok: false; error: string }
+> {
   const sb = getSupabaseClient();
   if (!sb) return { ok: false, error: "Supabase not configured" };
 
@@ -192,10 +202,73 @@ export async function createInvitation(args: {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const url = `${origin}/invite/${token}`;
 
+  // Fetch workspace name and inviter display name for the email.
+  // Both are best-effort — fall back to placeholders if either lookup fails.
+  let workspaceName = "your team";
+  try {
+    const { data: ws } = await sb
+      .from("workspaces")
+      .select("name, data")
+      .eq("id", args.workspaceId)
+      .maybeSingle();
+    if (ws?.name) workspaceName = ws.name;
+    else if (ws?.data?.orgName) workspaceName = ws.data.orgName;
+  } catch { /* leave fallback */ }
+
+  let inviterName = "A teammate";
+  try {
+    if (user) {
+      const { data: ws } = await sb
+        .from("workspaces")
+        .select("data")
+        .eq("id", args.workspaceId)
+        .maybeSingle();
+      const profile = ws?.data?.profiles?.find?.((p: { userId?: string; name?: string }) => p.userId === user.id);
+      if (profile?.name) inviterName = profile.name;
+      else if (user.email) inviterName = user.email.split("@")[0];
+    }
+  } catch { /* leave fallback */ }
+
+  // Fire the email send. Non-blocking — we return the invitation either way.
+  let emailSent = false;
+  let emailError: string | undefined;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) {
+      const resp = await fetch("/api/send-invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          to: args.email.trim().toLowerCase(),
+          workspaceName,
+          inviterName,
+          inviterEmail: user?.email ?? "",
+          role: args.role,
+          inviteUrl: url,
+        }),
+      });
+      if (resp.ok) {
+        emailSent = true;
+      } else {
+        const errBody = await resp.json().catch(() => ({ error: "unknown" }));
+        emailError = errBody.error ?? `http_${resp.status}`;
+        console.warn("[createInvitation] email send failed:", emailError);
+      }
+    }
+  } catch (e) {
+    emailError = e instanceof Error ? e.message : "unknown";
+    console.warn("[createInvitation] email send threw:", e);
+  }
+
   return {
     ok: true,
     invitation: rowToInvitation(data),
     url,
+    emailSent,
+    emailError,
   };
 }
 
@@ -224,6 +297,72 @@ export async function revokeInvitation(invitationId: string): Promise<{ ok: bool
   return { ok: true };
 }
 
+/**
+ * Resend an existing pending invitation. Doesn't create a new invitation —
+ * just re-fires the email for the same token. Useful when a recipient says
+ * "I never got the invite" or it landed in spam and they cleared inbox.
+ */
+export async function resendInvitation(invitationId: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured" };
+
+  // Look up the invitation
+  const { data: inv, error } = await sb
+    .from("invitations")
+    .select("*")
+    .eq("id", invitationId)
+    .maybeSingle();
+  if (error || !inv) return { ok: false, error: error?.message ?? "not_found" };
+  if (inv.accepted_at) return { ok: false, error: "already_accepted" };
+  if (inv.revoked_at) return { ok: false, error: "revoked" };
+
+  // Look up workspace name and inviter name (same logic as createInvitation)
+  const { data: { user } } = await sb.auth.getUser();
+  let workspaceName = "your team";
+  let inviterName = "A teammate";
+  try {
+    const { data: ws } = await sb
+      .from("workspaces")
+      .select("name, data")
+      .eq("id", inv.workspace_id)
+      .maybeSingle();
+    if (ws?.name) workspaceName = ws.name;
+    else if (ws?.data?.orgName) workspaceName = ws.data.orgName;
+    if (user) {
+      const profile = ws?.data?.profiles?.find?.((p: { userId?: string; name?: string }) => p.userId === user.id);
+      if (profile?.name) inviterName = profile.name;
+      else if (user.email) inviterName = user.email.split("@")[0];
+    }
+  } catch { /* fall through */ }
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const url = `${origin}/invite/${inv.token}`;
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.access_token) return { ok: false, error: "no_session" };
+
+  const resp = await fetch("/api/send-invite", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      to: inv.email,
+      workspaceName,
+      inviterName,
+      inviterEmail: user?.email ?? "",
+      role: inv.role,
+      inviteUrl: url,
+    }),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.json().catch(() => ({ error: "unknown" }));
+    return { ok: false, error: errBody.error ?? `http_${resp.status}` };
+  }
+  return { ok: true };
+}
+
 /** Redeem an invitation token. Caller must already be authenticated. */
 export async function redeemInvitation(token: string): Promise<
   | { ok: true; workspaceId: string; role: WorkspaceRole }
@@ -235,6 +374,42 @@ export async function redeemInvitation(token: string): Promise<
   if (error) return { ok: false, error: error.message };
   if (!data?.ok) return { ok: false, error: data?.error ?? "unknown" };
   return { ok: true, workspaceId: data.workspace_id, role: data.role };
+}
+
+/**
+ * Send a welcome email to the current user after they complete their profile.
+ * Best-effort — if it fails, profile completion still succeeds. Called from
+ * completeMyProfile() in useWorkspace.
+ */
+export async function sendWelcomeEmail(args: {
+  workspaceName: string;
+  memberName: string;
+  role: WorkspaceRole;
+}): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured" };
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.access_token || !session.user?.email) {
+    return { ok: false, error: "no_session" };
+  }
+  const resp = await fetch("/api/send-welcome", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      to: session.user.email,
+      workspaceName: args.workspaceName,
+      memberName: args.memberName,
+      role: args.role,
+    }),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.json().catch(() => ({ error: "unknown" }));
+    return { ok: false, error: errBody.error ?? `http_${resp.status}` };
+  }
+  return { ok: true };
 }
 
 function rowToInvitation(r: Record<string, unknown>): Invitation {
