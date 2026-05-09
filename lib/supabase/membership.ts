@@ -60,7 +60,7 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
   // let RLS-protected tables join on auth.users directly without a view.
   const { data: rows, error } = await sb
     .from("workspace_members")
-    .select("user_id, role, created_at")
+    .select("user_id, role, joined_at")
     .eq("workspace_id", workspaceId);
   if (error || !rows) return [];
 
@@ -69,7 +69,7 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
   // If the view doesn't exist, the query throws an error — we catch it silently
   // and use "—" as the email placeholder. The member row still gets returned
   // with their userId and role intact so the Members UI never drops members.
-  const members: WorkspaceMember[] = await Promise.all(rows.map(async (row: { user_id: string; role: string; created_at: string }) => {
+  const members: WorkspaceMember[] = await Promise.all(rows.map(async (row: { user_id: string; role: string; joined_at: string }) => {
     let email = "—";
     try {
       const { data: u } = await sb
@@ -85,7 +85,7 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
       userId: row.user_id,
       email,
       role: row.role as WorkspaceRole,
-      joinedAt: row.created_at,
+      joinedAt: row.joined_at,
     };
   }));
   return members;
