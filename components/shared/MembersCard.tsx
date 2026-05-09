@@ -165,11 +165,15 @@ function MemberRow({
       padding: "12px 0", borderBottom: "1px solid var(--b1)",
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Primary line: name if we have one, else email, else placeholder.
+            Secondary line: email (if name is shown) and join date. */}
         <div style={{ fontSize: 13, color: "var(--t1)", fontWeight: 500 }}>
-          {member.email}
+          {member.name ?? (member.email !== "—" ? member.email : "Unnamed member")}
           {isSelf && <span style={{ color: "var(--t3)", fontWeight: 400, marginLeft: 6 }}>(you)</span>}
         </div>
         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+          {/* Show email on second line ONLY when name is available — else email already on top line */}
+          {member.name && member.email !== "—" && <span>{member.email} · </span>}
           Joined {new Date(member.joinedAt).toLocaleDateString()}
         </div>
       </div>

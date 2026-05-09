@@ -18,6 +18,9 @@ import type { WorkspaceRole } from "./AuthContext";
 export interface WorkspaceMember {
   userId: string;
   email: string;
+  /** Display name from the workspace's team profile, if linked.
+   *  Null when the user hasn't completed their FirstTimeProfile setup yet. */
+  name: string | null;
   role: WorkspaceRole;
   joinedAt: string;
 }
@@ -64,26 +67,49 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
     .eq("workspace_id", workspaceId);
   if (error || !rows) return [];
 
-  // Resolve user emails through the optional `public_user_emails` view if it
-  // exists. The view is created by the optional iter-14 push 3 SQL migration.
-  // If the view doesn't exist, the query throws an error — we catch it silently
-  // and use "—" as the email placeholder. The member row still gets returned
-  // with their userId and role intact so the Members UI never drops members.
+  // Pull the workspace's profile array so we can resolve display names.
+  // We look up profiles by their `userId` field (set when a member completes
+  // their FirstTimeProfile). Pre-multi-user profiles won't have userId set —
+  // those rows just show "—" as the name, which is correct.
+  type Profile = { userId?: string; name?: string };
+  let profiles: Profile[] = [];
+  try {
+    const { data: ws } = await sb
+      .from("workspaces")
+      .select("data")
+      .eq("id", workspaceId)
+      .maybeSingle();
+    if (ws?.data?.profiles && Array.isArray(ws.data.profiles)) {
+      profiles = ws.data.profiles as Profile[];
+    }
+  } catch {
+    // Workspace fetch failed — proceed with empty profiles list.
+    // Members still render with "—" name but valid role/email/date.
+  }
+
+  // Resolve user emails via the email_for_member SECURITY DEFINER RPC, which
+  // returns the email IF the caller shares a workspace with the target user
+  // (or is the user themselves). Returns null otherwise — we substitute "—".
+  // Created by iter-14i SQL migration; if missing, falls back to "—".
   const members: WorkspaceMember[] = await Promise.all(rows.map(async (row: { user_id: string; role: string; joined_at: string }) => {
     let email = "—";
     try {
-      const { data: u } = await sb
-        .from("public_user_emails")
-        .select("email")
-        .eq("id", row.user_id)
-        .maybeSingle();
-      if (u?.email) email = u.email;
+      const { data: emailResult } = await sb.rpc("email_for_member", { target_user_id: row.user_id });
+      if (typeof emailResult === "string" && emailResult.length > 0) {
+        email = emailResult;
+      }
     } catch {
-      // View doesn't exist or query failed; keep "—" placeholder
+      // RPC doesn't exist or call failed; keep "—" placeholder.
     }
+
+    // Resolve display name from workspace profiles.
+    const profile = profiles.find(p => p.userId === row.user_id);
+    const name = profile?.name && profile.name.length > 0 ? profile.name : null;
+
     return {
       userId: row.user_id,
       email,
+      name,
       role: row.role as WorkspaceRole,
       joinedAt: row.joined_at,
     };
