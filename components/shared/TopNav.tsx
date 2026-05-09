@@ -1,10 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
+import {
+  countOwnedWorkspaces, createWorkspace, FREE_TIER_OWNED_WORKSPACE_CAP,
+} from "@/lib/supabase/membership";
 
 const TABS = [
   { href: "/dashboard", label: "Dashboard", short: "Dash" },
@@ -17,8 +20,22 @@ export default function TopNav() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { mode, data, switchMode, canUseDemo } = useWorkspace();
-  const { session, user, supabaseEnabled, signOut, workspaces, activeWorkspaceId, setActiveWorkspaceId } = useAuth();
+  const { session, user, supabaseEnabled, signOut, workspaces, activeWorkspaceId, setActiveWorkspaceId, refreshWorkspaces } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  /**
+   * Number of workspaces this user owns. Used to gate the "Create new workspace"
+   * action against FREE_TIER_OWNED_WORKSPACE_CAP. Refreshed whenever the
+   * dropdown opens (cheap query, kept fresh) and whenever the workspaces list
+   * changes (e.g. after creating one).
+   */
+  const [ownedCount, setOwnedCount] = useState<number>(0);
+  useEffect(() => {
+    if (!session || !supabaseEnabled) return;
+    countOwnedWorkspaces().then(setOwnedCount).catch(() => { /* ignore */ });
+  }, [session, supabaseEnabled, workspaces]);
+
+  const atOwnedCap = ownedCount >= FREE_TIER_OWNED_WORKSPACE_CAP;
 
   async function handleSignOut() {
     await signOut();
@@ -180,6 +197,48 @@ export default function TopNav() {
                   </div>
                 </button>
               )}
+              {/*
+               * "Create new workspace" action.
+               *
+               * Always visible to authenticated users when Supabase is wired up.
+               * Disabled (with a friendly upgrade hint) when the user is at the
+               * FREE_TIER_OWNED_WORKSPACE_CAP — surfacing the upgrade path
+               * without actively nagging.
+               *
+               * Discovery placement: bottom of the switcher dropdown. Users
+               * stumble on it organically when they've already absorbed the
+               * mental model of "this dropdown is where I switch workspaces."
+               * No tour, no onboarding nudge — invited users land in the right
+               * workspace, see the dropdown when they need it.
+               */}
+              {session && supabaseEnabled && (
+                <button
+                  onClick={() => {
+                    if (atOwnedCap) return;
+                    setMenuOpen(false);
+                    setShowCreateModal(true);
+                  }}
+                  disabled={atOwnedCap}
+                  style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "10px 12px",
+                    background: "transparent",
+                    border: "none", borderTop: "1px solid var(--b1)",
+                    cursor: atOwnedCap ? "default" : "pointer",
+                    color: atOwnedCap ? "var(--t3)" : "var(--t1)",
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontSize: 13, minHeight: 44,
+                  }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ fontWeight: 500 }}>+ Create new workspace</span>
+                  </div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2, lineHeight: 1.4 }}>
+                    {atOwnedCap
+                      ? `Free plan supports ${FREE_TIER_OWNED_WORKSPACE_CAP} workspace · upgrade for more`
+                      : "Start a fresh workspace where you're Owner"}
+                  </div>
+                </button>
+              )}
               {canUseDemo && (
                 <button onClick={() => handleSwitch("demo")} style={{
                   display: "block", width: "100%", textAlign: "left",
@@ -236,6 +295,133 @@ export default function TopNav() {
           </>
         )}
       </div>
+
+      {/*
+       * Create new workspace modal — mounted as sibling of nav so it overlays
+       * the entire page. Self-gates on `showCreateModal` state. After successful
+       * creation, refreshes the workspace list and switches to the new one.
+       */}
+      {showCreateModal && (
+        <CreateWorkspaceModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={async (newId) => {
+            setShowCreateModal(false);
+            await refreshWorkspaces();
+            setActiveWorkspaceId(newId);
+            // Land them in onboarding so they can name their workspace,
+            // add inventory, etc. Same flow a brand-new signup gets.
+            router.push("/onboarding");
+          }}
+        />
+      )}
     </nav>
+  );
+}
+
+/**
+ * Modal for creating a new workspace.
+ *
+ * Single field (name), submit fires createWorkspace(). On success, the parent
+ * handles refresh + switch + redirect to onboarding. On failure (most likely
+ * cap_reached or db_error), shows the error inline so the user can try again
+ * or close.
+ */
+function CreateWorkspaceModal({
+  onClose, onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (newWorkspaceId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Workspace name required.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    const result = await createWorkspace({ name: trimmed });
+    setSubmitting(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    onCreated(result.workspaceId);
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 200, padding: 20,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "var(--s1)", border: "1px solid var(--b1)", borderRadius: 10,
+        maxWidth: 440, width: "100%", padding: 24,
+      }}>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 700, color: "var(--t1)", marginBottom: 6 }}>
+          Create a new workspace
+        </div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 18, lineHeight: 1.55 }}>
+          You&apos;ll be the Owner of this workspace and can invite teammates to join. You can switch between workspaces anytime from the dropdown.
+        </div>
+
+        <label style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" }}>
+          Workspace name
+        </label>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+          placeholder="e.g. Acme Productions, My Freelance Setup"
+          maxLength={80}
+          style={{
+            width: "100%", padding: "10px 12px",
+            background: "var(--s2)", border: "1px solid var(--b2)",
+            borderRadius: 6, color: "var(--t1)",
+            fontFamily: "'DM Sans',sans-serif", fontSize: 14,
+            outline: "none",
+          }}
+        />
+
+        {error && (
+          <div style={{
+            marginTop: 12,
+            background: "rgba(255,122,122,0.08)", border: "1px solid rgba(255,122,122,0.25)",
+            borderRadius: 6, padding: "9px 12px", fontSize: 12, color: "var(--red)",
+            fontFamily: "'DM Mono',monospace", lineHeight: 1.5,
+          }}>{error}</div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+          <button onClick={onClose} style={{
+            padding: "10px 16px", borderRadius: 6,
+            background: "transparent", border: "1px solid var(--b2)",
+            color: "var(--t1)", cursor: "pointer",
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+          }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !name.trim()}
+            style={{
+              padding: "10px 18px", borderRadius: 6,
+              background: submitting || !name.trim() ? "var(--s3)" : "var(--acc)",
+              border: "none",
+              color: submitting || !name.trim() ? "var(--t3)" : "var(--bg)",
+              cursor: submitting || !name.trim() ? "not-allowed" : "pointer",
+              fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
+            }}>
+            {submitting ? "Creating..." : "Create workspace"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -532,3 +532,128 @@ function rowToPasscode(r: Record<string, unknown>): WorkspacePasscode {
     createdAt: r.created_at as string,
   };
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Workspace creation + ownership cap
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Free-tier limit on the number of workspaces a single user can be Owner of.
+ * Currently hardcoded to 1. When pricing tiers ship, this becomes a function
+ * of the user's plan (e.g., Pro = 3, Team = 10, Enterprise = unlimited).
+ *
+ * Membership in OTHER workspaces (as Manager/Crew/Viewer) is unlimited and
+ * unaffected by this cap.
+ */
+export const FREE_TIER_OWNED_WORKSPACE_CAP = 1;
+
+/**
+ * How many workspaces does the current user own?
+ * Used by the workspace switcher to decide whether to show or hide / disable
+ * the "Create new workspace" action.
+ */
+export async function countOwnedWorkspaces(): Promise<number> {
+  const sb = getSupabaseClient();
+  if (!sb) return 0;
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return 0;
+  const { count, error } = await sb
+    .from("workspace_members")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("role", "owner");
+  if (error) {
+    console.warn("[countOwnedWorkspaces]", error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
+ * Create a new workspace owned by the current user.
+ *
+ * Two-step DB write:
+ * 1. Insert into `workspaces` with name and minimal initial data
+ * 2. Insert into `workspace_members` with role='owner' linking the user
+ *
+ * Both writes must succeed atomically. If the second fails, we delete the
+ * orphan workspace row so we don't leave dangling data behind.
+ *
+ * Honors FREE_TIER_OWNED_WORKSPACE_CAP — returns an error if the user would
+ * exceed the cap. UI is expected to gate the create button on this same check
+ * before allowing the call, but we re-validate here as defense in depth.
+ */
+export async function createWorkspace(args: {
+  name: string;
+}): Promise<
+  | { ok: true; workspaceId: string }
+  | { ok: false; error: string; reason?: "cap_reached" | "validation" | "db_error" }
+> {
+  const name = args.name.trim();
+  if (!name) {
+    return { ok: false, error: "Name is required.", reason: "validation" };
+  }
+  if (name.length > 80) {
+    return { ok: false, error: "Name must be 80 characters or less.", reason: "validation" };
+  }
+
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured", reason: "db_error" };
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in", reason: "validation" };
+
+  // Re-check the cap server-side. UI also enforces this, but never trust the client.
+  const ownedCount = await countOwnedWorkspaces();
+  if (ownedCount >= FREE_TIER_OWNED_WORKSPACE_CAP) {
+    return {
+      ok: false,
+      reason: "cap_reached",
+      error: `You can own up to ${FREE_TIER_OWNED_WORKSPACE_CAP} workspace on the current plan.`,
+    };
+  }
+
+  // Empty workspace data shape — matches what onboarding initializes.
+  // We keep this minimal so the workspace is editable from first load.
+  const initialData = {
+    orgName: name,
+    timezone: "auto",
+    barcodePrefix: "",
+    filterableFields: [],
+    managerMode: false,  // ignored at runtime, derived from role
+    assets: [],
+    kits: [],
+    profiles: [],
+    shoots: [],
+    flags: [],
+    checkouts: [],
+    events: [],
+  };
+
+  const { data: ws, error: wsErr } = await sb
+    .from("workspaces")
+    .insert({ name, data: initialData })
+    .select("id")
+    .single();
+  if (wsErr || !ws) {
+    return { ok: false, error: wsErr?.message ?? "Workspace insert failed", reason: "db_error" };
+  }
+
+  const workspaceId = ws.id as string;
+
+  // Add the creator as owner. If this fails, undo the workspace insert so we
+  // don't leave an orphan workspace nobody can access.
+  const { error: memErr } = await sb
+    .from("workspace_members")
+    .insert({
+      workspace_id: workspaceId,
+      user_id: user.id,
+      role: "owner",
+    });
+  if (memErr) {
+    await sb.from("workspaces").delete().eq("id", workspaceId);
+    return { ok: false, error: `Membership creation failed: ${memErr.message}`, reason: "db_error" };
+  }
+
+  return { ok: true, workspaceId };
+}
