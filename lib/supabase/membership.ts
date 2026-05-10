@@ -630,9 +630,13 @@ export async function createWorkspace(args: {
     events: [],
   };
 
+  // Insert workspace row. `owner_id` is a NOT NULL column from the iter-9
+  // schema (predates multi-user) — it tracks the original creator and is
+  // distinct from the workspace_members table which tracks role-based access.
+  // Both must agree: owner_id here, plus role='owner' membership row below.
   const { data: ws, error: wsErr } = await sb
     .from("workspaces")
-    .insert({ name, data: initialData })
+    .insert({ name, data: initialData, owner_id: user.id })
     .select("id")
     .single();
   if (wsErr || !ws) {
