@@ -306,11 +306,18 @@ export default function TopNav() {
           onClose={() => setShowCreateModal(false)}
           onCreated={async (newId) => {
             setShowCreateModal(false);
+            // Refresh workspace list (so the new one appears in switcher) and
+            // make it the active workspace BEFORE navigation. Order matters:
+            // setActiveWorkspaceId triggers data adapter to switch, then the
+            // dashboard renders with the new workspace's data.
             await refreshWorkspaces();
             setActiveWorkspaceId(newId);
-            // Land them in onboarding so they can name their workspace,
-            // add inventory, etc. Same flow a brand-new signup gets.
-            router.push("/onboarding");
+            // IMPORTANT: navigate to /dashboard, NOT /onboarding.
+            // /onboarding is the "you have no workspaces yet" flow; sending
+            // a user there after they just created a workspace causes them
+            // to be prompted to create ANOTHER one (and another profile,
+            // and another team setup) — chain of duplicates.
+            router.push("/dashboard");
           }}
         />
       )}
