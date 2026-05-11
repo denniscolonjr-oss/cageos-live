@@ -22,6 +22,7 @@ function migrate(legacy: Partial<WorkspaceData>): WorkspaceData {
     shoots: legacy.shoots ?? [],
     events: legacy.events ?? [],
     flags: legacy.flags ?? [],
+    notes: legacy.notes ?? [],
     orgName: legacy.orgName ?? "Your Org",
     orgLocation: legacy.orgLocation ?? "—",
     barcodePrefix: legacy.barcodePrefix ?? "AST",
