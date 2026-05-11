@@ -377,16 +377,59 @@ function NewCommentInput({
         marginTop: 8, display: "flex", gap: 12, alignItems: "center",
         justifyContent: "space-between", flexWrap: "wrap",
       }}>
+        {/*
+         * Custom checkbox visual.
+         *
+         * The native browser checkbox renders poorly on dark backgrounds:
+         * the unchecked outline is barely visible (system default light grey
+         * on dark surfaces blends together) and `accentColor` only styles the
+         * checked-state fill, not the empty box. Custom rendering ensures the
+         * checkbox is always clearly visible in either state. The native input
+         * stays in the markup (visually hidden) for accessibility and form
+         * semantics; the visible square is a styled div that mirrors its state.
+         */}
         <label style={{
-          display: "flex", alignItems: "center", gap: 6,
+          display: "flex", alignItems: "center", gap: 8,
           cursor: "pointer", fontFamily: "'DM Mono',monospace",
           fontSize: 11, color: "var(--t2)",
+          userSelect: "none",
         }}>
           <input
-            type="checkbox" checked={isTask}
+            type="checkbox"
+            checked={isTask}
             onChange={e => setIsTask(e.target.checked)}
-            style={{ accentColor: "var(--acc)", cursor: "pointer" }}
+            style={{
+              // Visually hidden but kept in the DOM for accessibility/forms
+              position: "absolute", opacity: 0, pointerEvents: "none",
+              width: 0, height: 0,
+            }}
           />
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 16, height: 16, flexShrink: 0,
+              borderRadius: 3,
+              border: `1.5px solid ${isTask ? "var(--acc)" : "var(--b2)"}`,
+              background: isTask ? "var(--acc)" : "var(--s2)",
+              transition: "background 0.12s ease, border-color 0.12s ease",
+            }}
+          >
+            {isTask && (
+              // Checkmark — drawn with SVG so it scales cleanly and tints against
+              // the accent background. Stroke color is bg (dark) to read on yellow.
+              <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: "block" }}>
+                <path
+                  d="M1.5 5.2 L4 7.5 L8.5 2.5"
+                  stroke="var(--bg)"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </svg>
+            )}
+          </span>
           Mark as task (resolvable)
         </label>
         <button
