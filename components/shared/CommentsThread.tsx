@@ -19,7 +19,8 @@
  *   <CommentsThread parentType="asset" parentId={asset.id} />
  */
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import type { Note, NoteParentType } from "@/lib/data";
@@ -249,6 +250,40 @@ function NewCommentInput({
   const [mentionDropdown, setMentionDropdown] = useState<{ filter: string; cursorPos: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  /**
+   * Screen coordinates of the textarea, recomputed when the mention dropdown
+   * is shown. We render the dropdown via portal directly to document.body so
+   * it can escape any `overflow: hidden` ancestors (Card components). That
+   * means it can't use `position: absolute` relative to the input — it has
+   * to be positioned in viewport coordinates with `position: fixed`.
+   *
+   * Recomputed on:
+   *   - mention dropdown open (initial position)
+   *   - window resize / scroll (so it tracks the textarea visually)
+   *
+   * If position were computed once, scrolling the page would make the
+   * dropdown float in space disconnected from its anchor.
+   */
+  const [textareaRect, setTextareaRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!mentionDropdown) {
+      setTextareaRect(null);
+      return;
+    }
+    function update() {
+      if (textareaRef.current) {
+        setTextareaRect(textareaRef.current.getBoundingClientRect());
+      }
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [mentionDropdown]);
+
   // Filtered mention candidates — only profiles with set initials
   const mentionCandidates = useMemo(() => {
     if (!mentionDropdown) return [];
@@ -340,18 +375,42 @@ function NewCommentInput({
         }}
       />
 
-      {/* Mention autocomplete dropdown */}
-      {mentionDropdown && mentionCandidates.length > 0 && (
+      {/*
+       * Mention autocomplete dropdown.
+       *
+       * Rendered via portal directly to document.body so it can escape any
+       * `overflow: hidden` ancestor (the Card wrapper around the comments
+       * section clips children that overflow its rounded border). With the
+       * portal, the dropdown floats above everything and is positioned in
+       * viewport coordinates relative to the textarea's screen position.
+       *
+       * Falls back to `null` (renders nothing) when:
+       *   - the trigger isn't active (no @x partial in the input)
+       *   - no candidates match the filter
+       *   - we haven't measured the textarea position yet (mount race)
+       *   - we're rendering server-side (typeof document undefined)
+       */}
+      {mentionDropdown && mentionCandidates.length > 0 && textareaRect && typeof document !== "undefined" && createPortal(
         <div style={{
-          position: "absolute", top: "calc(100% + -28px)", left: 12,
+          position: "fixed",
+          // Position above the textarea, anchored to its left edge with a
+          // small inset so it visually aligns with the typed @ token.
+          top: textareaRect.top - 8,
+          left: textareaRect.left + 12,
+          transform: "translateY(-100%)",
           background: "var(--s1)", border: "1px solid var(--b2)", borderRadius: 6,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.5)", zIndex: 10,
-          minWidth: 200, padding: 4,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+          zIndex: 1000,
+          minWidth: 220, padding: 4,
         }}>
           {mentionCandidates.map(p => (
             <button
               key={p.initials}
-              onClick={() => applyMention(p.initials)}
+              // onMouseDown instead of onClick — onClick fires AFTER the
+              // textarea loses focus (closing the dropdown via parent state),
+              // which can race with applyMention. onMouseDown fires before
+              // the blur, so the click reliably registers.
+              onMouseDown={e => { e.preventDefault(); applyMention(p.initials); }}
               style={{
                 display: "flex", alignItems: "center", gap: 8, width: "100%",
                 padding: "6px 8px", borderRadius: 4, border: "none",
@@ -370,7 +429,8 @@ function NewCommentInput({
               <span>{p.name}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
 
       <div style={{
