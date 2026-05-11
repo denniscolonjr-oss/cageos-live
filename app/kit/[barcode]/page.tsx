@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import AddComponentsModal from "@/components/forms/AddComponentsModal";
 import SwapComponentModal from "@/components/forms/SwapComponentModal";
+import CommentsThread from "@/components/shared/CommentsThread";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -26,12 +27,41 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   const [swapTarget, setSwapTarget] = useState<{ assetId: string; category: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  /**
+   * Signed-out detection. When the user signs out while on a kit detail page,
+   * rawKits empties and `notFound()` would fire before the redirect-to-login
+   * can take effect — landing the user on a 404 page instead. This guard
+   * intercepts that and routes cleanly to /login. Matches the pattern used
+   * on the asset detail page.
+   *
+   * Doesn't affect anonymous demo flow — that mode never has a session,
+   * so `supabaseEnabled && !session` only matches a genuine signed-out state
+   * for an authenticated app.
+   */
+  const signedOut = auth.supabaseEnabled && !auth.loading && !auth.session;
+  useEffect(() => {
+    if (signedOut) router.replace("/login");
+  }, [signedOut, router]);
+
   if (!hydrated || auth.loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
           Loading workspace...
+        </div>
+      </div>
+    );
+  }
+
+  // Signed-out — render a brief loading state while the redirect-to-login
+  // takes effect. Without this guard, we'd 404 below on missing kit data.
+  if (signedOut) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Signing out...
         </div>
       </div>
     );
@@ -419,6 +449,24 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                     );
                   })
                 )}
+              </Card>
+
+              {/*
+               * Comments / discussion thread for this kit.
+               *
+               * Same setup as the asset detail page. Notes live in workspace
+               * JSON under `data.notes` filtered by parentType='kit' and
+               * parentId=kit.id. CommentsThread handles all the data fetching,
+               * permission gating, and rendering itself.
+               */}
+              <Card>
+                <div style={{ padding: "14px 18px 18px" }}>
+                  <CommentsThread
+                    parentType="kit"
+                    parentId={kit.id}
+                    parentLabel={kit.name}
+                  />
+                </div>
               </Card>
 
             </div>

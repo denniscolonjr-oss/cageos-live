@@ -171,6 +171,7 @@ export async function POST(req: Request) {
         authorName,
         workspaceName,
         parentType: body.parentType,
+        parentId: body.parentId,
         parentLabel: body.parentLabel,
         excerpt: body.excerpt,
       });
@@ -178,6 +179,7 @@ export async function POST(req: Request) {
         authorName,
         workspaceName,
         parentType: body.parentType,
+        parentId: body.parentId,
         parentLabel: body.parentLabel,
         excerpt: body.excerpt,
       });
@@ -217,11 +219,59 @@ interface MentionTemplateArgs {
   authorName: string;
   workspaceName: string;
   parentType: string;
+  parentId: string;
   parentLabel: string;
   excerpt: string;
 }
 
+/**
+ * Build the deep-link URL for the email "Open in CageOS" button.
+ *
+ * Without this, all mention emails just routed to /dashboard — which is
+ * useless for clients managing thousands of assets. The recipient should
+ * land on the EXACT entity that was commented on.
+ *
+ * URL patterns mirror what the app's router uses:
+ *   - asset → /asset/<barcode>
+ *   - kit   → /kit/<barcode>
+ *   - shoot → /dashboard (shoots are modals, no dedicated route)
+ *   - checkout → /dashboard (live in the active checkouts card)
+ *   - user (DM) → /dashboard (no profile detail route yet)
+ *
+ * As we add detail routes for shoots/users/checkouts in future iterations,
+ * extend this switch.
+ *
+ * encodeURIComponent guards against weird characters in barcodes/IDs.
+ */
+function buildDeepLink(parentType: string, parentId: string): string {
+  const base = "https://cageos.app";
+  switch (parentType) {
+    case "asset":
+      return `${base}/asset/${encodeURIComponent(parentId)}`;
+    case "kit":
+      return `${base}/kit/${encodeURIComponent(parentId)}`;
+    case "shoot":
+    case "checkout":
+    case "user":
+    default:
+      return `${base}/dashboard`;
+  }
+}
+
 function renderMentionHtml(b: MentionTemplateArgs): string {
+  const deepLink = buildDeepLink(b.parentType, b.parentId);
+  // Customize the CTA based on parent type. "Open this asset" reads cleaner
+  // than the generic "Open in CageOS" when we know what the recipient will
+  // actually land on.
+  const ctaLabel = (() => {
+    switch (b.parentType) {
+      case "asset": return "Open this asset";
+      case "kit": return "Open this kit";
+      case "shoot": return "Open the shoot";
+      case "checkout": return "Open the checkout";
+      default: return "Open in CageOS";
+    }
+  })();
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -244,8 +294,8 @@ function renderMentionHtml(b: MentionTemplateArgs): string {
         <div style="margin:0 0 24px;padding:14px 16px;background:#0e0e0e;border-left:3px solid #ecff70;border-radius:4px;font-size:14px;color:#cdc8bc;line-height:1.6;white-space:pre-wrap;">${escapeHtml(b.excerpt)}</div>
         <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
           <tr><td style="background:#ecff70;border-radius:7px;">
-            <a href="https://cageos.app/dashboard" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#0e0e0e;text-decoration:none;font-family:Georgia,serif;">
-              Open in CageOS
+            <a href="${escapeHtml(deepLink)}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#0e0e0e;text-decoration:none;font-family:Georgia,serif;">
+              ${ctaLabel}
             </a>
           </td></tr>
         </table>
@@ -266,14 +316,15 @@ function renderMentionHtml(b: MentionTemplateArgs): string {
 }
 
 function renderMentionText(b: MentionTemplateArgs): string {
+  const deepLink = buildDeepLink(b.parentType, b.parentId);
   return `${b.authorName} mentioned you
 
 On ${b.parentLabel} in ${b.workspaceName}:
 
 "${b.excerpt}"
 
-Open in CageOS:
-https://cageos.app/dashboard
+Open the ${b.parentType}:
+${deepLink}
 
 You're getting this because someone @mentioned you in a comment.
 
