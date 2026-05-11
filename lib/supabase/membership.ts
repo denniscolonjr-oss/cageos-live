@@ -548,6 +548,17 @@ function rowToPasscode(r: Record<string, unknown>): WorkspacePasscode {
 export const FREE_TIER_OWNED_WORKSPACE_CAP = 1;
 
 /**
+ * Free-tier limit on member count per workspace. Currently 3 (you + 2
+ * teammates) which is enough to test the product with a small crew but
+ * tight enough to encourage upgrade for real production use.
+ *
+ * Surfaced on the landing page pricing section. NOT YET ENFORCED in code
+ * — that lands when billing ships. For now, this is a single source of
+ * truth so the marketing claim matches the eventual enforcement.
+ */
+export const FREE_TIER_MEMBER_CAP = 3;
+
+/**
  * How many workspaces does the current user own?
  * Used by the workspace switcher to decide whether to show or hide / disable
  * the "Create new workspace" action.
@@ -630,13 +641,9 @@ export async function createWorkspace(args: {
     events: [],
   };
 
-  // Insert workspace row. `owner_id` is a NOT NULL column from the iter-9
-  // schema (predates multi-user) — it tracks the original creator and is
-  // distinct from the workspace_members table which tracks role-based access.
-  // Both must agree: owner_id here, plus role='owner' membership row below.
   const { data: ws, error: wsErr } = await sb
     .from("workspaces")
-    .insert({ name, data: initialData, owner_id: user.id })
+    .insert({ name, data: initialData })
     .select("id")
     .single();
   if (wsErr || !ws) {
