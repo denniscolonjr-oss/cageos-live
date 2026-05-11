@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
@@ -36,6 +36,24 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
   const [editValue, setEditValue] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
 
+  /**
+   * Signed-out detection. When the user signs out while sitting on an asset
+   * detail page, the workspace data clears and rawAssets becomes empty —
+   * which would cause `notFound()` to fire below and dump them on a 404.
+   *
+   * Instead, detect "Supabase is configured AND auth has finished loading
+   * AND there's no session" — that's a clean signed-out state. Push them
+   * to /login. Doesn't affect the anonymous demo flow (which never has a
+   * session because Supabase isn't enabled for it).
+   *
+   * useEffect rather than inline redirect because Next.js doesn't like
+   * router.push() during render — must be in an effect.
+   */
+  const signedOut = auth.supabaseEnabled && !auth.loading && !auth.session;
+  useEffect(() => {
+    if (signedOut) router.replace("/login");
+  }, [signedOut, router]);
+
   const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
 
   if (!hydrated || auth.loading) {
@@ -44,6 +62,19 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
           Loading workspace...
+        </div>
+      </div>
+    );
+  }
+
+  // Signed-out — render a brief loading state while the redirect-to-login
+  // takes effect. Without this guard, we'd 404 below on missing asset data.
+  if (signedOut) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Signing out...
         </div>
       </div>
     );
