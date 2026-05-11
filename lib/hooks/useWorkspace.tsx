@@ -1043,6 +1043,7 @@ function useWorkspaceImpl() {
       resolvedAt: null,
       resolvedBy: null,
       mentionedInitials: extractMentions(args.body),
+      readBy: userId ? [userId] : [],  // author has implicitly "read" their own note
     };
 
     updateUserData(d => {
@@ -1151,6 +1152,100 @@ function useWorkspaceImpl() {
       .filter(n => n.parentType === parentType && n.parentId === parentId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [data]);
+
+  /**
+   * The current user's profile in this workspace. Returns null if not signed
+   * in or profile doesn't exist yet. Used by the inbox selector to find
+   * mentions targeting "me" — which we match on initials (since @mentions
+   * are by initials in the body) AND on userId (to filter out self-mentions).
+   */
+  const myProfile = useMemo(() => {
+    if (!auth.user) return null;
+    return userData.profiles.find(p => p.userId === auth.user!.id) ?? null;
+  }, [auth.user, userData.profiles]);
+
+  /**
+   * Notes where the current user is @mentioned. Used by the /inbox page.
+   *
+   * Match logic: a note mentions me if my profile's initials appear in
+   * `mentionedInitials`. We exclude notes authored by me (so I don't see
+   * my own self-mentions). Returns sorted newest-first since inbox is
+   * latest-on-top.
+   *
+   * Each note carries a `readBy` array; the inbox uses this to compute
+   * read/unread state per-user.
+   */
+  const myInboxNotes = useMemo(() => {
+    if (!myProfile?.initials || !auth.user) return [];
+    const myInitials = myProfile.initials.toUpperCase();
+    const myUserId = auth.user.id;
+    const notes = data.notes ?? [];
+    return notes
+      .filter(n =>
+        n.mentionedInitials.includes(myInitials) &&
+        n.authorUserId !== myUserId  // don't show my own mentions of myself
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [myProfile?.initials, auth.user, data.notes]);
+
+  /**
+   * Count of unread @mentions for the current user. Drives the TopNav bell
+   * badge. Computed from `myInboxNotes` minus ones where my userId is in
+   * the note's `readBy` array.
+   */
+  const inboxUnreadCount = useMemo(() => {
+    if (!auth.user) return 0;
+    const myUserId = auth.user.id;
+    return myInboxNotes.filter(n => !n.readBy.includes(myUserId)).length;
+  }, [myInboxNotes, auth.user]);
+
+  /**
+   * Mark a specific note as read by the current user. Called from the inbox
+   * row click handler before navigating, AND from the parent entity detail
+   * page when a note is rendered (so visiting the asset/kit auto-clears
+   * the unread state for any mentions visible there).
+   */
+  const markNoteRead = useCallback((noteId: string) => {
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    updateUserData(d => {
+      const notes = d.notes ?? [];
+      const idx = notes.findIndex(n => n.id === noteId);
+      if (idx === -1) return d;
+      const existing = notes[idx];
+      if (existing.readBy.includes(userId)) return d;  // already read, no-op
+      const next = [...notes];
+      next[idx] = { ...existing, readBy: [...existing.readBy, userId] };
+      return { ...d, notes: next };
+    });
+  }, [auth.user, updateUserData]);
+
+  /**
+   * Mark all unread notes on a given parent as read by the current user.
+   * Called when the user opens an asset/kit detail page, clearing the
+   * inbox badge for everything visible there in one batched state update.
+   */
+  const markNotesReadForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "checkout" | "user", parentId: string) => {
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    updateUserData(d => {
+      const notes = d.notes ?? [];
+      let mutated = false;
+      const next = notes.map(n => {
+        if (
+          n.parentType === parentType &&
+          n.parentId === parentId &&
+          !n.readBy.includes(userId)
+        ) {
+          mutated = true;
+          return { ...n, readBy: [...n.readBy, userId] };
+        }
+        return n;
+      });
+      if (!mutated) return d;  // skip the write if nothing changed
+      return { ...d, notes: next };
+    });
+  }, [auth.user, updateUserData]);
 
   const addShoot = useCallback((shoot: Shoot) => {
     if (isReadOnly) return;
@@ -1531,6 +1626,11 @@ function useWorkspaceImpl() {
     deleteNote,
     resolveNote,
     notesForParent,
+    // Inbox / mentions tracking — see iter-18a
+    myInboxNotes,
+    inboxUnreadCount,
+    markNoteRead,
+    markNotesReadForParent,
     stats,
     activeCheckouts,
     switchMode,

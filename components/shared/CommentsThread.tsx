@@ -33,13 +33,27 @@ interface CommentsThreadProps {
 }
 
 export default function CommentsThread({ parentType, parentId, parentLabel }: CommentsThreadProps) {
-  const { data, notesForParent, addNote } = useWorkspace();
+  const { data, notesForParent, addNote, markNotesReadForParent } = useWorkspace();
   const { currentRole, user } = useAuth();
   // Comments require Crew+ (matches kiosk-checkout permission semantics).
   // Owner/Manager/Crew can post; Viewer is read-only.
   const canPost = currentRole === "owner" || currentRole === "manager" || currentRole === "crew";
 
   const notes = notesForParent(parentType, parentId);
+
+  /**
+   * Auto-clear unread mentions on this parent when the user views the
+   * comments thread. If you visit an asset where someone @mentioned you,
+   * the inbox unread count for those mentions should drop to 0 — you've
+   * seen them now.
+   *
+   * Runs once on mount and any time the parent changes. The mutator itself
+   * is a no-op when nothing actually needs clearing, so the cost of running
+   * unconditionally is negligible.
+   */
+  useEffect(() => {
+    markNotesReadForParent(parentType, parentId);
+  }, [parentType, parentId, markNotesReadForParent]);
 
   return (
     <div style={{ marginTop: 24 }}>

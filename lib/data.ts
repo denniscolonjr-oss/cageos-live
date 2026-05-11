@@ -157,6 +157,17 @@ export interface Note {
   resolvedBy: string | null;
   /** Initials extracted from @mentions, for fast notification dispatch and "mentions of me" filtering. */
   mentionedInitials: string[];
+  /**
+   * Tracking which mentioned users have viewed this note. Populated by the
+   * inbox view when a user opens a note's parent entity. Array of auth user
+   * IDs (not initials, since initials can change but user IDs are stable).
+   *
+   * Inbox unread count = notes mentioning me where my user id is NOT in
+   * readBy. Default empty array — a freshly posted note is unread by
+   * everyone, including the author (we filter out self-mentions in the
+   * inbox query anyway, so this doesn't matter for author).
+   */
+  readBy: string[];
 }
 
 export const KITS: Kit[] = [

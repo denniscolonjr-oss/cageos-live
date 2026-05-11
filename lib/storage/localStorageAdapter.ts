@@ -22,7 +22,12 @@ function migrate(legacy: Partial<WorkspaceData>): WorkspaceData {
     shoots: legacy.shoots ?? [],
     events: legacy.events ?? [],
     flags: legacy.flags ?? [],
-    notes: legacy.notes ?? [],
+    // Notes added in iter-17. iter-18a added readBy field; migrate legacy
+    // notes without it so the inbox view doesn't crash on undefined.
+    notes: (legacy.notes ?? []).map(n => ({
+      ...n,
+      readBy: n.readBy ?? [],
+    })),
     orgName: legacy.orgName ?? "Your Org",
     orgLocation: legacy.orgLocation ?? "—",
     barcodePrefix: legacy.barcodePrefix ?? "AST",

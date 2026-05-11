@@ -19,7 +19,7 @@ export default function TopNav() {
   const path = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const { mode, data, switchMode, canUseDemo } = useWorkspace();
+  const { mode, data, switchMode, canUseDemo, inboxUnreadCount } = useWorkspace();
   const { session, user, supabaseEnabled, signOut, workspaces, activeWorkspaceId, setActiveWorkspaceId, refreshWorkspaces } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -107,6 +107,51 @@ export default function TopNav() {
           );
         })}
       </div>
+
+      {/*
+       * Inbox bell — shows count of unread @mentions.
+       *
+       * Only visible when signed in (no session = no inbox to surface).
+       * Pulses via the badge color so unread counts catch the eye without
+       * being obnoxious. Click → /inbox.
+       *
+       * The bell is intentionally simple — no dropdown preview. The full
+       * inbox view is one click away and shows everything in context.
+       * If the preview ends up being useful we can add it later.
+       */}
+      {session && supabaseEnabled && (
+        <Link href="/inbox" aria-label="Inbox" style={{
+          position: "relative",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 32, height: 32, borderRadius: 6,
+          background: path.startsWith("/inbox") ? "var(--s3)" : "var(--s1)",
+          border: `1px solid var(--b1)`,
+          color: path.startsWith("/inbox") ? "var(--t1)" : "var(--t2)",
+          textDecoration: "none",
+          flexShrink: 0,
+        }}>
+          {/* Bell SVG, currentColor follows the link's color */}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+          {inboxUnreadCount > 0 && (
+            <span style={{
+              position: "absolute",
+              top: -4, right: -4,
+              minWidth: 16, height: 16,
+              padding: "0 4px", borderRadius: 8,
+              background: "var(--acc)", color: "var(--bg)",
+              fontFamily: "'DM Mono',monospace",
+              fontSize: 9, fontWeight: 700, lineHeight: "16px",
+              textAlign: "center",
+              boxShadow: "0 0 0 2px var(--bg)",  // ring so badge separates from button
+            }}>
+              {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
+            </span>
+          )}
+        </Link>
+      )}
 
       {/* Workspace switcher */}
       <div style={{ position: "relative", flexShrink: 0 }}>
