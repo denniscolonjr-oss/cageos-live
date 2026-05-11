@@ -39,10 +39,25 @@ export default function LandingPage() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      /*
+       * Self-contained scroll context.
+       *
+       * The root layout sets `body { height: 100vh; overflow: hidden }` to
+       * give the dashboard a fixed app-shell with sticky TopNav and a single
+       * inner scrolling area. That global lock is essential for the rest of
+       * the app but it kills scrolling for marketing pages that need to be
+       * long-form scrollable documents.
+       *
+       * Rather than change the global layout (and risk breaking the
+       * dashboard / kiosk / detail pages), the landing owns its own scroll
+       * context here: fixed to fill the viewport, with overflow-y auto so
+       * the page can be as long as it needs to be while keeping body locked.
+       */
+      height: "100vh",
+      overflowY: "auto",
+      overflowX: "hidden",
       background: "var(--bg)",
       color: "var(--t1)",
-      // Smooth scroll behavior for in-page anchor links (Pricing, etc.)
       scrollBehavior: "smooth",
     }}>
       <Header isSignedIn={isSignedIn} />
@@ -87,9 +102,9 @@ function Header({ isSignedIn }: { isSignedIn: boolean }) {
         </Link>
 
         <nav style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <a href="#features" style={navLinkStyle} className="landing-nav-link">Features</a>
-          <a href="#industries" style={navLinkStyle} className="landing-nav-link">Industries</a>
-          <a href="#pricing" style={navLinkStyle} className="landing-nav-link">Pricing</a>
+          <a href="#features" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Features</a>
+          <a href="#industries" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Industries</a>
+          <a href="#pricing" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Pricing</a>
 
           {isSignedIn ? (
             <Link href="/dashboard" style={primaryButtonStyle}>
@@ -141,6 +156,45 @@ const secondaryButtonStyle: React.CSSProperties = {
   border: "1px solid var(--b2)",
   letterSpacing: "0.01em",
 };
+
+/**
+ * Smooth-scroll handler for in-page anchor links.
+ *
+ * Because the landing page owns its own scroll context (not the document /
+ * window), the default browser anchor behavior won't smoothly scroll —
+ * it would try to scroll the window which has no scroll. We intercept the
+ * click, find the target section by id, find the nearest scrollable ancestor
+ * (the landing root div), and call scrollTo on that with `behavior: "smooth"`.
+ *
+ * Falls back to scrollIntoView if the ancestor walk fails for any reason.
+ */
+function smoothScrollToId(e: React.MouseEvent<HTMLAnchorElement>) {
+  const href = e.currentTarget.getAttribute("href");
+  if (!href?.startsWith("#")) return;
+  const id = href.slice(1);
+  const target = document.getElementById(id);
+  if (!target) return;
+  e.preventDefault();
+  // Walk up to find the actual scroll container (the landing root div).
+  let scrollParent: HTMLElement | null = target.parentElement;
+  while (scrollParent) {
+    const style = window.getComputedStyle(scrollParent);
+    if (style.overflowY === "auto" || style.overflowY === "scroll") break;
+    scrollParent = scrollParent.parentElement;
+  }
+  if (scrollParent) {
+    // Account for the sticky header height (~50px) so the section title
+    // isn't covered by the header after scrolling.
+    const headerOffset = 56;
+    const targetTop = target.getBoundingClientRect().top
+      - scrollParent.getBoundingClientRect().top
+      + scrollParent.scrollTop
+      - headerOffset;
+    scrollParent.scrollTo({ top: targetTop, behavior: "smooth" });
+  } else {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Hero
