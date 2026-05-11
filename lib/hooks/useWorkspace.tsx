@@ -10,6 +10,7 @@ import {
   type Asset,
   type Kit,
   type UserProfile,
+  type Note,
 } from "@/lib/data";
 import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/localStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
@@ -31,6 +32,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   shoots: [],
   events: [],
   flags: [],
+  notes: [],
   orgName: "Your Org",
   orgLocation: "—",
   barcodePrefix: "AST",
@@ -178,6 +180,7 @@ function buildDemoWorkspace(): WorkspaceData {
     shoots: buildDemoShoots(),
     events: buildDemoEvents(),
     flags: buildDemoFlags(),
+    notes: [],
     orgName: "MMG Production",
     orgLocation: "DC",
     barcodePrefix: "MMG",
@@ -981,6 +984,174 @@ function useWorkspaceImpl() {
     }
   }, []);
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Notes (comments) mutators
+  // ────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Extract @mentioned initials from a markdown body. Tokens are `@XX` where
+   * XX is 1-4 uppercase letters/digits. Returns deduplicated uppercase array.
+   * Used to populate `mentionedInitials` for fast notification dispatch.
+   */
+  function extractMentions(body: string): string[] {
+    const matches = body.match(/@([A-Z0-9]{1,4})\b/g) ?? [];
+    const initials = matches.map(m => m.slice(1).toUpperCase());
+    return Array.from(new Set(initials));
+  }
+
+  /**
+   * Add a note (comment) to a parent entity. Author is automatically the
+   * currently signed-in user; if there's no profile yet (edge case) we fall
+   * back to email-derived placeholder values so the note still renders.
+   *
+   * Returns the created note's id so callers can scroll to it / focus it.
+   */
+  const addNote = useCallback((args: {
+    parentType: "asset" | "kit" | "shoot" | "checkout" | "user";
+    parentId: string;
+    body: string;
+    isTask?: boolean;
+  }): string | null => {
+    if (isReadOnly) return null;
+    if (!auth.user) return null;
+    if (!args.body.trim()) return null;
+
+    const userId = auth.user.id;
+    const userEmail = auth.user.email ?? "";
+    const myProfile = userData.profiles.find(p => p.userId === userId);
+
+    // Snapshot the author's current display info so the note survives later renames
+    const authorName = myProfile?.name?.trim() || userEmail.split("@")[0] || "Unknown";
+    const authorInitials = myProfile?.initials || "??";
+    const authorColor = myProfile?.color || "#cdc8bc";
+
+    const now = new Date().toISOString();
+    const id = `note-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+
+    const newNote: Note = {
+      id,
+      parentType: args.parentType,
+      parentId: args.parentId,
+      authorUserId: userId,
+      authorName,
+      authorInitials,
+      authorColor,
+      body: args.body.trim(),
+      createdAt: now,
+      editedAt: null,
+      isTask: !!args.isTask,
+      resolvedAt: null,
+      resolvedBy: null,
+      mentionedInitials: extractMentions(args.body),
+    };
+
+    updateUserData(d => {
+      const notes = [...(d.notes ?? []), newNote];
+      return appendEvent(
+        { ...d, notes },
+        "note_added", `${authorName} commented on ${args.parentType}`,
+        { actor: authorName, detail: args.body.slice(0, 60) },
+      );
+    });
+
+    return id;
+  }, [isReadOnly, auth.user, userData.profiles, updateUserData]);
+
+  /**
+   * Edit an existing note. Only the original author may edit. Updates body,
+   * recomputes mentions, sets editedAt timestamp.
+   */
+  const editNote = useCallback((noteId: string, newBody: string) => {
+    if (isReadOnly) return;
+    if (!auth.user) return;
+    if (!newBody.trim()) return;
+    const userId = auth.user.id;
+
+    updateUserData(d => {
+      const notes = d.notes ?? [];
+      const idx = notes.findIndex(n => n.id === noteId);
+      if (idx === -1) return d;
+      const existing = notes[idx];
+      // Authorship enforcement: only original author can edit.
+      if (existing.authorUserId !== userId) {
+        console.warn("[editNote] denied — only the author can edit");
+        return d;
+      }
+      const updated: Note = {
+        ...existing,
+        body: newBody.trim(),
+        editedAt: new Date().toISOString(),
+        mentionedInitials: extractMentions(newBody),
+      };
+      const next = [...notes];
+      next[idx] = updated;
+      return { ...d, notes: next };
+    });
+  }, [isReadOnly, auth.user, updateUserData]);
+
+  /**
+   * Delete a note. Author can delete their own; Manager+ can delete anyone's.
+   * Crew can ONLY delete their own. Viewer cannot delete.
+   */
+  const deleteNote = useCallback((noteId: string) => {
+    if (isReadOnly) return;
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    const isManager = role === "owner" || role === "manager";
+
+    updateUserData(d => {
+      const notes = d.notes ?? [];
+      const target = notes.find(n => n.id === noteId);
+      if (!target) return d;
+      // Crew can only delete own; Manager+ can delete any
+      if (target.authorUserId !== userId && !isManager) {
+        console.warn("[deleteNote] denied — manager role required to delete others' notes");
+        return d;
+      }
+      return { ...d, notes: notes.filter(n => n.id !== noteId) };
+    });
+  }, [isReadOnly, auth.user, role, updateUserData]);
+
+  /**
+   * Mark a task-flagged note as resolved (or un-resolve). Anyone with Crew+
+   * can resolve. Toggles based on current state. Only valid on isTask notes;
+   * silently no-ops otherwise.
+   */
+  const resolveNote = useCallback((noteId: string) => {
+    if (isReadOnly) return;
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    const myProfile = userData.profiles.find(p => p.userId === userId);
+    const resolverName = myProfile?.name?.trim() || auth.user.email?.split("@")[0] || "Unknown";
+
+    updateUserData(d => {
+      const notes = d.notes ?? [];
+      const idx = notes.findIndex(n => n.id === noteId);
+      if (idx === -1) return d;
+      const existing = notes[idx];
+      if (!existing.isTask) {
+        console.warn("[resolveNote] note is not a task; resolve is no-op");
+        return d;
+      }
+      const next = [...notes];
+      // Toggle resolved state
+      if (existing.resolvedAt) {
+        next[idx] = { ...existing, resolvedAt: null, resolvedBy: null };
+      } else {
+        next[idx] = { ...existing, resolvedAt: new Date().toISOString(), resolvedBy: resolverName };
+      }
+      return { ...d, notes: next };
+    });
+  }, [isReadOnly, auth.user, userData.profiles, updateUserData]);
+
+  /** Helper: get all notes for a given parent. */
+  const notesForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "checkout" | "user", parentId: string) => {
+    const notes = data.notes ?? [];
+    return notes
+      .filter(n => n.parentType === parentType && n.parentId === parentId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [data]);
+
   const addShoot = useCallback((shoot: Shoot) => {
     if (isReadOnly) return;
     updateUserData(d => appendEvent(
@@ -1354,6 +1525,12 @@ function useWorkspaceImpl() {
     canUseDemo,
     /** Current user's role in the active workspace. Null when no workspace. */
     role,
+    // Notes (comments) — see iter-17 design notes in lib/data.ts
+    addNote,
+    editNote,
+    deleteNote,
+    resolveNote,
+    notesForParent,
     stats,
     activeCheckouts,
     switchMode,

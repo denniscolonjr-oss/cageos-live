@@ -14,6 +14,7 @@ import { toast } from "@/components/ui/Toast";
 import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import PickKitModal from "@/components/forms/PickKitModal";
+import CommentsThread from "@/components/shared/CommentsThread";
 
 const CATEGORIES = ["Video", "Audio", "Lighting", "Grip", "Power", "Misc Prod", "IT / Network"];
 const LIFECYCLE_OPTIONS = ["active", "retired", "lost"] as const;
@@ -605,6 +606,29 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                     );
                   })
                 )}
+              </Card>
+
+              {/*
+               * Comments / discussion thread for this asset.
+               *
+               * iter-17: comments live in workspace JSON as `data.notes` filtered
+               * by parentType='asset' + parentId=asset.id. The CommentsThread
+               * component owns its own data fetching (via useWorkspace) and
+               * permission gating (Crew+ for write, Viewer read-only). All we
+               * do here is render it with the right props.
+               *
+               * Wrapped in a Card to match the visual rhythm of the surrounding
+               * sections (Service history, Flag history). The thread itself
+               * supplies the "Comments" heading and the count.
+               */}
+              <Card>
+                <div style={{ padding: "14px 18px 18px" }}>
+                  <CommentsThread
+                    parentType="asset"
+                    parentId={asset.id}
+                    parentLabel={asset.name}
+                  />
+                </div>
               </Card>
 
             </div>

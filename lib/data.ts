@@ -118,6 +118,47 @@ export interface UserProfile {
   pendingSetup?: boolean;
 }
 
+/**
+ * Note — unified comment system attached to a parent entity.
+ *
+ * Per iter-17 design:
+ *   - Lives in workspace JSON under `data.notes: Note[]`
+ *   - Filterable by parentType + parentId
+ *   - Markdown body, rendered with @mention autocomplete
+ *   - Author can edit/delete their own; Manager+ can delete anyone's
+ *   - `isTask` flag enables resolve workflow
+ *   - Mentions trigger email notifications via /api/send-mention
+ *
+ * Future iterations extend parentType to "kit" | "shoot" | "checkout" | "user".
+ */
+export type NoteParentType = "asset" | "kit" | "shoot" | "checkout" | "user";
+
+export interface Note {
+  id: string;
+  parentType: NoteParentType;
+  /** ID of the parent entity (asset.id, kit.id, etc.). For "user" notes, recipient userId. */
+  parentId: string;
+  /** Auth user id of the comment author. Null for legacy/imported notes. */
+  authorUserId: string | null;
+  /** Denormalized author display info (snapshot at write time, survives profile changes). */
+  authorName: string;
+  authorInitials: string;
+  authorColor: string;
+  /** Markdown body. Mentions stored as `@<initials>` tokens. */
+  body: string;
+  createdAt: string;
+  /** Set when the author edits. Display "(edited)" indicator. */
+  editedAt: string | null;
+  /** When true, the note is a task — Resolve action becomes available. Default false. */
+  isTask: boolean;
+  /** Set when someone marks the task resolved. */
+  resolvedAt: string | null;
+  /** Display name of the resolver. */
+  resolvedBy: string | null;
+  /** Initials extracted from @mentions, for fast notification dispatch and "mentions of me" filtering. */
+  mentionedInitials: string[];
+}
+
 export const KITS: Kit[] = [
   { id:"MMG-0000576", name:"Venice Cinema Kit", barcode:"MMG-0000576", status:"out", location:"LMG05", componentIds:["MMG-0000001","MMG-0000002"] },
   { id:"MMG-0000575", name:"Lens Kit", barcode:"MMG-0000575", status:"out", location:"LMG05", componentIds:["MMG-0000003","MMG-0000004","MMG-0000005","MMG-0000006","MMG-0000007","MMG-0000008"] },

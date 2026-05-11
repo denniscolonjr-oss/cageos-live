@@ -12,6 +12,7 @@ import type {
   CheckoutRecord,
   Alert,
   UserProfile,
+  Note,
 } from "@/lib/data";
 
 export type WorkspaceMode = "user" | "demo" | "unset";
@@ -79,7 +80,8 @@ export type AuditCategory =
   | "flag_opened"
   | "flag_status_changed"
   | "flag_note_added"
-  | "flag_resolved";
+  | "flag_resolved"
+  | "note_added";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -154,6 +156,17 @@ export interface WorkspaceData {
    * computed from the most recent open flag in this list.
    */
   flags: ServiceFlag[];
+  /**
+   * Comments / notes attached to entities in this workspace. Added in iter-17.
+   *
+   * Each note declares its parent (asset, kit, shoot, checkout, or user for DMs)
+   * and is filterable by parentType + parentId. Stored inline in workspace JSON
+   * since note volume per workspace is expected to remain modest (low thousands);
+   * future migration to a dedicated table is straightforward if needed.
+   *
+   * See lib/data.ts for the Note interface details.
+   */
+  notes: Note[];
   orgName: string;
   orgLocation: string;
   barcodePrefix: string;
