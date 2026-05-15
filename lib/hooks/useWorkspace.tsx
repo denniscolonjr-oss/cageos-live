@@ -1010,7 +1010,7 @@ function useWorkspaceImpl() {
    * Returns the created note's id so callers can scroll to it / focus it.
    */
   const addNote = useCallback((args: {
-    parentType: "asset" | "kit" | "shoot" | "checkout" | "user";
+    parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user";
     parentId: string;
     body: string;
     isTask?: boolean;
@@ -1149,7 +1149,7 @@ function useWorkspaceImpl() {
   }, [isReadOnly, auth.user, userData.profiles, updateUserData]);
 
   /** Helper: get all notes for a given parent. */
-  const notesForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "checkout" | "user", parentId: string) => {
+  const notesForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user", parentId: string) => {
     const notes = data.notes ?? [];
     return notes
       .filter(n => n.parentType === parentType && n.parentId === parentId)
@@ -1228,7 +1228,7 @@ function useWorkspaceImpl() {
    * Called when the user opens an asset/kit detail page, clearing the
    * inbox badge for everything visible there in one batched state update.
    */
-  const markNotesReadForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "checkout" | "user", parentId: string) => {
+  const markNotesReadForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user", parentId: string) => {
     if (!auth.user) return;
     const userId = auth.user.id;
     updateUserData(d => {

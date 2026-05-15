@@ -12,7 +12,7 @@
  * Body shape:
  *   {
  *     mentionedInitials: string[],   // e.g. ["KL", "BR"]
- *     parentType: "asset" | "kit" | "shoot" | "checkout" | "user",
+ *     parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user",
  *     parentId: string,
  *     parentLabel: string,            // human-readable, e.g. "Sigma 85mm f/1.4"
  *     excerpt: string                 // first ~200 chars of the comment body
