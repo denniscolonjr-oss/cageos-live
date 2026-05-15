@@ -1418,7 +1418,7 @@ export default function DashboardPage() {
       <AddTeamMemberModal open={openModal === "team"} onClose={() => setOpenModal(null)} />
       <CSVUploadModal open={openModal === "csv"} onClose={() => setOpenModal(null)} />
       <AddShootModal open={openModal === "shoot"} onClose={() => setOpenModal(null)} />
-      <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} shoot={selectedShoot} />
+      <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} project={selectedShoot} />
       <FlagItemModal open={!!flagAssetTarget} onClose={() => setFlagAssetTarget(null)} asset={flagAssetTarget} />
       <FlagDetailModal open={!!selectedFlag} onClose={() => setSelectedFlagId(null)} flag={selectedFlag} />
       {/* Self-gates on pendingSetup; renders nothing if profile already complete */}

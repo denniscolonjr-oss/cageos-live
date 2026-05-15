@@ -12,33 +12,33 @@ interface Props {
 }
 
 export default function AssignToShootModal({ open, onClose, profileInitials, profileName }: Props) {
-  const { data, updateShoot } = useWorkspace();
+  const { data, updateProject } = useWorkspace();
 
   // Eligible: scheduled or active, person not already on it
-  const eligibleShoots = data.shoots.filter(s =>
+  const eligibleProjects = data.projects.filter(s =>
     (s.status === "scheduled" || s.status === "active") &&
     !s.assignedTeam.includes(profileInitials) &&
     s.leadInitials !== profileInitials
   );
 
-  function handleAssign(shootId: string, shootTitle: string) {
-    const shoot = data.shoots.find(s => s.id === shootId);
-    if (!shoot) return;
-    updateShoot(shootId, {
-      assignedTeam: [...shoot.assignedTeam, profileInitials],
+  function handleAssign(projectId: string, projectTitle: string) {
+    const project = data.projects.find(s => s.id === projectId);
+    if (!project) return;
+    updateProject(projectId, {
+      assignedTeam: [...project.assignedTeam, profileInitials],
     });
-    toast(`${profileName} added to ${shootTitle}`, { detail: shoot.client });
+    toast(`${profileName} added to ${projectTitle}`, { detail: project.client });
     onClose();
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Assign ${profileName.split(" ")[0]} to a shoot`}>
-      {data.shoots.length === 0 ? (
+    <Modal open={open} onClose={onClose} title={`Assign ${profileName.split(" ")[0]} to a project`}>
+      {data.projects.length === 0 ? (
         <div style={{ textAlign: "center", padding: "20px 0" }}>
           <div style={{ fontSize: 28, opacity: 0.4, marginBottom: 10 }}>⬡</div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No shoots scheduled</div>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No projects scheduled</div>
           <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginBottom: 16 }}>
-            Schedule a shoot first, then you can assign team to it.
+            Schedule a project first, then you can assign team to it.
           </div>
           <button onClick={onClose} style={{
             padding: "10px 20px", borderRadius: 7, background: "var(--acc)",
@@ -46,12 +46,12 @@ export default function AssignToShootModal({ open, onClose, profileInitials, pro
             fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700, minHeight: 40,
           }}>OK</button>
         </div>
-      ) : eligibleShoots.length === 0 ? (
+      ) : eligibleProjects.length === 0 ? (
         <div style={{ textAlign: "center", padding: "20px 0" }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>✓</div>
           <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Already assigned to everything</div>
           <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginBottom: 16 }}>
-            {profileName.split(" ")[0]} is already on every active or scheduled shoot.
+            {profileName.split(" ")[0]} is already on every active or scheduled project.
           </div>
           <button onClick={onClose} style={{
             padding: "10px 20px", borderRadius: 7, background: "var(--acc)",
@@ -62,10 +62,10 @@ export default function AssignToShootModal({ open, onClose, profileInitials, pro
       ) : (
         <>
           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
-            Pick a shoot to add {profileName.split(" ")[0]} to.
+            Pick a project to add {profileName.split(" ")[0]} to.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
-            {eligibleShoots.map(s => (
+            {eligibleProjects.map(s => (
               <button key={s.id} onClick={() => handleAssign(s.id, s.title)} style={{
                 background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8,
                 padding: "12px 14px", cursor: "pointer", textAlign: "left",

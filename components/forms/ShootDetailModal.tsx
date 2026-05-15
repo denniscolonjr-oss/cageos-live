@@ -4,16 +4,16 @@ import Modal from "@/components/ui/Modal";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { toast } from "@/components/ui/Toast";
 import { formatShootRange, isoToInputValue, inputValueToISO, timezoneShortLabel } from "@/lib/timezone";
-import type { Shoot } from "@/lib/hooks/workspaceTypes";
+import type { Project } from "@/lib/hooks/workspaceTypes";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  shoot: Shoot | null;
+  project: Project | null;
 }
 
-export default function ShootDetailModal({ open, onClose, shoot }: Props) {
-  const { data, updateShoot, deleteShoot, isReadOnly } = useWorkspace();
+export default function ShootDetailModal({ open, onClose, project }: Props) {
+  const { data, updateProject, deleteProject, isReadOnly } = useWorkspace();
   const [editing, setEditing] = useState(false);
 
   // Editable fields
@@ -28,58 +28,58 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    if (shoot) {
-      setTitle(shoot.title);
-      setClient(shoot.client);
-      setStartsAt(shoot.startsAt);
-      setEndsAt(shoot.endsAt ?? "");
-      setLocation(shoot.location ?? "");
-      setLeadInitials(shoot.leadInitials ?? "");
-      setAssignedTeam(new Set(shoot.assignedTeam));
-      setAssignedKits(new Set(shoot.assignedKits));
-      setNotes(shoot.notes ?? "");
+    if (project) {
+      setTitle(project.title);
+      setClient(project.client);
+      setStartsAt(project.startsAt);
+      setEndsAt(project.endsAt ?? "");
+      setLocation(project.location ?? "");
+      setLeadInitials(project.leadInitials ?? "");
+      setAssignedTeam(new Set(project.assignedTeam));
+      setAssignedKits(new Set(project.assignedKits));
+      setNotes(project.notes ?? "");
       setEditing(false);
     }
-  }, [shoot]);
+  }, [project]);
 
   /**
-   * Conflicts with OTHER shoots only (not this one being edited).
+   * Conflicts with OTHER projects only (not this one being edited).
    *
    * IMPORTANT: This hook MUST be declared before any early returns.
    * Hooks must run in the same order on every render — the previous version
-   * of this file declared this useMemo AFTER `if (!shoot) return null;`,
+   * of this file declared this useMemo AFTER `if (!project) return null;`,
    * which crashed React with error #310 (rendered more hooks than previous
-   * render) the first time the modal opened with a non-null shoot.
+   * render) the first time the modal opened with a non-null project.
    */
   const kitConflicts = useMemo(() => {
-    if (!shoot) return [];
+    if (!project) return [];
     if (!startsAt) return [];
     const newStart = new Date(startsAt).getTime();
     const newEndRaw = endsAt ? new Date(endsAt).getTime() : null;
     const newEnd = newEndRaw ?? newStart + 8 * 60 * 60 * 1000;
 
-    const conflicts: { kitId: string; kitName: string; conflicts: { shootTitle: string; range: string }[] }[] = [];
+    const conflicts: { kitId: string; kitName: string; conflicts: { projectTitle: string; range: string }[] }[] = [];
 
     for (const kitId of assignedKits) {
       const kit = data.kits.find(k => k.id === kitId);
       if (!kit) continue;
-      const overlapping: { shootTitle: string; range: string }[] = [];
-      for (const otherShoot of data.shoots) {
-        if (otherShoot.id === shoot.id) continue;
-        if (otherShoot.status === "completed" || otherShoot.status === "cancelled") continue;
-        if (!otherShoot.assignedKits.includes(kitId)) continue;
-        const otherStart = new Date(otherShoot.startsAt).getTime();
-        const otherEnd = otherShoot.endsAt
-          ? new Date(otherShoot.endsAt).getTime()
+      const overlapping: { projectTitle: string; range: string }[] = [];
+      for (const otherProject of data.projects) {
+        if (otherProject.id === project.id) continue;
+        if (otherProject.status === "completed" || otherProject.status === "cancelled") continue;
+        if (!otherProject.assignedKits.includes(kitId)) continue;
+        const otherStart = new Date(otherProject.startsAt).getTime();
+        const otherEnd = otherProject.endsAt
+          ? new Date(otherProject.endsAt).getTime()
           : otherStart + 8 * 60 * 60 * 1000;
         if (newStart < otherEnd && newEnd > otherStart) {
-          const startLabel = new Date(otherShoot.startsAt).toLocaleString([], {
+          const startLabel = new Date(otherProject.startsAt).toLocaleString([], {
             month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
           });
-          const endLabel = otherShoot.endsAt
-            ? new Date(otherShoot.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+          const endLabel = otherProject.endsAt
+            ? new Date(otherProject.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
             : "+8h";
-          overlapping.push({ shootTitle: otherShoot.title, range: `${startLabel} – ${endLabel}` });
+          overlapping.push({ projectTitle: otherProject.title, range: `${startLabel} – ${endLabel}` });
         }
       }
       if (overlapping.length > 0) {
@@ -88,13 +88,13 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
     }
 
     return conflicts;
-  }, [assignedKits, startsAt, endsAt, data.shoots, data.kits, shoot]);
+  }, [assignedKits, startsAt, endsAt, data.projects, data.kits, project]);
 
-  if (!shoot) return null;
+  if (!project) return null;
 
-  const teamProfiles = shoot.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
-  const kits = shoot.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
-  const lead = shoot.leadInitials ? data.profiles.find(p => p.initials === shoot.leadInitials) : null;
+  const teamProfiles = project.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
+  const kits = project.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
+  const lead = project.leadInitials ? data.profiles.find(p => p.initials === project.leadInitials) : null;
   const tz = data.timezone;
 
   function toggleTeam(initials: string) {
@@ -109,9 +109,9 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
   }
 
   function handleSaveEdit() {
-    if (!shoot) return;
+    if (!project) return;
     if (!title.trim()) { toast("Title is required", { variant: "error" }); return; }
-    updateShoot(shoot.id, {
+    updateProject(project.id, {
       title: title.trim(),
       client: client.trim() || "Internal",
       startsAt,
@@ -126,26 +126,26 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
     setEditing(false);
   }
 
-  function handleStatusChange(newStatus: Shoot["status"]) {
-    if (!shoot) return;
-    updateShoot(shoot.id, { status: newStatus });
-    const labels: Record<Shoot["status"], string> = {
+  function handleStatusChange(newStatus: Project["status"]) {
+    if (!project) return;
+    updateProject(project.id, { status: newStatus });
+    const labels: Record<Project["status"], string> = {
       scheduled: "scheduled",
       active: "marked active",
       completed: "marked complete",
       cancelled: "cancelled",
     };
-    toast(`${shoot.title} ${labels[newStatus]}`);
+    toast(`${project.title} ${labels[newStatus]}`);
     if (newStatus === "completed" || newStatus === "cancelled") onClose();
   }
 
   function handleDelete() {
-    if (!shoot) return;
-    if (!confirm(`Delete "${shoot.title}"?`)) return;
-    const shootTitle = shoot.title;
-    const undo = deleteShoot(shoot.id);
-    toast(`${shootTitle} deleted`, {
-      action: undo ? { label: "Undo", onClick: () => { undo(); toast(`${shootTitle} restored`); } } : undefined,
+    if (!project) return;
+    if (!confirm(`Delete "${project.title}"?`)) return;
+    const projectTitle = project.title;
+    const undo = deleteProject(project.id);
+    toast(`${projectTitle} deleted`, {
+      action: undo ? { label: "Undo", onClick: () => { undo(); toast(`${projectTitle} restored`); } } : undefined,
     });
     onClose();
   }
@@ -166,33 +166,33 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
   // ============ VIEW MODE ============
   if (!editing) {
     return (
-      <Modal open={open} onClose={onClose} title={shoot.title} maxWidth={620}>
+      <Modal open={open} onClose={onClose} title={project.title} maxWidth={620}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Status badge + key fields */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--b1)" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 3 }}>{shoot.client}</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 3 }}>{project.client}</div>
               <div style={{ fontSize: 13, color: "var(--t1)" }}>
-                {formatShootRange(shoot.startsAt, shoot.endsAt, tz)}
+                {formatShootRange(project.startsAt, project.endsAt, tz)}
               </div>
-              {shoot.location && (
-                <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 3 }}>📍 {shoot.location}</div>
+              {project.location && (
+                <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 3 }}>📍 {project.location}</div>
               )}
             </div>
             <span style={{
               fontSize: 10, padding: "3px 8px", borderRadius: 4,
               fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.05em",
               background:
-                shoot.status === "active" ? "rgba(109,238,159,0.12)" :
-                shoot.status === "scheduled" ? "rgba(122,181,245,0.12)" :
-                shoot.status === "completed" ? "rgba(205,200,188,0.12)" :
+                project.status === "active" ? "rgba(109,238,159,0.12)" :
+                project.status === "scheduled" ? "rgba(122,181,245,0.12)" :
+                project.status === "completed" ? "rgba(205,200,188,0.12)" :
                 "rgba(255,122,122,0.12)",
               color:
-                shoot.status === "active" ? "var(--green)" :
-                shoot.status === "scheduled" ? "var(--blue)" :
-                shoot.status === "completed" ? "var(--t3)" :
+                project.status === "active" ? "var(--green)" :
+                project.status === "scheduled" ? "var(--blue)" :
+                project.status === "completed" ? "var(--t3)" :
                 "var(--red)",
-            }}>{shoot.status}</span>
+            }}>{project.status}</span>
           </div>
 
           {/* Team */}
@@ -209,7 +209,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
                     <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: p!.color, flexShrink: 0 }}>{p!.initials}</div>
                     <span style={{ fontSize: 11, color: "var(--t1)" }}>
                       {p!.name.split(" ")[0]}
-                      {shoot.leadInitials === p!.initials && <span style={{ color: "var(--acc)", marginLeft: 4 }}>★</span>}
+                      {project.leadInitials === p!.initials && <span style={{ color: "var(--acc)", marginLeft: 4 }}>★</span>}
                     </span>
                   </div>
                 ))}
@@ -237,19 +237,19 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
           )}
 
           {/* Notes */}
-          {shoot.notes && (
+          {project.notes && (
             <div>
               <div style={labelStyle}>Notes</div>
               <div style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 7, padding: "10px 12px", fontSize: 12, color: "var(--t1)", lineHeight: 1.6 }}>
-                {shoot.notes}
+                {project.notes}
               </div>
             </div>
           )}
 
           {/* Status actions (manager mode features but allowed for v1) */}
-          {!isReadOnly && (shoot.status === "scheduled" || shoot.status === "active") && (
+          {!isReadOnly && (project.status === "scheduled" || project.status === "active") && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingTop: 6 }}>
-              {shoot.status === "scheduled" && (
+              {project.status === "scheduled" && (
                 <button onClick={() => handleStatusChange("active")} style={{
                   padding: "8px 14px", borderRadius: 6, fontSize: 12,
                   background: "rgba(109,238,159,0.08)", border: "1px solid rgba(109,238,159,0.3)",
@@ -268,7 +268,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
                 background: "transparent", border: "1px solid var(--b1)",
                 color: "var(--t3)", cursor: "pointer",
                 fontFamily: "'DM Mono',monospace", minHeight: 36,
-              }}>Cancel shoot</button>
+              }}>Cancel project</button>
             </div>
           )}
 
@@ -297,7 +297,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
 
   // ============ EDIT MODE ============
   return (
-    <Modal open={open} onClose={onClose} title={`Edit · ${shoot.title}`} maxWidth={620}>
+    <Modal open={open} onClose={onClose} title={`Edit · ${project.title}`} maxWidth={620}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={labelStyle}>Title</label>
@@ -413,7 +413,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: "var(--t1)" }}>
                         {k.name}
-                        {hasConflict && <span title="Time conflict with another shoot" style={{ color: "var(--amber)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
+                        {hasConflict && <span title="Time conflict with another project" style={{ color: "var(--amber)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
                       </div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>{k.barcode}</div>
                     </div>
@@ -438,7 +438,7 @@ export default function ShootDetailModal({ open, onClose, shoot }: Props) {
                       {c.conflicts.map((cc, i) => (
                         <span key={i}>
                           {i > 0 && ", "}
-                          <span style={{ color: "var(--t1)" }}>{cc.shootTitle}</span>{" "}
+                          <span style={{ color: "var(--t1)" }}>{cc.projectTitle}</span>{" "}
                           <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>({cc.range})</span>
                         </span>
                       ))}

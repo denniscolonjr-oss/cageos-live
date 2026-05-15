@@ -3,11 +3,11 @@ import { useState, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { toast } from "@/components/ui/Toast";
-import type { Shoot } from "@/lib/hooks/workspaceTypes";
+import type { Project } from "@/lib/hooks/workspaceTypes";
 import { resolveTimezone, timezoneShortLabel, inputValueToISO, isoToInputValue } from "@/lib/timezone";
 
 export default function AddShootModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { data, addShoot } = useWorkspace();
+  const { data, addProject } = useWorkspace();
   const tz = data.timezone;
   const tzLabel = useMemo(() => timezoneShortLabel(tz), [tz]);
 
@@ -48,11 +48,11 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
   }
 
   /**
-   * For each kit currently assigned in the form, find any other shoot whose time range
-   * overlaps with this new shoot's time range. Returns conflicts as {kitId, kitName, conflicts[]}.
+   * For each kit currently assigned in the form, find any other project whose time range
+   * overlaps with this new project's time range. Returns conflicts as {kitId, kitName, conflicts[]}.
    *
-   * Time ranges: each shoot has startsAt (ISO) and optionally endsAt (ISO). If endsAt is missing,
-   * we treat the shoot as 8 hours long. We exclude completed and cancelled shoots — they
+   * Time ranges: each project has startsAt (ISO) and optionally endsAt (ISO). If endsAt is missing,
+   * we treat the project as 8 hours long. We exclude completed and cancelled projects — they
    * don't represent active claims on gear.
    */
   const kitConflicts = useMemo(() => {
@@ -60,28 +60,28 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
     const newEndRaw = endsAt ? new Date(endsAt).getTime() : null;
     const newEnd = newEndRaw ?? newStart + 8 * 60 * 60 * 1000;
 
-    const conflicts: { kitId: string; kitName: string; conflicts: { shootTitle: string; range: string }[] }[] = [];
+    const conflicts: { kitId: string; kitName: string; conflicts: { projectTitle: string; range: string }[] }[] = [];
 
     for (const kitId of assignedKits) {
       const kit = data.kits.find(k => k.id === kitId);
       if (!kit) continue;
-      const overlapping: { shootTitle: string; range: string }[] = [];
-      for (const otherShoot of data.shoots) {
-        if (otherShoot.status === "completed" || otherShoot.status === "cancelled") continue;
-        if (!otherShoot.assignedKits.includes(kitId)) continue;
-        const otherStart = new Date(otherShoot.startsAt).getTime();
-        const otherEnd = otherShoot.endsAt
-          ? new Date(otherShoot.endsAt).getTime()
+      const overlapping: { projectTitle: string; range: string }[] = [];
+      for (const otherProject of data.projects) {
+        if (otherProject.status === "completed" || otherProject.status === "cancelled") continue;
+        if (!otherProject.assignedKits.includes(kitId)) continue;
+        const otherStart = new Date(otherProject.startsAt).getTime();
+        const otherEnd = otherProject.endsAt
+          ? new Date(otherProject.endsAt).getTime()
           : otherStart + 8 * 60 * 60 * 1000;
         // Overlap: newStart < otherEnd AND newEnd > otherStart
         if (newStart < otherEnd && newEnd > otherStart) {
-          const startLabel = new Date(otherShoot.startsAt).toLocaleString([], {
+          const startLabel = new Date(otherProject.startsAt).toLocaleString([], {
             month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
           });
-          const endLabel = otherShoot.endsAt
-            ? new Date(otherShoot.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+          const endLabel = otherProject.endsAt
+            ? new Date(otherProject.endsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
             : "+8h";
-          overlapping.push({ shootTitle: otherShoot.title, range: `${startLabel} – ${endLabel}` });
+          overlapping.push({ projectTitle: otherProject.title, range: `${startLabel} – ${endLabel}` });
         }
       }
       if (overlapping.length > 0) {
@@ -90,11 +90,11 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
     }
 
     return conflicts;
-  }, [assignedKits, startsAt, endsAt, data.shoots, data.kits]);
+  }, [assignedKits, startsAt, endsAt, data.projects, data.kits]);
 
   function handleSubmit() {
     if (!title.trim()) return;
-    const shoot: Shoot = {
+    const project: Project = {
       id: `sh-${Date.now()}`,
       title: title.trim(),
       client: client.trim() || "Internal",
@@ -107,9 +107,9 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
       notes: notes.trim() || undefined,
       status: "scheduled",
     };
-    addShoot(shoot);
-    toast(`${shoot.title} scheduled`, {
-      detail: `${shoot.assignedTeam.length} team · ${shoot.assignedKits.length} kit${shoot.assignedKits.length === 1 ? "" : "s"}`,
+    addProject(project);
+    toast(`${project.title} scheduled`, {
+      detail: `${project.assignedTeam.length} team · ${project.assignedKits.length} kit${project.assignedKits.length === 1 ? "" : "s"}`,
     });
     reset();
     onClose();
@@ -130,12 +130,12 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
 
   if (data.profiles.length === 0) {
     return (
-      <Modal open={open} onClose={onClose} title="Schedule a shoot">
+      <Modal open={open} onClose={onClose} title="Schedule a project">
         <div style={{ textAlign: "center", padding: "20px 0" }}>
           <div style={{ fontSize: 32, opacity: 0.4, marginBottom: 12 }}>⬡</div>
           <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>You need a team first</div>
           <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 18 }}>
-            Shoots assign team members and kits. Add at least one team member before scheduling a shoot.
+            Projects assign team members and kits. Add at least one team member before scheduling a project.
           </div>
           <button onClick={onClose} style={{
             padding: "12px 24px", borderRadius: 7, background: "var(--acc)",
@@ -148,10 +148,10 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Schedule a shoot" maxWidth={620}>
+    <Modal open={open} onClose={onClose} title="Schedule a project" maxWidth={620}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label style={labelStyle}>Shoot title *</label>
+          <label style={labelStyle}>Project title *</label>
           <input style={inputStyle} value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Capitol Hearing Coverage" autoFocus />
         </div>
 
@@ -267,7 +267,7 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: "var(--t1)" }}>
                         {k.name}
-                        {hasConflict && <span title="Time conflict with another shoot" style={{ color: "var(--amber)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
+                        {hasConflict && <span title="Time conflict with another project" style={{ color: "var(--amber)", marginLeft: 6, fontSize: 11 }}>⚠</span>}
                       </div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{k.barcode} · {k.componentIds.length} components</div>
                     </div>
@@ -293,7 +293,7 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
                       {c.conflicts.map((cc, i) => (
                         <span key={i}>
                           {i > 0 && ", "}
-                          <span style={{ color: "var(--t1)" }}>{cc.shootTitle}</span>{" "}
+                          <span style={{ color: "var(--t1)" }}>{cc.projectTitle}</span>{" "}
                           <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>({cc.range})</span>
                         </span>
                       ))}
@@ -301,7 +301,7 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
                   ))}
                 </div>
                 <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 6, lineHeight: 1.4 }}>
-                  You can still save — but only one shoot will be able to actually check out the kit.
+                  You can still save — but only one project will be able to actually check out the kit.
                 </div>
               </div>
             )}
@@ -332,7 +332,7 @@ export default function AddShootModal({ open, onClose }: { open: boolean; onClos
             color: title.trim() ? "var(--bg)" : "var(--t3)",
             cursor: title.trim() ? "pointer" : "not-allowed",
             fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, minHeight: 44,
-          }}>Schedule shoot</button>
+          }}>Schedule project</button>
         </div>
       </div>
     </Modal>
