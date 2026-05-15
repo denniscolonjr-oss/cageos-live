@@ -149,6 +149,15 @@ export default function DashboardPage() {
   function handleSidebarClick(item: SidebarItem) {
     if (item.action) {
       setOpenModal(item.action as "asset" | "kit" | "team" | "csv" | "shoot");
+    } else if (item.key === "checkouts") {
+      /*
+       * "Active checkouts" navigates to the dedicated /checkouts page added
+       * in iter-21 rather than switching the dashboard tab. The dashboard
+       * tab was a no-op (same view as "Cage status") which made the sidebar
+       * feel broken. The dedicated page is the right surface for this view
+       * — filter tabs, stat strip, sortable rows, drill-into-detail.
+       */
+      router.push("/checkouts");
     } else {
       setActiveKey(item.key);
     }
@@ -353,7 +362,14 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {activeCheckouts.map(co => (
-                        <Link key={co.id} href={`/profile/${encodeURIComponent(co.initials)}`} style={{ textDecoration: "none", color: "inherit" }}>
+                        {/*
+                         * Active checkout row link. Routes to the checkout
+                         * DETAIL page added in iter-21 so the user sees full
+                         * context (kits, photos, condition, contact info,
+                         * comments) instead of being bounced to the person's
+                         * profile.
+                         */}
+                        <Link key={co.id} href={`/checkouts/${encodeURIComponent(co.id)}`} style={{ textDecoration: "none", color: "inherit" }}>
                           <div style={{
                             padding: isMobile ? "13px 16px" : "11px 16px", borderBottom: "1px solid var(--b1)",
                             display: "flex", alignItems: "center", gap: 11,

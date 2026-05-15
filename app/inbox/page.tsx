@@ -69,9 +69,10 @@ export default function InboxPage() {
    */
   function urlForParent(parentType: Note["parentType"], parentId: string): string {
     switch (parentType) {
-      case "asset": return `/asset/${encodeURIComponent(parentId)}`;
-      case "kit":   return `/kit/${encodeURIComponent(parentId)}`;
-      default:      return "/dashboard";
+      case "asset":    return `/asset/${encodeURIComponent(parentId)}`;
+      case "kit":      return `/kit/${encodeURIComponent(parentId)}`;
+      case "checkout": return `/checkouts/${encodeURIComponent(parentId)}`;
+      default:         return "/dashboard";
     }
   }
 
@@ -87,6 +88,15 @@ export default function InboxPage() {
     if (n.parentType === "kit") {
       const k = data.kits.find(x => x.id === n.parentId);
       return k?.name ?? `Kit ${n.parentId}`;
+    }
+    if (n.parentType === "checkout") {
+      const c = data.checkouts.find(x => x.id === n.parentId);
+      if (!c) return `Checkout ${n.parentId}`;
+      // Compose a useful label from kit names + user, since checkouts don't
+      // have a single .name field. "Cinema Kit A · Brittany R" reads better
+      // than the bare id.
+      const kitsLabel = c.kits?.length ? c.kits.join(" · ") : `${c.kits?.length ?? 0} kits`;
+      return `${kitsLabel} (${c.user})`;
     }
     return n.parentId;
   }

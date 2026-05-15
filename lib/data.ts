@@ -94,6 +94,15 @@ export interface UserProfile {
   role: string;
   joinedAt: string;
   email: string;
+  /**
+   * Optional phone number for contact-on-checkout flows. Added iter-21
+   * for the active checkouts page so a shop manager can text or call the
+   * person who has gear out. Stored as free-form string — no E.164
+   * normalization (since users may include extensions, regional formats,
+   * etc.). Click-to-text uses `sms:<phone>` URL scheme which handles
+   * most formats well enough.
+   */
+  phone?: string;
   badgeCount: number;
   isGuest?: boolean;
   department: string;

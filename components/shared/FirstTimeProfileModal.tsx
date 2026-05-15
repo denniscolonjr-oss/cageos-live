@@ -32,6 +32,13 @@ export default function FirstTimeProfileModal() {
   const [initials, setInitials] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [department, setDepartment] = useState("");
+  /**
+   * Optional phone number. Surfaces on the active checkouts page so the
+   * shop manager can text/call the person who has gear out. Free-form
+   * string — no validation beyond max length, since users may include
+   * extensions, regional formats, country codes, etc.
+   */
+  const [phone, setPhone] = useState("");
   // Tracks whether the user has manually edited initials. Used to suppress
   // the auto-suggest from name once they've typed their own. MUST be declared
   // here above any early returns — moving it below `if (!myProfile?.pendingSetup)`
@@ -65,6 +72,7 @@ export default function FirstTimeProfileModal() {
       initials: initials.toUpperCase(),
       color,
       department: department.trim(),
+      phone: phone.trim() || undefined,
     });
   }
 
@@ -147,6 +155,32 @@ export default function FirstTimeProfileModal() {
               value={department}
               onChange={e => setDepartment(e.target.value)}
               placeholder="e.g. Production · Lead Camera"
+              style={{
+                width: "100%", padding: "10px 12px",
+                background: "var(--s2)", border: "1px solid var(--b2)",
+                borderRadius: 6, color: "var(--t1)",
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          {/*
+           * Phone number — used by the active checkouts page so a manager
+           * can text/call the person who has gear out. Optional and
+           * free-form (no E.164 normalization).
+           */}
+          <div>
+            <label style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" }}>
+              Phone (optional)
+            </label>
+            <input
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="e.g. 555-123-4567"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={32}
               style={{
                 width: "100%", padding: "10px 12px",
                 background: "var(--s2)", border: "1px solid var(--b2)",

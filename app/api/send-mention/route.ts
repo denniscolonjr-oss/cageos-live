@@ -250,8 +250,10 @@ function buildDeepLink(parentType: string, parentId: string): string {
       return `${base}/asset/${encodeURIComponent(parentId)}`;
     case "kit":
       return `${base}/kit/${encodeURIComponent(parentId)}`;
-    case "shoot":
     case "checkout":
+      // Added iter-21 — checkouts now have their own detail page.
+      return `${base}/checkouts/${encodeURIComponent(parentId)}`;
+    case "shoot":
     case "user":
     default:
       return `${base}/dashboard`;
