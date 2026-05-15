@@ -7,17 +7,28 @@
  *   - timestamp + random suffix ensures filename uniqueness without
  *     needing a uuid library
  *
- * Returns a public URL. The storage bucket "asset-photos" is assumed to
- * exist and have public-read policies (set up in iter-13ish for asset
- * photo upload). New paths under it inherit those policies automatically.
+ * Returns a public URL. The bucket name resolves from
+ *   process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET
+ * if set, otherwise defaults to "asset-photos". This lets you override
+ * the bucket without code changes by setting the env var in Vercel.
  *
- * Errors thrown bubble up to the caller — typically CameraCapture, which
- * surfaces them in the error overlay.
+ * If the bucket doesn't exist or isn't public, the upload will fail with
+ * a "Bucket not found" or "row violates" RLS error. The error surfaced
+ * to the user explicitly names the bucket it tried so you can verify
+ * the configuration in Supabase Dashboard → Storage.
  */
 
 import { getSupabaseClient } from "./client";
 
-const BUCKET = "asset-photos";
+/**
+ * Bucket name resolution. Reads from NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET
+ * env var (settable in Vercel without code change) and falls back to
+ * "photos" — the actual bucket name in our Supabase project.
+ *
+ * If you ever rename the Supabase bucket, either update this default or
+ * set the env var to override without code changes.
+ */
+const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "photos";
 
 export async function uploadPhoto(
   blob: Blob,
@@ -42,8 +53,16 @@ export async function uploadPhoto(
     });
 
   if (error) {
-    // Surface a clean message to the user without leaking internals.
-    console.error("[uploadPhoto] failed:", error);
+    // Surface a helpful message that names the bucket being attempted —
+    // makes "Bucket not found" actionable without digging through logs.
+    console.error("[uploadPhoto] failed:", { bucket: BUCKET, path, error });
+    if (error.message?.toLowerCase().includes("bucket")) {
+      throw new Error(
+        `Bucket "${BUCKET}" not found in Supabase Storage. ` +
+        `Create it and mark it Public, or set ` +
+        `NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET in Vercel env vars.`
+      );
+    }
     throw new Error(error.message || "Upload failed.");
   }
 
@@ -52,3 +71,4 @@ export async function uploadPhoto(
   const { data: { publicUrl } } = sb.storage.from(BUCKET).getPublicUrl(path);
   return publicUrl;
 }
+

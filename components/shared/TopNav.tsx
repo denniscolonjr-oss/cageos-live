@@ -43,10 +43,17 @@ export default function TopNav() {
     router.push("/");
   }
 
+  /**
+   * Workspace switcher label. Shown in the nav button on the right.
+   * On mobile: compact form to avoid overflow on iPhone-sized viewports.
+   *   Demo mode → "DEMO" (just the badge)
+   *   Real workspace → first 8 chars of orgName + ellipsis, no location subtitle
+   * On desktop: full label with org location.
+   */
   const orgLabel = mode === "demo"
-    ? (isMobile ? "MMG · DEMO" : "MMG Production · DEMO")
+    ? (isMobile ? "DEMO" : "MMG Production · DEMO")
     : (isMobile
-        ? `${data.orgName.length > 10 ? data.orgName.slice(0, 10) + "…" : data.orgName}`
+        ? (data.orgName.length > 8 ? data.orgName.slice(0, 8) + "…" : data.orgName)
         : `${data.orgName} · ${data.orgLocation}`);
 
   function handleSwitch(m: "user" | "demo") {
@@ -79,11 +86,23 @@ export default function TopNav() {
         )}
       </Link>
 
-      {/* Tabs */}
+      {/*
+       * Tabs container. On mobile, allows horizontal scroll AND shrink so it
+       * doesn't push the workspace switcher and bell off the right edge of
+       * narrow phones. The minWidth: 0 + flexShrink: 1 combo lets flexbox
+       * actually compress this child when total space is constrained — without
+       * those, the tabs default to their content width and overflow the nav.
+       */}
       <div className={isMobile ? "scroll-x" : ""} style={{
         display: "flex", gap: 2, background: "var(--s1)", border: "1px solid var(--b1)",
         borderRadius: 7, padding: 3,
-        flexShrink: isMobile ? 1 : 0, minWidth: 0, maxWidth: "100%",
+        flexShrink: isMobile ? 1 : 0,
+        minWidth: 0,
+        maxWidth: "100%",
+        overflowX: isMobile ? "auto" : "visible",
+        // Hide the scrollbar on mobile so the tabs row looks clean. Users
+        // can still swipe to scroll.
+        scrollbarWidth: "none",
       }}>
         {TABS.map(t => {
           const active = path.startsWith(t.href);

@@ -20,7 +20,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ height: "100vh", overflow: "hidden" }}>
+      {/*
+       * Body locked to the visible viewport so the app shell (TopNav + sticky
+       * content) can fit a single scroll context inside the dashboard / kiosk
+       * / detail routes. Uses `100dvh` (dynamic viewport height) rather than
+       * `100vh` to handle iOS Safari's collapsing URL bar correctly — on
+       * iPhone, `100vh` is the height of the viewport WITHOUT subtracting
+       * the bottom browser UI, so kiosk Confirm buttons end up off-screen.
+       * `100dvh` shrinks to the actually visible area. `100vh` stays as a
+       * fallback for older browsers that don't support dvh (pre-2022 Safari).
+       */}
+      <body style={{ height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <AuthProvider>
           <WorkspaceProvider>
             {children}

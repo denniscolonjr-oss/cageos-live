@@ -123,8 +123,14 @@ export default function KioskPage() {
     resetReturn();
   }
 
-  // Derive demo users from workspace profiles (first 4)
-  const kioskUsers: KioskUser[] = data.profiles.slice(0, 4).map(p => ({
+  /**
+   * All workspace profiles shown as tappable user cards on step 1 of the
+   * kiosk flow. Previously sliced to the first 4 for the demo seed — that
+   * cap is gone now so teams of any size show all members. The render
+   * below uses a responsive grid that wraps; for very large teams the
+   * container scrolls vertically inside the kiosk Card.
+   */
+  const kioskUsers: KioskUser[] = data.profiles.map(p => ({
     name: p.name, role: p.role, initials: p.initials, color: p.color, isGuest: p.isGuest,
   }));
 
@@ -155,7 +161,7 @@ export default function KioskPage() {
 
   if (!hydrated) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
           Loading workspace...
@@ -168,7 +174,7 @@ export default function KioskPage() {
     const teamReady = data.profiles.length > 0;
     const kitsReady = data.kits.length > 0;
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "20px 14px" : "40px 28px", background: "var(--bg)" }}>
           <div style={{ maxWidth: 620, margin: "0 auto" }}>
@@ -202,7 +208,7 @@ export default function KioskPage() {
   // ================== MENU ==================
   if (flow === "menu") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 16 : 24, background: "var(--bg)" }}>
           <div style={{ width: "100%", maxWidth: 540, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -251,7 +257,7 @@ export default function KioskPage() {
   // ================== RETURN FLOW ==================
   if (flow === "return") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: isMobile ? "stretch" : "center", justifyContent: "center", padding: isMobile ? 0 : 24, background: "var(--bg)", overflow: "hidden" }}>
           <div style={{
@@ -271,7 +277,11 @@ export default function KioskPage() {
                     <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 20 : 18, fontWeight: 700, marginBottom: 6 }}>Who&apos;s returning gear?</div>
                     <div style={{ fontSize: 13, color: "var(--t2)" }}>Pick your name to see what you&apos;ve got out.</div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 10 : 7 }}>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
+                    gap: isMobile ? 10 : 7,
+                  }}>
                     {kioskUsers.map(u => (
                       <button key={u.name} onClick={() => setReturnUser(u)} style={{
                         background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8,
@@ -379,7 +389,7 @@ export default function KioskPage() {
 
   // ================== CHECKOUT FLOW ==================
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
       <TopNav />
       <div style={{ flex: 1, display: "flex", alignItems: isMobile ? "stretch" : "center", justifyContent: "center", padding: isMobile ? 0 : 24, background: "var(--bg)", overflow: "hidden" }}>
         <div style={{
@@ -416,7 +426,17 @@ export default function KioskPage() {
                     </div>
                   </>
                 )}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 10 : 7 }}>
+                {/*
+                 * User picker grid. Responsive columns: 2 columns on mobile
+                 * (touch-target friendly), 3 on wider viewports to keep
+                 * larger team rosters from becoming an excessive vertical
+                 * scroll. No member cap — every workspace profile renders.
+                 */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
+                  gap: isMobile ? 10 : 7,
+                }}>
                   {kioskUsers.map(u => (
                     <button key={u.name} onClick={() => selectUser(u)} style={{
                       background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8,
