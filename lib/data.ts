@@ -116,7 +116,7 @@ export interface UserProfile {
   sopsContributed: number;
   expertise: Expertise[];
   history: HistoryEntry[];
-  frequentCollaborators: { name: string; initials: string; color: string; sharedShoots: number }[];
+  frequentCollaborators: { name: string; initials: string; color: string; sharedProjects: number }[];
   certifications: { name: string; issuedAt: string; expiresAt: string | null }[];
   /** Supabase auth user id, set when this profile is linked to a real account.
    *  Used to find the current user's profile and auto-create on first join. */
@@ -295,9 +295,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-008", date: "Mar 8, 2026", shoot: "Library Portrait Series", client: "Library of Congress", durationHours: 5, kitIds: ["MMG-0000576"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 27 },
-      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 19 },
-      { name: "Clay Foltz", initials: "CF", color: "#a78bfa", sharedShoots: 8 }
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedProjects: 27 },
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedProjects: 19 },
+      { name: "Clay Foltz", initials: "CF", color: "#a78bfa", sharedProjects: 8 }
     ],
     certifications: [
       { name: "Sony Cinema Line Certified Operator", issuedAt: "Mar 2023", expiresAt: "Mar 2026" },
@@ -338,9 +338,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-106", date: "Mar 18, 2026", shoot: "Documentary Interview", client: "Dept of Interior", durationHours: 9, kitIds: ["MMG-0000578","MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 19 },
-      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 14 },
-      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedShoots: 11 }
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedProjects: 19 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedProjects: 14 },
+      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedProjects: 11 }
     ],
     certifications: [
       { name: "ETC Lighting Console — Level 1", issuedAt: "Oct 2023", expiresAt: null }
@@ -378,9 +378,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-205", date: "Apr 2, 2026", shoot: "Podcast Series Launch", client: "Internal", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 27 },
-      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 16 },
-      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedShoots: 14 }
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedProjects: 27 },
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedProjects: 16 },
+      { name: "Kevin Silverman", initials: "KS", color: "#f59e0b", sharedProjects: 14 }
     ],
     certifications: [
       { name: "Shure Wireless Mastery", issuedAt: "May 2023", expiresAt: null },
@@ -417,8 +417,8 @@ export const PROFILES: UserProfile[] = [
       { id: "h-303", date: "Apr 1, 2026", shoot: "Theater Event Lighting", client: "Coolidge", durationHours: 9, kitIds: ["MMG-0000584"], conditionOnReturn: "fair", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 8 },
-      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 6 }
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedProjects: 8 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedProjects: 6 }
     ],
     certifications: []
   },
@@ -453,9 +453,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-504", date: "Mar 21, 2026", shoot: "Corporate Keynote", client: "Kenvue", durationHours: 7, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: false, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 22 },
-      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 18 },
-      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 12 }
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedProjects: 22 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedProjects: 18 },
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedProjects: 12 }
     ],
     certifications: [
       { name: "Dante Level 2", issuedAt: "Jan 2022", expiresAt: null },
@@ -492,9 +492,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-603", date: "Mar 25, 2026", shoot: "Smithsonian Audio Booth", client: "Smithsonian", durationHours: 8, kitIds: ["MMG-0000577"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 19 },
-      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedShoots: 14 },
-      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 12 }
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedProjects: 19 },
+      { name: "Brittany Smith", initials: "BS", color: "#4ade80", sharedProjects: 14 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedProjects: 12 }
     ],
     certifications: [
       { name: "Yamaha Digital Mixer Certified", issuedAt: "Feb 2020", expiresAt: null },
@@ -532,8 +532,8 @@ export const PROFILES: UserProfile[] = [
       { id: "h-703", date: "Mar 27, 2026", shoot: "Documentary Rough Cut", client: "NFL Films", durationHours: 12, kitIds: [], conditionOnReturn: "good", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedShoots: 18 },
-      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedShoots: 11 }
+      { name: "Thomas Odom", initials: "TO", color: "#4ade80", sharedProjects: 18 },
+      { name: "Tom Nauer", initials: "TN", color: "#a78bfa", sharedProjects: 11 }
     ],
     certifications: [
       { name: "Avid Media Composer — Editor", issuedAt: "Jul 2022", expiresAt: null },
@@ -570,9 +570,9 @@ export const PROFILES: UserProfile[] = [
       { id: "h-803", date: "Apr 5, 2026", shoot: "Capitol Hill Coverage Lead", client: "Capitol Hill", durationHours: 8, kitIds: ["MMG-0000578"], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedShoots: 22 },
-      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedShoots: 22 },
-      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 19 }
+      { name: "Dennis Colon Jr.", initials: "DC", color: "#60a5fa", sharedProjects: 22 },
+      { name: "Alejandro Badani", initials: "AB", color: "#f59e0b", sharedProjects: 22 },
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedProjects: 19 }
     ],
     certifications: [
       { name: "PMP — Project Management Professional", issuedAt: "Mar 2022", expiresAt: "Mar 2027" },
@@ -609,8 +609,8 @@ export const PROFILES: UserProfile[] = [
       { id: "h-903", date: "Mar 31, 2026", shoot: "Feature Doc Dailies", client: "NFL Films", durationHours: 14, kitIds: [], conditionOnReturn: "excellent", notesAdded: true, incident: null }
     ],
     frequentCollaborators: [
-      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedShoots: 5 },
-      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedShoots: 9 }
+      { name: "Chris Kilcullen", initials: "CK", color: "#5aa0f0", sharedProjects: 5 },
+      { name: "Joon Yi", initials: "JY", color: "#5aa0f0", sharedProjects: 9 }
     ],
     certifications: [
       { name: "AJA KiPro Certified Operator", issuedAt: "Jun 2023", expiresAt: null },
