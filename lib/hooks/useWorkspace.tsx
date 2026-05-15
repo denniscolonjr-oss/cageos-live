@@ -1549,7 +1549,7 @@ function useWorkspaceImpl() {
       };
       return appendEvent(next, "return",
         `${active.user} returned ${active.kits.length === 1 ? active.kits[0] : `${active.kits.length} kits`}`,
-        { actor: active.user, detail: `from ${active.shoot}` });
+        { actor: active.user, detail: `from ${active.project ?? (active as { shoot?: string }).shoot ?? "—"}` });
     });
   }, [isReadOnly, updateUserData]);
 
