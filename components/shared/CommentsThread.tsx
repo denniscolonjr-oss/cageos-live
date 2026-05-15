@@ -19,7 +19,7 @@
  *   <CommentsThread parentType="asset" parentId={asset.id} />
  */
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -390,6 +390,19 @@ function NewCommentInput({
       />
 
       {/*
+       * Formatting hint. Inline subset of markdown supported by the
+       * renderBodyWithMentions function. Kept minimal so the input doesn't
+       * feel cluttered — full reference would belong in a help popover if
+       * we ever build one.
+       */}
+      <div style={{
+        marginTop: 6, fontFamily: "'DM Mono',monospace", fontSize: 10,
+        color: "var(--t3)", letterSpacing: "0.02em",
+      }}>
+        Formatting: <strong style={{ color: "var(--t2)" }}>**bold**</strong> · <em style={{ color: "var(--t2)" }}>*italic*</em> · <code style={{ color: "var(--t2)" }}>`code`</code> · <span style={{ color: "var(--t2)" }}>[link](url)</span>
+      </div>
+
+      {/*
        * Mention autocomplete dropdown.
        *
        * Rendered via portal directly to document.body so it can escape any
@@ -545,19 +558,135 @@ function formatRelative(iso: string): string {
  * Splits on @TOKEN and wraps mentions in styled spans. Doesn't try to do
  * full markdown rendering — that can come later if needed.
  */
+/**
+ * Render a comment body with inline markdown + @mention highlighting.
+ *
+ * Supports a small, safe subset of markdown:
+ *   **bold**           → <strong>
+ *   *italic*           → <em>
+ *   `code`             → <code> (monospace, subtle bg)
+ *   [label](https://…) → <a> opening in a new tab
+ *
+ * All output is rendered as native React elements (no dangerouslySetInnerHTML)
+ * so there's no XSS surface — even if a user types `<script>` it ends up as
+ * literal text.
+ *
+ * Link safety:
+ *   - Only http://, https://, and mailto: schemes are allowed. Other schemes
+ *     (javascript:, data:, etc.) render as plain text to prevent XSS via URL
+ *     injection.
+ *   - All links get rel="noopener noreferrer" and target="_blank".
+ *
+ * Algorithm: each line is tokenized in a single left-to-right pass that
+ * consumes the leading delimiter when one is found, otherwise advances by
+ * one character. Nesting isn't supported (so **bold *italic* bold** doesn't
+ * nest the italic — works as flat tokens), which is fine for a comments
+ * field. Lines are rendered with <br/> between them to preserve newlines.
+ */
 function renderBodyWithMentions(body: string): React.ReactNode {
-  const parts = body.split(/(@[A-Z0-9]{1,4}\b)/g);
-  return parts.map((p, i) =>
-    p.match(/^@[A-Z0-9]+$/) ? (
-      <span key={i} style={{
+  const lines = body.split("\n");
+  return lines.map((line, lineIdx) => (
+    <React.Fragment key={lineIdx}>
+      {tokenizeInline(line)}
+      {lineIdx < lines.length - 1 && <br />}
+    </React.Fragment>
+  ));
+}
+
+// Patterns the tokenizer looks for, in priority order. Each match returns
+// either a string (literal text consumed) or a React element. Order matters:
+// `**bold**` must be tried before `*italic*` since the bold delimiter looks
+// like two italic delimiters.
+const INLINE_PATTERNS: {
+  regex: RegExp;
+  render: (match: RegExpExecArray, key: string) => React.ReactNode;
+}[] = [
+  // Bold: **text**
+  {
+    regex: /^\*\*([^*\n]+?)\*\*/,
+    render: (m, key) => <strong key={key}>{m[1]}</strong>,
+  },
+  // Italic: *text*
+  {
+    regex: /^\*([^*\n]+?)\*/,
+    render: (m, key) => <em key={key}>{m[1]}</em>,
+  },
+  // Inline code: `text`
+  {
+    regex: /^`([^`\n]+?)`/,
+    render: (m, key) => (
+      <code key={key} style={{
+        fontFamily: "'DM Mono',monospace",
+        fontSize: "0.9em",
+        background: "var(--s2)",
+        padding: "1px 5px",
+        borderRadius: 3,
+        border: "1px solid var(--b1)",
+      }}>{m[1]}</code>
+    ),
+  },
+  // Link: [label](url)
+  {
+    regex: /^\[([^\]\n]+?)\]\(([^)\s]+?)\)/,
+    render: (m, key) => {
+      const url = m[2];
+      // Allowlist safe schemes only. Anything else renders as plain text
+      // so a user can't slip in javascript:alert(...) etc.
+      const safe = /^(https?:\/\/|mailto:)/i.test(url);
+      if (!safe) return <span key={key}>{m[0]}</span>;
+      return (
+        <a key={key} href={url} target="_blank" rel="noopener noreferrer" style={{
+          color: "var(--acc)", textDecoration: "underline",
+        }}>{m[1]}</a>
+      );
+    },
+  },
+  // Mention: @INITIALS (1-4 alphanum chars)
+  {
+    regex: /^@([A-Z0-9]{1,4})\b/,
+    render: (m, key) => (
+      <span key={key} style={{
         color: "var(--acc)", fontWeight: 600,
         background: "rgba(236,255,112,0.08)",
         padding: "1px 4px", borderRadius: 3,
-      }}>{p}</span>
-    ) : (
-      <span key={i}>{p}</span>
-    )
-  );
+      }}>@{m[1]}</span>
+    ),
+  },
+];
+
+function tokenizeInline(line: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let remaining = line;
+  let textBuffer = "";
+  let tokenIdx = 0;
+
+  while (remaining.length > 0) {
+    let matched = false;
+    for (const pattern of INLINE_PATTERNS) {
+      const m = pattern.regex.exec(remaining);
+      if (m && m.index === 0) {
+        // Flush any plain text we've been accumulating.
+        if (textBuffer) {
+          out.push(<span key={`t${tokenIdx++}`}>{textBuffer}</span>);
+          textBuffer = "";
+        }
+        out.push(pattern.render(m, `p${tokenIdx++}`));
+        remaining = remaining.slice(m[0].length);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      // No pattern matched at this position — consume one char as plain text
+      // and try again from the next position.
+      textBuffer += remaining[0];
+      remaining = remaining.slice(1);
+    }
+  }
+  if (textBuffer) {
+    out.push(<span key={`t${tokenIdx++}`}>{textBuffer}</span>);
+  }
+  return out;
 }
 
 /**

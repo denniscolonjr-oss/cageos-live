@@ -668,3 +668,51 @@ export async function createWorkspace(args: {
 
   return { ok: true, workspaceId };
 }
+
+/**
+ * deleteWorkspace — permanently delete a workspace.
+ *
+ * RLS policy (set up around iter-16i) only permits Owners to execute the
+ * delete; non-owners get a permission error returned by Supabase. We don't
+ * pre-check the role here — the RLS layer is the source of truth, and
+ * pre-checking creates a TOCTOU race where the role could change between
+ * check and delete.
+ *
+ * What gets deleted:
+ *   - The workspaces row (and via FK cascade: workspace_members, all
+ *     workspace-scoped data referenced by FK)
+ *   - Storage objects under <workspaceId>/* in the photos bucket are NOT
+ *     auto-deleted. Storage cleanup is a future cost optimization — for now
+ *     orphaned photos stay until manually purged.
+ *
+ * Caller responsibility:
+ *   - Switch to a different workspace (or onboarding) AFTER the delete
+ *     succeeds, since the active workspace will no longer exist.
+ *
+ * @returns Promise<{ ok: boolean; error?: string }>
+ */
+export async function deleteWorkspace(workspaceId: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured." };
+
+  const { error } = await sb
+    .from("workspaces")
+    .delete()
+    .eq("id", workspaceId);
+
+  if (error) {
+    console.error("[deleteWorkspace] failed:", error);
+    // Surface a friendlier message for the most common failure (non-owner).
+    const isPermission = error.message?.toLowerCase().includes("policy")
+      || error.message?.toLowerCase().includes("permission")
+      || error.code === "42501";
+    return {
+      ok: false,
+      error: isPermission
+        ? "Only the workspace owner can delete a workspace."
+        : error.message || "Delete failed.",
+    };
+  }
+
+  return { ok: true };
+}

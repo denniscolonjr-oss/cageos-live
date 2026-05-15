@@ -20,7 +20,9 @@ import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
+import { deleteWorkspace } from "@/lib/supabase/membership";
 import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
+import { toast } from "@/components/ui/Toast";
 import type { Shoot } from "@/lib/hooks/workspaceTypes";
 import type { Asset } from "@/lib/data";
 
@@ -57,6 +59,15 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  /**
+   * Delete workspace modal. Only opens for owners via the Danger Zone card
+   * at the bottom of Settings. Modal-state lives on the dashboard rather
+   * than its own component so it shares the toast + router + workspace
+   * switching plumbing already wired up here.
+   */
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   function clearColumnFilter(field: string) {
     setColumnFilters(prev => {
@@ -1217,6 +1228,44 @@ export default function DashboardPage() {
                   </div>
                 </Card>
               )}
+
+              {/*
+               * Danger Zone — Delete the entire workspace.
+               *
+               * Different from Reset:
+               *   - Reset wipes the workspace's DATA but keeps the workspace itself
+               *     and your membership. Useful when starting over with the same
+               *     team but a clean inventory.
+               *   - Delete REMOVES THE WORKSPACE ENTIRELY. All members lose access.
+               *     The owner gets switched to another workspace or sent to /onboarding.
+               *
+               * Only the owner sees this. Real-mode only (you can't delete the demo
+               * workspace — it's seed data shared across users).
+               */}
+              {!isReadOnly && role === "owner" && mode === "user" && (
+                <Card>
+                  <div style={{ padding: 20, borderLeft: "3px solid var(--red)", marginLeft: -1 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4, color: "var(--red)" }}>
+                      Danger zone: Delete workspace
+                    </div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.6 }}>
+                      Permanently delete <strong style={{ color: "var(--t1)" }}>{data.orgName}</strong> and all of its data — assets, kits, team members, projects, audit log, comments, photos. Everyone in the workspace loses access immediately. This cannot be undone.
+                    </div>
+                    <button
+                      onClick={() => {
+                        setDeleteConfirmText("");
+                        setDeleteModalOpen(true);
+                      }}
+                      style={{
+                        padding: "10px 16px", borderRadius: 6,
+                        background: "var(--red)", color: "var(--bg)",
+                        border: "none", cursor: "pointer",
+                        fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
+                        minHeight: 40,
+                      }}>Delete this workspace</button>
+                  </div>
+                </Card>
+              )}
             </div>
           )}
 
@@ -1359,6 +1408,115 @@ export default function DashboardPage() {
       <FlagDetailModal open={!!selectedFlag} onClose={() => setSelectedFlagId(null)} flag={selectedFlag} />
       {/* Self-gates on pendingSetup; renders nothing if profile already complete */}
       <FirstTimeProfileModal />
+
+      {/*
+       * Delete workspace confirmation modal. Owner-only. Requires the user to
+       * type the workspace name exactly before the destructive button enables —
+       * GitHub-style "type-the-name" pattern protects against muscle-memory
+       * clicks. On success, refresh workspaces + switch to another (or send
+       * to /onboarding if this was the last one).
+       */}
+      {deleteModalOpen && (
+        <div
+          onClick={() => !deleting && setDeleteModalOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20, backdropFilter: "blur(6px)",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--s1)",
+              border: "1px solid var(--red)",
+              borderRadius: 12,
+              maxWidth: 480, width: "100%", padding: 28,
+            }}
+          >
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 700, color: "var(--red)", marginBottom: 8 }}>
+              Delete workspace?
+            </div>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 20 }}>
+              You&apos;re about to permanently delete <strong style={{ color: "var(--t1)" }}>{data.orgName}</strong>. Every team member, asset, kit, project, comment, photo, and audit entry will be gone. <strong style={{ color: "var(--red)" }}>This cannot be undone.</strong>
+            </div>
+
+            <label style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" }}>
+              Type the workspace name to confirm
+            </label>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 8 }}>
+              Workspace name: <span style={{ color: "var(--t1)", fontWeight: 700 }}>{data.orgName}</span>
+            </div>
+            <input
+              autoFocus
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder={data.orgName}
+              disabled={deleting}
+              style={{
+                width: "100%", padding: "10px 12px",
+                background: "var(--s2)", border: "1px solid var(--b2)",
+                borderRadius: 6, color: "var(--t1)",
+                fontFamily: "'DM Mono',monospace", fontSize: 13,
+                outline: "none", marginBottom: 18,
+                boxSizing: "border-box",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                style={{
+                  padding: "10px 16px", borderRadius: 6,
+                  background: "transparent", border: "1px solid var(--b2)",
+                  color: "var(--t1)", cursor: deleting ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+                  opacity: deleting ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleting || deleteConfirmText !== data.orgName}
+                onClick={async () => {
+                  if (!auth.activeWorkspaceId) return;
+                  setDeleting(true);
+                  const result = await deleteWorkspace(auth.activeWorkspaceId);
+                  if (!result.ok) {
+                    toast("Delete failed", { variant: "error", detail: result.error });
+                    setDeleting(false);
+                    return;
+                  }
+                  toast("Workspace deleted", { detail: `${data.orgName} is gone.` });
+                  // Refresh workspace list. If user has another workspace, switch
+                  // to it; otherwise route to onboarding. AuthContext's
+                  // refreshWorkspaces handles the active-id reconciliation.
+                  await auth.refreshWorkspaces();
+                  const remaining = auth.workspaces.filter(w => w.id !== auth.activeWorkspaceId);
+                  if (remaining.length > 0) {
+                    auth.setActiveWorkspaceId(remaining[0].id);
+                    router.push("/dashboard");
+                  } else {
+                    router.push("/onboarding");
+                  }
+                }}
+                style={{
+                  padding: "10px 18px", borderRadius: 6,
+                  background: deleteConfirmText === data.orgName && !deleting ? "var(--red)" : "var(--s3)",
+                  color: deleteConfirmText === data.orgName && !deleting ? "var(--bg)" : "var(--t3)",
+                  border: "none",
+                  cursor: deleteConfirmText === data.orgName && !deleting ? "pointer" : "not-allowed",
+                  fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
+                }}
+              >
+                {deleting ? "Deleting..." : "Delete workspace"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

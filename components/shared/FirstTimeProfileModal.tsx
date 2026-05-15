@@ -23,27 +23,85 @@ import { roleLabel } from "@/lib/supabase/permissions";
 
 const COLORS = ["#7ab5f5", "#fbc25c", "#6dee9f", "#b89dfc", "#5aa0f0", "#ff9d57", "#ecff70", "#ff7a7a"];
 
+/**
+ * localStorage key for the user's cached "default profile" — the values they
+ * filled in the FIRST time they did FirstTimeProfile setup. Used to pre-fill
+ * the form when the user joins a NEW workspace, so they don't have to retype
+ * name/initials/color/department/phone every time.
+ *
+ * Scoped by Supabase user id so different users on the same browser don't
+ * see each other's defaults. We store a stringified JSON blob:
+ *   { name, initials, color, department, phone }
+ *
+ * Updated on every successful completeMyProfile call. If the user changes
+ * their name/initials/color in one workspace, the next workspace they join
+ * gets pre-filled with the LATEST values.
+ */
+const PROFILE_DEFAULTS_KEY_PREFIX = "cageos:profile-defaults:";
+
+interface ProfileDefaults {
+  name?: string;
+  initials?: string;
+  color?: string;
+  department?: string;
+  phone?: string;
+}
+
+function loadProfileDefaults(userId: string): ProfileDefaults | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_DEFAULTS_KEY_PREFIX + userId);
+    if (!raw) return null;
+    return JSON.parse(raw) as ProfileDefaults;
+  } catch {
+    // Corrupted JSON or storage unavailable — fall through to a clean slate.
+    return null;
+  }
+}
+
+function saveProfileDefaults(userId: string, defaults: ProfileDefaults) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PROFILE_DEFAULTS_KEY_PREFIX + userId, JSON.stringify(defaults));
+  } catch {
+    // Storage may be full or disabled (private browsing). Silent — pre-fill
+    // just won't work next time, which is a non-fatal degradation.
+  }
+}
+
 export default function FirstTimeProfileModal() {
   const { user, currentRole } = useAuth();
   const { data, completeMyProfile } = useWorkspace();
   const myProfile = user ? data.profiles.find(p => p.userId === user.id) : null;
 
-  const [name, setName] = useState("");
-  const [initials, setInitials] = useState("");
-  const [color, setColor] = useState(COLORS[0]);
-  const [department, setDepartment] = useState("");
+  /**
+   * Pre-fill defaults from the user's last completed profile, if any. Read
+   * synchronously via useState initializer so the form is populated on the
+   * first render (no flicker from "" → "Dennis Colon" on mount).
+   *
+   * Empty string fallbacks when nothing is cached or user is unauthenticated.
+   */
+  const cached = user ? loadProfileDefaults(user.id) : null;
+
+  const [name, setName] = useState(cached?.name ?? "");
+  const [initials, setInitials] = useState(cached?.initials ?? "");
+  const [color, setColor] = useState(cached?.color ?? COLORS[0]);
+  const [department, setDepartment] = useState(cached?.department ?? "");
   /**
    * Optional phone number. Surfaces on the active checkouts page so the
    * shop manager can text/call the person who has gear out. Free-form
    * string — no validation beyond max length, since users may include
    * extensions, regional formats, country codes, etc.
    */
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(cached?.phone ?? "");
   // Tracks whether the user has manually edited initials. Used to suppress
   // the auto-suggest from name once they've typed their own. MUST be declared
   // here above any early returns — moving it below `if (!myProfile?.pendingSetup)`
   // crashes React with error #310 (rendered more hooks than previous render).
-  const [initialsTouched, setInitialsTouched] = useState(false);
+  //
+  // Initialize to TRUE when we have cached initials, so the auto-suggest
+  // doesn't overwrite the cached value when the user touches the name field.
+  const [initialsTouched, setInitialsTouched] = useState(!!cached?.initials);
 
   // Only render if there's a profile awaiting setup. Otherwise stay invisible.
   if (!myProfile?.pendingSetup) return null;
@@ -67,13 +125,30 @@ export default function FirstTimeProfileModal() {
 
   function handleSubmit() {
     if (!valid) return;
+    const trimmedName = name.trim();
+    const upperInitials = initials.toUpperCase();
+    const trimmedDept = department.trim();
+    const trimmedPhone = phone.trim() || undefined;
+
     completeMyProfile({
-      name: name.trim(),
-      initials: initials.toUpperCase(),
+      name: trimmedName,
+      initials: upperInitials,
       color,
-      department: department.trim(),
-      phone: phone.trim() || undefined,
+      department: trimmedDept,
+      phone: trimmedPhone,
     });
+
+    // Cache for next workspace join — written AFTER successful submit so a
+    // user who closes the tab mid-setup doesn't pollute their defaults.
+    if (user) {
+      saveProfileDefaults(user.id, {
+        name: trimmedName,
+        initials: upperInitials,
+        color,
+        department: trimmedDept,
+        phone: trimmedPhone,
+      });
+    }
   }
 
   // Check for initials collision in the workspace

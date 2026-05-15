@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { formatShootRange } from "@/lib/timezone";
 import { toast } from "@/components/ui/Toast";
 import AssignToShootModal from "@/components/forms/AssignToShootModal";
@@ -26,18 +27,50 @@ const COLOR_OPTIONS = [
 export default function ProfileDetailPage({ params }: { params: Promise<{ initials: string }> }) {
   const isMobile = useIsMobile();
   const router = useRouter();
+  const auth = useAuth();
   const { data, hydrated, isReadOnly, updateProfile } = useWorkspace();
   const { initials } = use(params);
   const [assignOpen, setAssignOpen] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  if (!hydrated) {
+  /**
+   * Signed-out detection. When the user signs out while on a profile detail
+   * page, `data.profiles` empties out and `notFound()` would fire before the
+   * redirect-to-login can take effect — landing the user on a 404 page
+   * instead. This guard catches that and routes cleanly to /login. Same
+   * pattern as iter-17g (asset page) and iter-17h (kit page).
+   *
+   * The unauthenticated demo flow has no session, so this only matches a
+   * genuine signed-out state for an authenticated app.
+   */
+  const signedOut = auth.supabaseEnabled && !auth.loading && !auth.session;
+  useEffect(() => {
+    if (signedOut) router.replace("/login");
+  }, [signedOut, router]);
+
+  if (!hydrated || auth.loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
         <TopNav />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
           Loading workspace...
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * Signed-out — show a brief loading state while the redirect-to-login
+   * fires from the useEffect above. Without this we'd notFound() below on
+   * the empty profile list and land on a 404 page.
+   */
+  if (signedOut) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
+        <TopNav />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+          Signing out...
         </div>
       </div>
     );
