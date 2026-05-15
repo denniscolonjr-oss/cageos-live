@@ -30,7 +30,14 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
    * the field rename.
    */
   const migratedCheckouts = (legacy.checkouts ?? []).map(c => {
-    const anyc = c as Record<string, unknown>;
+    /*
+     * Type-cast through `unknown` because `CheckoutRecord | ActiveCheckout`
+     * doesn't structurally overlap with `Record<string, unknown>` — TS demands
+     * the two-step cast to acknowledge we're doing a "trust me, this object
+     * may have unknown legacy fields" lookup. The actual field reads are
+     * safe because we check for `undefined` before using values.
+     */
+    const anyc = c as unknown as Record<string, unknown>;
     if (anyc.project === undefined && anyc.shoot !== undefined) {
       return {
         ...c,
