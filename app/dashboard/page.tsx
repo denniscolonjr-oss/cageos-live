@@ -361,14 +361,14 @@ export default function DashboardPage() {
                           <span className="animate-live" style={{ width: 5, height: 5, background: "var(--green)", borderRadius: "50%", display: "inline-block" }} />LIVE
                         </div>
                       </div>
+                      {/*
+                       * Active checkout row link. Routes to the checkout
+                       * DETAIL page added in iter-21 so the user sees full
+                       * context (kits, photos, condition, contact info,
+                       * comments) instead of being bounced to the person's
+                       * profile.
+                       */}
                       {activeCheckouts.map(co => (
-                        {/*
-                         * Active checkout row link. Routes to the checkout
-                         * DETAIL page added in iter-21 so the user sees full
-                         * context (kits, photos, condition, contact info,
-                         * comments) instead of being bounced to the person's
-                         * profile.
-                         */}
                         <Link key={co.id} href={`/checkouts/${encodeURIComponent(co.id)}`} style={{ textDecoration: "none", color: "inherit" }}>
                           <div style={{
                             padding: isMobile ? "13px 16px" : "11px 16px", borderBottom: "1px solid var(--b1)",
