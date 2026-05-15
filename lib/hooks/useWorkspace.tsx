@@ -1429,6 +1429,14 @@ function useWorkspaceImpl() {
     shootTitle: string;
     shootId?: string;
     dueBackHoursFromNow?: number;
+    /**
+     * Condition documentation captured at the kiosk's step 4. Both fields
+     * optional — the user can skip the photos and/or condition rating and
+     * still complete a checkout. Photos are Supabase Storage public URLs
+     * (already uploaded by CameraCapture before this call).
+     */
+    intakePhotoUrls?: string[];
+    intakeCondition?: "excellent" | "good" | "fair" | "damaged" | "broken";
   }): ActiveCheckout | null => {
     if (isReadOnly) return null;
     const dueBackHours = args.dueBackHoursFromNow ?? 8;
@@ -1459,6 +1467,8 @@ function useWorkspaceImpl() {
         assetIds: allComponentIds,
         status: "active",
         isGuest: args.user.isGuest,
+        intakePhotoUrls: args.intakePhotoUrls && args.intakePhotoUrls.length > 0 ? args.intakePhotoUrls : undefined,
+        intakeCondition: args.intakeCondition,
       };
       createdCheckout = checkout;
 
@@ -1479,9 +1489,15 @@ function useWorkspaceImpl() {
   }, [isReadOnly, updateUserData]);
 
   /**
-   * Return a checkout — by id. Reverses the checkoutKits effects.
+   * Return a checkout — by id. Reverses the checkoutKits effects. Accepts
+   * optional return-side condition documentation (photos + rating) which
+   * gets attached to the same ActiveCheckout row alongside the intake data
+   * already there from the original checkout.
    */
-  const returnCheckout = useCallback((checkoutId: string) => {
+  const returnCheckout = useCallback((checkoutId: string, opts?: {
+    returnPhotoUrls?: string[];
+    returnCondition?: "excellent" | "good" | "fair" | "damaged" | "broken";
+  }) => {
     if (isReadOnly) return;
     const now = new Date();
     updateUserData(d => {
@@ -1499,7 +1515,13 @@ function useWorkspaceImpl() {
           ? { ...a, status: "in" as const, lastUpdated: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }
           : a),
         checkouts: d.checkouts.map(c => c.id === checkoutId
-          ? ({ ...active, status: "returned" as const, returnedAtISO: now.toISOString() } as ActiveCheckout)
+          ? ({
+              ...active,
+              status: "returned" as const,
+              returnedAtISO: now.toISOString(),
+              returnPhotoUrls: opts?.returnPhotoUrls && opts.returnPhotoUrls.length > 0 ? opts.returnPhotoUrls : undefined,
+              returnCondition: opts?.returnCondition,
+            } as ActiveCheckout)
           : c),
       };
       return appendEvent(next, "return",

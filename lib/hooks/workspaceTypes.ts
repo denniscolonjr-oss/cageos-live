@@ -59,6 +59,18 @@ export interface ActiveCheckout {
   isGuest?: boolean;
   /** ISO timestamp when returned, if returned */
   returnedAtISO?: string;
+  /**
+   * Photos captured at checkout time (kiosk step 4 condition check).
+   * Supabase Storage public URLs. Optional — users can skip the photo
+   * step entirely. Two slots: photo1, photo2. iter-20a.
+   */
+  intakePhotoUrls?: string[];
+  /** Self-reported condition at checkout. Same scale used at return. */
+  intakeCondition?: "excellent" | "good" | "fair" | "damaged" | "broken";
+  /** Photos captured at return / check-in time. iter-20a. */
+  returnPhotoUrls?: string[];
+  /** Self-reported condition at return. */
+  returnCondition?: "excellent" | "good" | "fair" | "damaged" | "broken";
 }
 
 export type AuditCategory =

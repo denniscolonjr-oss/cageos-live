@@ -9,6 +9,8 @@ import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { toast } from "@/components/ui/Toast";
 import type { Shoot, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
 import { formatShootRange } from "@/lib/timezone";
+import { useAuth } from "@/lib/supabase/AuthContext";
+import CameraCapture from "@/components/shared/CameraCapture";
 
 type Flow = "menu" | "checkout" | "return";
 type CheckoutStep = 1 | 2 | 3 | 4 | 5;
@@ -24,13 +26,26 @@ interface KioskUser {
 export default function KioskPage() {
   const isMobile = useIsMobile();
   const { data, hydrated, isReadOnly, checkoutKits, returnCheckout, getBlockingFlags } = useWorkspace();
+  const { activeWorkspaceId } = useAuth();
   const [flow, setFlow] = useState<Flow>("menu");
 
   // Checkout state
   const [step, setStep] = useState<CheckoutStep>(1);
   const [user, setUser] = useState<KioskUser | null>(null);
   const [shoot, setShoot] = useState<Shoot | null>(null);
-  const [photos, setPhotos] = useState<Record<string, boolean>>({});
+  /**
+   * Condition check photos for this checkout/check-in. Keyed by slot id
+   * ("photo1" | "photo2"). Holds the uploaded Supabase Storage public URL
+   * once the user captures + confirms a photo for that slot. Empty = slot
+   * not yet captured. Both slots remain optional throughout the flow.
+   */
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  /**
+   * Which slot is currently being captured. null = camera not open.
+   * When non-null, CameraCapture renders fullscreen until the user confirms,
+   * cancels, or hits the back button.
+   */
+  const [activeCameraSlot, setActiveCameraSlot] = useState<string | null>(null);
   const [rating, setRating] = useState("good");
   const [animDir, setAnimDir] = useState<"right" | "left">("right");
   const [expandedKits, setExpandedKits] = useState<Record<string, boolean>>({});
@@ -79,7 +94,22 @@ export default function KioskPage() {
       return next;
     });
   }
-  function capturePhoto(id: string) { setPhotos(prev => ({ ...prev, [id]: true })); }
+  /** Open the camera overlay for the given slot. The CameraCapture
+   *  component handles the rest (preview, shutter, confirm, upload), and
+   *  calls back into `handleCameraCapture` below with the public URL once
+   *  the user confirms. */
+  function openCameraForSlot(slotId: string) {
+    setActiveCameraSlot(slotId);
+  }
+
+  /** Called by CameraCapture after a photo is captured AND successfully
+   *  uploaded to Supabase Storage. Stores the URL on the matching slot
+   *  and closes the camera overlay. */
+  function handleCameraCapture(slotId: string, publicUrl: string) {
+    setPhotos(prev => ({ ...prev, [slotId]: publicUrl }));
+    setActiveCameraSlot(null);
+    toast("Photo captured", { variant: "success" });
+  }
 
   function resetCheckout() {
     setStep(1); setUser(null); setShoot(null); setPhotos({}); setRating("good");
@@ -586,35 +616,85 @@ export default function KioskPage() {
             {step === 4 && (
               <div>
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Condition check</div>
-                <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 14 }}>Capture photos before leaving the cage.</div>
+                <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 14 }}>Capture photos before leaving the cage. Optional but recommended.</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                  {[{ id: "front", label: "Front of case" }, { id: "body", label: "Camera body" }].map(slot => (
-                    <div key={slot.id} onClick={() => capturePhoto(slot.id)} style={{
-                      aspectRatio: "4/3",
-                      background: "var(--s2)",
-                      border: `1px ${photos[slot.id] ? "solid" : "dashed"} ${photos[slot.id] ? "var(--green)" : "var(--b2)"}`,
-                      borderRadius: 8,
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      gap: 6, cursor: "pointer",
-                      backgroundColor: photos[slot.id] ? "rgba(74,222,128,0.06)" : "var(--s2)",
-                    }}>
-                      <span style={{ fontSize: 22, opacity: 0.5 }}>{photos[slot.id] ? "✓" : "⬡"}</span>
-                      <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: photos[slot.id] ? "var(--green)" : "var(--t3)" }}>{photos[slot.id] ? "Captured" : slot.label}</span>
-                    </div>
-                  ))}
+                  {[
+                    // Renamed from camera-specific labels (Front of case / Camera body)
+                    // to generic Photo 1 / Photo 2 so the kiosk reads well across
+                    // any industry: AV, landscaping, construction, schools, theater,
+                    // auto repair. The label below each tile is purely guidance.
+                    { id: "photo1", label: "Photo 1" },
+                    { id: "photo2", label: "Photo 2" },
+                  ].map(slot => {
+                    const url = photos[slot.id];
+                    const hasPhoto = !!url;
+                    return (
+                      <div key={slot.id} onClick={() => openCameraForSlot(slot.id)} style={{
+                        aspectRatio: "4/3",
+                        background: hasPhoto ? "var(--bg)" : "var(--s2)",
+                        border: `1px ${hasPhoto ? "solid" : "dashed"} ${hasPhoto ? "var(--green)" : "var(--b2)"}`,
+                        borderRadius: 8,
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        gap: 6, cursor: "pointer",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}>
+                        {hasPhoto ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`${slot.label} preview`}
+                              style={{
+                                position: "absolute", inset: 0,
+                                width: "100%", height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                            {/* Replace badge — clicking the tile while it has a photo
+                                re-opens the camera to retake. The badge confirms the
+                                current state and reinforces tap-to-retake affordance. */}
+                            <div style={{
+                              position: "absolute", bottom: 6, right: 6,
+                              background: "rgba(0,0,0,0.7)", color: "#fff",
+                              fontFamily: "'DM Mono', monospace", fontSize: 9,
+                              padding: "3px 7px", borderRadius: 3,
+                              letterSpacing: "0.06em",
+                            }}>
+                              ✓ {slot.label.toUpperCase()} · TAP TO RETAKE
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: 22, opacity: 0.5 }}>⬡</span>
+                            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)" }}>
+                              {slot.label}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>Overall condition</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginBottom: 14 }}>
-                  {["excellent","good","fair","damaged","broken"].map(r => (
-                    <button key={r} onClick={() => setRating(r)} style={{
+                  {/* Capitalize for display so labels render in full ("Excellent" not "exce"). */}
+                  {[
+                    { value: "excellent", label: "Excellent" },
+                    { value: "good", label: "Good" },
+                    { value: "fair", label: "Fair" },
+                    { value: "damaged", label: "Damaged" },
+                    { value: "broken", label: "Broken" },
+                  ].map(r => (
+                    <button key={r.value} onClick={() => setRating(r.value)} style={{
                       padding: "10px 3px", borderRadius: 5,
                       fontSize: 10, fontFamily: "'DM Mono', monospace",
                       cursor: "pointer", textAlign: "center",
-                      border: `1px solid ${rating === r ? "var(--acc)" : "var(--b1)"}`,
-                      background: rating === r ? "rgba(226,245,92,0.08)" : "var(--s2)",
-                      color: rating === r ? "var(--acc)" : "var(--t2)",
+                      border: `1px solid ${rating === r.value ? "var(--acc)" : "var(--b1)"}`,
+                      background: rating === r.value ? "rgba(226,245,92,0.08)" : "var(--s2)",
+                      color: rating === r.value ? "var(--acc)" : "var(--t2)",
                       minHeight: 40,
-                    }}>{r.slice(0, 4)}</button>
+                    }}>{r.label}</button>
                   ))}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "'DM Mono', monospace", textAlign: "center" }}>Photos + condition log timestamped and stored</div>
@@ -719,6 +799,11 @@ export default function KioskPage() {
                     shootTitle: shoot?.title ?? "General use",
                     shootId: shoot?.id !== "general" ? shoot?.id : undefined,
                     dueBackHoursFromNow: 8,
+                    // Pass through any photos captured at step 4. Falsy values
+                    // (slot not captured) are filtered out so we send only the
+                    // URLs that exist — the type allows undefined if none.
+                    intakePhotoUrls: Object.values(photos).filter((url): url is string => !!url),
+                    intakeCondition: rating as "excellent" | "good" | "fair" | "damaged" | "broken",
                   });
                   if (result) {
                     setCreatedCheckout(result);
@@ -733,6 +818,22 @@ export default function KioskPage() {
           </div>
         </div>
       </div>
+
+      {/*
+       * Fullscreen camera overlay — only mounted when a slot is being captured.
+       * Sits OUTSIDE the kiosk's nested scroll containers so it can claim the
+       * full viewport (position: fixed, inset: 0). Photos upload to
+       * `<workspaceId>/checkouts/<timestamp>-<rand>.jpg`. iter-20a.
+       */}
+      {activeCameraSlot && activeWorkspaceId && (
+        <CameraCapture
+          label={activeCameraSlot === "photo1" ? "Photo 1" : "Photo 2"}
+          workspaceId={activeWorkspaceId}
+          pathPrefix="checkouts"
+          onCapture={(url) => handleCameraCapture(activeCameraSlot, url)}
+          onCancel={() => setActiveCameraSlot(null)}
+        />
+      )}
     </div>
   );
 }
