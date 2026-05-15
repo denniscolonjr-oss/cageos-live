@@ -7,7 +7,7 @@ import Card from "@/components/ui/Card";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { toast } from "@/components/ui/Toast";
-import type { Shoot, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
+import type { Project, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
 import { formatShootRange } from "@/lib/timezone";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import CameraCapture from "@/components/shared/CameraCapture";
@@ -32,7 +32,7 @@ export default function KioskPage() {
   // Checkout state
   const [step, setStep] = useState<CheckoutStep>(1);
   const [user, setUser] = useState<KioskUser | null>(null);
-  const [shoot, setShoot] = useState<Shoot | null>(null);
+  const [shoot, setShoot] = useState<Project | null>(null);
   /**
    * Condition check photos for this checkout/check-in. Keyed by slot id
    * ("photo1" | "photo2"). Holds the uploaded Supabase Storage public URL
@@ -84,7 +84,7 @@ export default function KioskPage() {
     goStep(2);
   }
 
-  function selectShoot(s: Shoot) { setShoot(s); }
+  function selectShoot(s: Project) { setShoot(s); }
   function toggleKit(id: string) { setExpandedKits(prev => ({ ...prev, [id]: !prev[id] })); }
   function toggleKitSelected(id: string) {
     setSelectedKitIds(prev => {
@@ -227,7 +227,7 @@ export default function KioskPage() {
               <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--acc)", color: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>↗</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 18, fontWeight: 700, color: "var(--t1)", marginBottom: 3 }}>Checking out</div>
-                <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5 }}>Take gear out for a shoot</div>
+                <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5 }}>Take gear out for a project</div>
               </div>
               <div style={{ fontSize: 18, color: "var(--t3)", flexShrink: 0 }}>→</div>
             </button>
@@ -321,7 +321,7 @@ export default function KioskPage() {
                         <div key={co.id} style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 9, padding: "12px 14px" }}>
                           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{co.shoot}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{(co as { project?: string; shoot?: string }).project ?? (co as { shoot?: string }).shoot ?? ""}</div>
                               <div style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t2)" }}>
                                 {co.kits.join(" · ")}
                               </div>
@@ -338,19 +338,20 @@ export default function KioskPage() {
                                 toast("Demo mode is read-only", { variant: "info" });
                                 return;
                               }
-                              // If this checkout is tied to a shoot whose end is in the future, ask first.
-                              const activeCheckout = co as ActiveCheckout;
-                              if (activeCheckout.shootId && activeCheckout.shootId !== "general") {
-                                const shoot = data.shoots.find(s => s.id === activeCheckout.shootId);
+                              // If this checkout is tied to a project whose end is in the future, ask first.
+                              const activeCheckout = co as ActiveCheckout & { shootId?: string; shoot?: string };
+                              const linkedId = activeCheckout.projectId ?? activeCheckout.shootId;
+                              if (linkedId && linkedId !== "general") {
+                                const project = data.projects.find(s => s.id === linkedId);
                                 const now = new Date();
-                                if (shoot && (shoot.status === "active" || shoot.status === "scheduled")) {
+                                if (project && (project.status === "active" || project.status === "scheduled")) {
                                   // Use endsAt if set, else startsAt as a proxy
-                                  const endRef = shoot.endsAt || shoot.startsAt;
+                                  const endRef = project.endsAt || project.startsAt;
                                   if (endRef) {
                                     const endDate = new Date(endRef);
                                     if (!isNaN(endDate.getTime()) && endDate > now) {
                                       const ok = confirm(
-                                        `This kit is still scheduled for "${shoot.title}" until ${formatShootRange(shoot.startsAt, shoot.endsAt, data.timezone)}.\n\nDo you still want to return it now?`
+                                        `This kit is still scheduled for "${project.title}" until ${formatShootRange(project.startsAt, project.endsAt, data.timezone)}.\n\nDo you still want to return it now?`
                                       );
                                       if (!ok) return;
                                     }
@@ -358,7 +359,7 @@ export default function KioskPage() {
                                 }
                               }
                               returnCheckout(co.id);
-                              toast(`Returned: ${co.kits.join(" · ")}`, { detail: `from ${co.shoot}` });
+                              toast(`Returned: ${co.kits.join(" · ")}`, { detail: `from ${activeCheckout.project ?? activeCheckout.shoot ?? "—"}` });
                             }}
                             style={{
                               width: "100%",
@@ -466,11 +467,11 @@ export default function KioskPage() {
                   <Badge variant="green">Verified</Badge>
                 </div>
 
-                <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>Select your shoot</div>
+                <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>Select your project</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {[
-                    ...data.shoots.filter(s => s.status === "active" || s.status === "scheduled"),
-                    { id: "general", title: "General use / no shoot", client: "Ad hoc", startsAt: "", assignedTeam: [], assignedKits: [], status: "scheduled" } as Shoot,
+                    ...data.projects.filter(s => s.status === "active" || s.status === "scheduled"),
+                    { id: "general", title: "General use / no project", client: "Ad hoc", startsAt: "", assignedTeam: [], assignedKits: [], status: "scheduled" } as Project,
                   ].map(s => (
                     <button key={s.id} onClick={() => selectShoot(s)} style={{
                       background: "var(--s2)",
@@ -531,7 +532,7 @@ export default function KioskPage() {
                     const shootAssigned = allAvailableKits.filter(k => shootAssignedKitIds.has(k.id));
                     const others = allAvailableKits.filter(k => !shootAssignedKitIds.has(k.id));
                     const sections: { label: string; kits: typeof allAvailableKits }[] = [];
-                    if (shootAssigned.length > 0) sections.push({ label: "Assigned to this shoot", kits: shootAssigned });
+                    if (shootAssigned.length > 0) sections.push({ label: "Assigned to this project", kits: shootAssigned });
                     if (others.length > 0) sections.push({
                       label: shootAssigned.length > 0 ? "Other available" : "Available",
                       kits: others,
@@ -731,7 +732,7 @@ export default function KioskPage() {
                 <div style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 9, padding: 14, textAlign: "left", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 16 }}>
                   {[
                     ["Checked out", user?.name ?? "—"],
-                    ["Shoot", shoot?.title ?? "General use"],
+                    ["Project", shoot?.title ?? "General use"],
                     ["Time", new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })],
                   ].map(([k, v]) => (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--t2)", gap: 10 }}>
@@ -816,8 +817,8 @@ export default function KioskPage() {
                   const result = checkoutKits({
                     user: { name: user.name, initials: user.initials, color: user.color, isGuest: user.isGuest },
                     kitIds: kitsForCheckout.map(k => k.id),
-                    shootTitle: shoot?.title ?? "General use",
-                    shootId: shoot?.id !== "general" ? shoot?.id : undefined,
+                    projectTitle: shoot?.title ?? "General use",
+                    projectId: shoot?.id !== "general" ? shoot?.id : undefined,
                     dueBackHoursFromNow: 8,
                     // Pass through any photos captured at step 4. Falsy values
                     // (slot not captured) are filtered out so we send only the

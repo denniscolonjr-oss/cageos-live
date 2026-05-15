@@ -23,7 +23,7 @@ const EMPTY: WorkspaceData = {
   checkouts: [],
   alerts: [],
   profiles: [],
-  shoots: [],
+  projects: [],
   events: [],
   flags: [],
   notes: [],
@@ -35,14 +35,39 @@ const EMPTY: WorkspaceData = {
   managerMode: false,
 };
 
-function migrate(legacy: Partial<WorkspaceData>): WorkspaceData {
+function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): WorkspaceData {
+  /*
+   * iter-23 rename: shoots -> projects.
+   * Read from either key, write to the new one. Tolerates fully-migrated
+   * data (only `projects` present), legacy data (only `shoots` present),
+   * and dual-write transitional data (both keys present — `projects` wins).
+   */
+  const projectsFromLegacy = (legacy.projects ?? legacy.shoots ?? []) as WorkspaceData["projects"];
+
+  /*
+   * ActiveCheckout: rename shoot/shootId -> project/projectId. Apply per-row
+   * so existing checkouts in storage keep displaying project context after
+   * the field rename.
+   */
+  const migratedCheckouts = (legacy.checkouts ?? []).map(c => {
+    const anyc = c as Record<string, unknown>;
+    if (anyc.project === undefined && anyc.shoot !== undefined) {
+      return {
+        ...c,
+        project: anyc.shoot,
+        projectId: anyc.shootId,
+      };
+    }
+    return c;
+  }) as WorkspaceData["checkouts"];
+
   return {
     assets: legacy.assets ?? [],
     kits: legacy.kits ?? [],
-    checkouts: legacy.checkouts ?? [],
+    checkouts: migratedCheckouts,
     alerts: legacy.alerts ?? [],
     profiles: legacy.profiles ?? [],
-    shoots: legacy.shoots ?? [],
+    projects: projectsFromLegacy,
     events: legacy.events ?? [],
     flags: legacy.flags ?? [],
     // Notes added in iter-17. iter-18a added readBy field; migrate legacy

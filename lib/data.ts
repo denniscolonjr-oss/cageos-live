@@ -138,9 +138,13 @@ export interface UserProfile {
  *   - `isTask` flag enables resolve workflow
  *   - Mentions trigger email notifications via /api/send-mention
  *
- * Future iterations extend parentType to "kit" | "shoot" | "checkout" | "user".
+ * Future iterations extend parentType to "kit" | "project" | "checkout" | "user".
+ *
+ * "shoot" is kept in the union as a deprecated alias for "project" (iter-23
+ * rename) so historical notes attached to projects don't break the type
+ * check. New code uses "project" exclusively.
  */
-export type NoteParentType = "asset" | "kit" | "shoot" | "checkout" | "user";
+export type NoteParentType = "asset" | "kit" | "shoot" | "project" | "checkout" | "user";
 
 export interface Note {
   id: string;

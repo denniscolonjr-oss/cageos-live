@@ -12,14 +12,42 @@ const STORAGE_KEY = "cageos:workspace:v3";
 const LEGACY_KEYS = ["cageos:workspace:v2", "cageos:workspace:v1"];
 const MODE_KEY = "cageos:mode:v1";
 
-function migrate(legacy: Partial<WorkspaceData>): WorkspaceData {
+function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): WorkspaceData {
+  /*
+   * iter-23 rename: shoots -> projects.
+   * Read from either key, write to the new one. Tolerates fully-migrated
+   * data (only `projects` present), legacy data (only `shoots` present),
+   * and dual-write transitional data (both keys present — `projects` wins).
+   *
+   * The unknown[] cast on shoots is because the type was already removed
+   * from WorkspaceData but we still want to read the old key during migration.
+   */
+  const projectsFromLegacy = (legacy.projects ?? legacy.shoots ?? []) as WorkspaceData["projects"];
+
+  /*
+   * ActiveCheckout: rename shoot/shootId -> project/projectId. Apply per-row
+   * so existing checkouts in storage keep displaying project context after
+   * the field rename.
+   */
+  const migratedCheckouts = (legacy.checkouts ?? []).map(c => {
+    const anyc = c as Record<string, unknown>;
+    if (anyc.project === undefined && anyc.shoot !== undefined) {
+      return {
+        ...c,
+        project: anyc.shoot,
+        projectId: anyc.shootId,
+      };
+    }
+    return c;
+  }) as WorkspaceData["checkouts"];
+
   return {
     assets: legacy.assets ?? [],
     kits: legacy.kits ?? [],
-    checkouts: legacy.checkouts ?? [],
+    checkouts: migratedCheckouts,
     alerts: legacy.alerts ?? [],
     profiles: legacy.profiles ?? [],
-    shoots: legacy.shoots ?? [],
+    projects: projectsFromLegacy,
     events: legacy.events ?? [],
     flags: legacy.flags ?? [],
     // Notes added in iter-17. iter-18a added readBy field; migrate legacy

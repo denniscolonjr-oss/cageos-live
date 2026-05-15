@@ -123,7 +123,7 @@ function renderInviteHtml(b: SendInviteBody): string {
           ${escapeHtml(b.inviterName || "Someone")} invited you to join their workspace as <strong style="color:#fafaf6;">${roleLabel}</strong>.
         </p>
         <p style="margin:0 0 28px;font-size:15px;color:#cdc8bc;line-height:1.6;">
-          CageOS is where production teams keep track of their gear, people, shoots, and knowledge. Click below to accept the invitation and join the workspace.
+          CageOS is where production teams keep track of their gear, people, projects, and knowledge. Click below to accept the invitation and join the workspace.
         </p>
         <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
           <tr><td style="background:#ecff70;border-radius:7px;">
@@ -159,7 +159,7 @@ function renderInviteText(b: SendInviteBody): string {
 
 ${b.inviterName || "Someone"} invited you to join their workspace as ${roleLabel}.
 
-CageOS is where production teams keep track of their gear, people, shoots, and knowledge.
+CageOS is where production teams keep track of their gear, people, projects, and knowledge.
 
 Accept the invitation:
 ${b.inviteUrl}

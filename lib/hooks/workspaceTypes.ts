@@ -17,7 +17,20 @@ import type {
 
 export type WorkspaceMode = "user" | "demo" | "unset";
 
-export interface Shoot {
+/**
+ * Project — formerly "Shoot" (renamed iter-23 for generic positioning).
+ *
+ * A scheduled engagement that gear and team members can be assigned to.
+ * Cross-industry name: AV calls these "shoots", construction calls them
+ * "jobs", theater calls them "productions", landscaping calls them "jobs"
+ * or "service days". All map to this single Project type.
+ *
+ * The data shape is unchanged from the old Shoot type. Migration is at
+ * the workspace-JSON-key level: `projects: [...]` is the new key, but the
+ * storage adapter's migrate() also accepts legacy `shoots: [...]` data
+ * so existing workspaces don't lose their schedule on upgrade.
+ */
+export interface Project {
   id: string;
   title: string;
   client: string;
@@ -32,6 +45,15 @@ export interface Shoot {
   notes?: string;
   status: "scheduled" | "active" | "completed" | "cancelled";
 }
+
+/**
+ * Deprecated alias. Some files still import `Shoot` — leaving this here lets
+ * the rename roll out file-by-file without breaking the build at any point.
+ * Remove once every `import type { Shoot }` is updated to `Project`.
+ *
+ * @deprecated use Project instead
+ */
+export type Shoot = Project;
 
 /**
  * Active checkout — extends CheckoutRecord with structured fields the UI needs
@@ -50,8 +72,15 @@ export interface ActiveCheckout {
   user: string;
   initials: string;
   color: string;
-  shoot: string;
-  shootId?: string;
+  /**
+   * Project (formerly "shoot") this checkout is for. Display label of the
+   * project — see also projectId for the linking. Renamed iter-23 from
+   * `shoot` to `project` so the data model matches the new generic
+   * terminology. Legacy ActiveCheckouts in storage with `shoot` keys are
+   * migrated by the adapter on read.
+   */
+  project: string;
+  projectId?: string;
   kits: string[]; // display labels — "Venice Cinema Kit"
   kitIds: string[]; // for state reconciliation
   assetIds: string[]; // assets that were also checked out, including kit components
@@ -84,10 +113,17 @@ export type AuditCategory =
   | "kit_restored"
   | "kit_composition_changed"
   | "team_added"
+  // iter-23 rename: shoot_* → project_*. The shoot_* values stay in the
+  // union so historical audit entries (locked decision: don't rewrite
+  // history) keep type-checking. New writes use project_* exclusively.
   | "shoot_scheduled"
   | "shoot_updated"
   | "shoot_status_changed"
   | "shoot_deleted"
+  | "project_scheduled"
+  | "project_updated"
+  | "project_status_changed"
+  | "project_deleted"
   | "manager_mode"
   | "flag_opened"
   | "flag_status_changed"
@@ -160,7 +196,12 @@ export interface WorkspaceData {
   checkouts: (CheckoutRecord | ActiveCheckout)[];
   alerts: Alert[];
   profiles: UserProfile[];
-  shoots: Shoot[];
+  /**
+   * Scheduled projects (formerly "shoots"). See Project interface above.
+   * Renamed iter-23 for industry-neutral terminology. Migration in adapter
+   * handles old `shoots: [...]` payloads.
+   */
+  projects: Project[];
   events: AuditEvent[];
   /**
    * Service flag history. Each flag is its own record with full repair lifecycle.

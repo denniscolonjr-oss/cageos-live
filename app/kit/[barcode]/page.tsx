@@ -91,8 +91,8 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
   const components = rawAssets.filter(a => kit.componentIds.includes(a.id));
   const blockedComponents = components.filter(c => openFlags.some(f => f.assetId === c.id));
 
-  // Shoots that have this kit assigned
-  const shootsWithKit = data.shoots
+  // Projects that have this kit assigned
+  const projectsWithKit = data.projects
     .filter(s => s.assignedKits.includes(kit.id))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 
@@ -298,7 +298,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                       Currently checked out
                     </div>
                     <div style={{ fontSize: 12, color: "var(--t2)" }}>
-                      {(activeCheckout as { user: string }).user} · for {(activeCheckout as { shoot: string }).shoot}
+                      {(activeCheckout as { user: string }).user} · for {(activeCheckout as { project?: string; shoot?: string }).project ?? (activeCheckout as { shoot?: string }).shoot}
                     </div>
                   </div>
                 </Card>
@@ -414,17 +414,17 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                 )}
               </Card>
 
-              {/* Shoots */}
+              {/* Projects */}
               <Card>
                 <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--b1)" }}>
-                  <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700 }}>Shoots ({shootsWithKit.length})</div>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700 }}>Projects ({projectsWithKit.length})</div>
                 </div>
-                {shootsWithKit.length === 0 ? (
+                {projectsWithKit.length === 0 ? (
                   <div style={{ padding: "24px 18px", textAlign: "center", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
-                    Not assigned to any shoots.
+                    Not assigned to any projects.
                   </div>
                 ) : (
-                  shootsWithKit.map((s, i) => {
+                  projectsWithKit.map((s, i) => {
                     const statusColor =
                       s.status === "active" ? "var(--green)" :
                       s.status === "scheduled" ? "var(--blue)" :
@@ -432,7 +432,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                     return (
                       <div key={s.id} style={{
                         padding: "12px 18px",
-                        borderBottom: i < shootsWithKit.length - 1 ? "1px solid var(--b1)" : "none",
+                        borderBottom: i < projectsWithKit.length - 1 ? "1px solid var(--b1)" : "none",
                         display: "flex", gap: 10, alignItems: "flex-start",
                       }}>
                         <div style={{ width: 4, alignSelf: "stretch", flexShrink: 0, background: statusColor, borderRadius: 2 }} />
@@ -481,7 +481,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                   <SidebarRow label="Components" value={String(components.length)} />
                   <SidebarRow label="Status" value={kit.status} />
                   <SidebarRow label="Flagged components" value={String(blockedComponents.length)} />
-                  <SidebarRow label="Shoots assigned" value={String(shootsWithKit.length)} last />
+                  <SidebarRow label="Projects assigned" value={String(projectsWithKit.length)} last />
                 </div>
               </Card>
 
@@ -512,10 +512,10 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                   const ck = c as { kitIds?: string[] };
                   return ck.kitIds?.includes(kit.id) ?? false;
                 });
-                const upcomingShoots = data.shoots.filter(s =>
+                const upcomingProjects = data.projects.filter(s =>
                   (s.status === "scheduled" || s.status === "active") && s.assignedKits.includes(kit.id),
                 );
-                const blocked = isCheckedOut || upcomingShoots.length > 0;
+                const blocked = isCheckedOut || upcomingProjects.length > 0;
                 const everCheckedOut = data.checkouts.some(c => {
                   const ck = c as { kitIds?: string[] };
                   return ck.kitIds?.includes(kit.id);
@@ -529,7 +529,7 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                       <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
                         {blocked && isCheckedOut && "This kit is currently checked out. Return it first to archive or delete."}
-                        {blocked && !isCheckedOut && upcomingShoots.length > 0 && `This kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {blocked && !isCheckedOut && upcomingProjects.length > 0 && `This kit is assigned to ${upcomingProjects.length} upcoming project${upcomingProjects.length === 1 ? "" : "s"}. Remove from those projects first.`}
                         {!blocked && "Archive moves the kit to the Archived list (recoverable). Permanent delete removes it forever (no undo). Components stay in inventory either way."}
                       </div>
 

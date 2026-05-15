@@ -23,7 +23,7 @@ import { useAuth } from "@/lib/supabase/AuthContext";
 import { deleteWorkspace } from "@/lib/supabase/membership";
 import { formatShootRange, getTimezoneOptions, timezoneShortLabel, resolveTimezone } from "@/lib/timezone";
 import { toast } from "@/components/ui/Toast";
-import type { Shoot } from "@/lib/hooks/workspaceTypes";
+import type { Project } from "@/lib/hooks/workspaceTypes";
 import type { Asset } from "@/lib/data";
 
 const flagBadgeStyle: React.CSSProperties = {
@@ -33,7 +33,7 @@ const flagBadgeStyle: React.CSSProperties = {
 
 const PAGES: Record<string, string> = {
   cage: "Cage status", checkouts: "Active checkouts",
-  assets: "All assets", kits: "Kits", shoots: "Shoots", flags: "Service flags",
+  assets: "All assets", kits: "Kits", projects: "Projects", flags: "Service flags",
   settings: "Settings",
   badges: "Staff badges", guests: "Guest tokens",
   "kiosk-admin": "Kiosk devices", integrations: "Integrations",
@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | "shoot" | null>(null);
-  const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
+  const [selectedShoot, setSelectedShoot] = useState<Project | null>(null);
   const [flagAssetTarget, setFlagAssetTarget] = useState<Asset | null>(null);
   const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null);
   const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
@@ -136,7 +136,7 @@ export default function DashboardPage() {
     { section: "Inventory", items: [
       { label: "All assets", key: "assets", count: data.assets.length || null, countStyle: null },
       { label: "Kits", key: "kits", count: data.kits.length || null, countStyle: null },
-      { label: "Shoots", key: "shoots", count: data.shoots.length || null, countStyle: null },
+      { label: "Projects", key: "projects", count: data.projects.length || null, countStyle: null },
       { label: "Service flags", key: "flags", count: stats.serviceFlags || null, countStyle: stats.serviceFlags > 0 ? "alert" : null },
       ...(data.managerMode && (archivedAssets.length > 0 || archivedKits.length > 0)
         ? [{ label: "Archived", key: "archived", count: archivedAssets.length + archivedKits.length, countStyle: null }]
@@ -146,7 +146,7 @@ export default function DashboardPage() {
       { label: "+ Asset", key: "_asset", count: null, countStyle: null, action: "asset" },
       { label: "+ Build kit", key: "_kit", count: null, countStyle: null, action: "kit" },
       { label: "+ Team member", key: "_team", count: null, countStyle: null, action: "team" },
-      { label: "+ Schedule shoot", key: "_shoot", count: null, countStyle: null, action: "shoot" },
+      { label: "+ Schedule project", key: "_shoot", count: null, countStyle: null, action: "shoot" },
       { label: "↑ Upload CSV", key: "_csv", count: null, countStyle: null, action: "csv" },
     ]},
     { section: "Admin", items: [
@@ -393,7 +393,7 @@ export default function DashboardPage() {
                                 {co.isGuest && <Badge variant="purple" style={{ fontSize: 9 }}>GUEST</Badge>}
                               </div>
                               <div style={{ fontSize: 10, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {co.kits.join(" · ")} → {co.shoot}
+                                {co.kits.join(" · ")} → {(co as { project?: string; shoot?: string }).project ?? (co as { shoot?: string }).shoot ?? ""}
                               </div>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
@@ -698,15 +698,15 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeKey === "shoots" && (
+          {activeKey === "projects" && (
             <div className="animate-fade-up">
-              {data.shoots.length === 0 ? (
+              {data.projects.length === 0 ? (
                 <Card>
                   <div style={{ padding: isMobile ? "32px 20px" : "44px 32px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
                     <div style={{ width: 56, height: 56, background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, margin: "0 auto 16px" }}>⬡</div>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 19 : 22, fontWeight: 700, marginBottom: 8 }}>No shoots scheduled yet</div>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: isMobile ? 19 : 22, fontWeight: 700, marginBottom: 8 }}>No projects scheduled yet</div>
                     <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.6, marginBottom: 22 }}>
-                      Shoots tie together a client, a date, your team, and the kits they&apos;ll need. Schedule one and the kiosk will surface it when crew check out gear.
+                      Projects tie together a client, a date, your team, and the kits they&apos;ll need. Schedule one and the kiosk will surface it when crew check out gear.
                     </div>
                     {!isReadOnly && (
                       <button onClick={() => setOpenModal("shoot")} style={{
@@ -714,7 +714,7 @@ export default function DashboardPage() {
                         padding: "12px 22px", borderRadius: 7,
                         fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700,
                         cursor: "pointer", minHeight: 44,
-                      }}>+ Schedule a shoot</button>
+                      }}>+ Schedule a project</button>
                     )}
                   </div>
                 </Card>
@@ -724,7 +724,7 @@ export default function DashboardPage() {
                   gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(320px, 1fr))",
                   gap: 12,
                 }}>
-                  {data.shoots.map(sh => {
+                  {data.projects.map(sh => {
                     const lead = sh.leadInitials ? data.profiles.find(p => p.initials === sh.leadInitials) : null;
                     const teamProfiles = sh.assignedTeam.map(i => data.profiles.find(p => p.initials === i)).filter(Boolean);
                     const kits = sh.assignedKits.map(id => data.kits.find(k => k.id === id)).filter(Boolean);
@@ -1153,7 +1153,7 @@ export default function DashboardPage() {
                   <div style={{ padding: 20 }}>
                     <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Time zone</div>
                     <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
-                      How shoot dates and times are displayed across the app. Shoots are stored as absolute moments and converted on display.
+                      How project dates and times are displayed across the app. Projects are stored as absolute moments and converted on display.
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <select
@@ -1212,7 +1212,7 @@ export default function DashboardPage() {
                   <div style={{ padding: 20 }}>
                     <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Reset</div>
                     <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14 }}>
-                      Permanently delete all assets, kits, team members, and shoots in this workspace.
+                      Permanently delete all assets, kits, team members, and projects in this workspace.
                     </div>
                     <button
                       onClick={() => {
@@ -1276,22 +1276,37 @@ export default function DashboardPage() {
                   { key: "all", label: "All events" },
                   { key: "checkout", label: "Checkouts" },
                   { key: "return", label: "Returns" },
-                  { key: "shoot_scheduled", label: "Shoots scheduled" },
-                  { key: "shoot_status_changed", label: "Shoot status" },
-                  { key: "shoot_updated", label: "Shoot edits" },
-                  { key: "shoot_deleted", label: "Shoot deletions" },
+                  { key: "shoot_scheduled", label: "Projects scheduled" },
+                  { key: "shoot_status_changed", label: "Project status" },
+                  { key: "shoot_updated", label: "Project edits" },
+                  { key: "shoot_deleted", label: "Project deletions" },
                   { key: "asset_added", label: "Assets added" },
                   { key: "kit_added", label: "Kits built" },
                   { key: "team_added", label: "Team added" },
                   { key: "manager_mode", label: "Manager mode" },
                 ];
+                /*
+                 * Audit filter. For project categories, match both the
+                 * legacy shoot_* and new project_* prefixes so users can
+                 * filter the combined timeline (iter-23 locked decision:
+                 * keep historical entries with their original category).
+                 */
+                function categoryMatches(eventCat: string, filterKey: string): boolean {
+                  if (filterKey === eventCat) return true;
+                  if (filterKey.startsWith("shoot_")) {
+                    const tail = filterKey.slice("shoot_".length);
+                    return eventCat === `project_${tail}`;
+                  }
+                  return false;
+                }
                 const filtered = auditFilter === "all"
                   ? data.events
-                  : data.events.filter(e => e.category === auditFilter);
+                  : data.events.filter(e => categoryMatches(e.category, auditFilter));
                 const categoryColor = (c: string) => {
                   if (c === "checkout") return "var(--amber)";
                   if (c === "return") return "var(--green)";
-                  if (c.startsWith("shoot")) return "var(--blue)";
+                  // Match both shoot_* (legacy entries) and project_* (iter-23+)
+                  if (c.startsWith("shoot") || c.startsWith("project")) return "var(--blue)";
                   if (c === "asset_added" || c === "kit_added") return "var(--acc)";
                   if (c === "team_added") return "var(--purple)";
                   return "var(--t3)";
@@ -1302,7 +1317,7 @@ export default function DashboardPage() {
                     <div className="scroll-x" style={{ display: "flex", gap: 6, marginBottom: 14, paddingBottom: 4 }}>
                       {CATEGORIES.map(c => {
                         const isActive = auditFilter === c.key;
-                        const count = c.key === "all" ? data.events.length : data.events.filter(e => e.category === c.key).length;
+                        const count = c.key === "all" ? data.events.length : data.events.filter(e => categoryMatches(e.category, c.key)).length;
                         return (
                           <button key={c.key} onClick={() => setAuditFilter(c.key)} style={{
                             padding: "8px 14px", borderRadius: 6, fontSize: 11,
@@ -1327,7 +1342,7 @@ export default function DashboardPage() {
                           </div>
                           <div style={{ fontSize: 12, color: "var(--t2)" }}>
                             {auditFilter === "all"
-                              ? "Activity will populate here as you add assets, build kits, schedule shoots, and run kiosk transactions."
+                              ? "Activity will populate here as you add assets, build kits, schedule projects, and run kiosk transactions."
                               : "Try a different category."}
                           </div>
                         </div>

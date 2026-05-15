@@ -125,7 +125,7 @@ function renderWelcomeHtml(b: SendWelcomeBody): string {
         <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#cdc8bc;line-height:1.7;">
           <li>Browse the <strong style="color:#fafaf6;">All assets</strong> tab to see what's available</li>
           <li>Visit the <strong style="color:#fafaf6;">Kiosk</strong> to check gear in or out</li>
-          <li>Check <strong style="color:#fafaf6;">Shoots</strong> for upcoming productions</li>
+          <li>Check <strong style="color:#fafaf6;">Projects</strong> for upcoming productions</li>
           <li>Click your initials in the top-right to switch workspaces or sign out</li>
         </ul>
         <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
@@ -160,7 +160,7 @@ You've joined as ${roleLabel}.
 A few things to try:
 - Browse the All assets tab to see what's available
 - Visit the Kiosk to check gear in or out
-- Check Shoots for upcoming productions
+- Check Projects for upcoming productions
 - Click your initials in the top-right to switch workspaces or sign out
 
 Open the dashboard:

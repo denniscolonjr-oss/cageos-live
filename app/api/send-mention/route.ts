@@ -33,7 +33,7 @@ import { createClient } from "@supabase/supabase-js";
 
 interface SendMentionBody {
   mentionedInitials: string[];
-  parentType: "asset" | "kit" | "shoot" | "checkout" | "user";
+  parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user";
   parentId: string;
   parentLabel: string;
   excerpt: string;
@@ -253,7 +253,11 @@ function buildDeepLink(parentType: string, parentId: string): string {
     case "checkout":
       // Added iter-21 — checkouts now have their own detail page.
       return `${base}/checkouts/${encodeURIComponent(parentId)}`;
+    case "project":
     case "shoot":
+      // Both route to /projects (the placeholder list / future calendar in iter-24).
+      // Project detail routes don't exist yet; for now we land users on the list.
+      return `${base}/projects`;
     case "user":
     default:
       return `${base}/dashboard`;
@@ -269,7 +273,8 @@ function renderMentionHtml(b: MentionTemplateArgs): string {
     switch (b.parentType) {
       case "asset": return "Open this asset";
       case "kit": return "Open this kit";
-      case "shoot": return "Open the shoot";
+      case "project":
+      case "shoot": return "Open the project";
       case "checkout": return "Open the checkout";
       default: return "Open in CageOS";
     }

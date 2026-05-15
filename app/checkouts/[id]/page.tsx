@@ -8,7 +8,7 @@
  *   - WHO has the gear (with contact info — email + phone)
  *   - WHAT was checked out (kits + their components)
  *   - WHEN it was checked out and when it's due back
- *   - WHERE the shoot/project is (location from the Shoot record)
+ *   - WHERE the project is (location from the Project record)
  *   - PHOTOS captured at intake (and return, when iter-20b lands)
  *   - CONDITION rating at intake
  *   - COMMENTS thread on this checkout (uses parentType="checkout")
@@ -33,7 +33,7 @@ import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { toast } from "@/components/ui/Toast";
-import type { ActiveCheckout, Shoot } from "@/lib/hooks/workspaceTypes";
+import type { ActiveCheckout, Project } from "@/lib/hooks/workspaceTypes";
 import { formatShootRange } from "@/lib/timezone";
 
 export default function CheckoutDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -112,11 +112,14 @@ function CheckoutDetailBody({
 
   // Resolve relations.
   // - Person: lookup profile by initials (profiles don't always have a userId)
-  // - Shoot: lookup by shootId, falls back to title-match
+  
   // - Kits: lookup by kitIds
   const person = data.profiles.find(p => p.initials === checkout.initials);
-  const shoot: Shoot | undefined = checkout.shootId
-    ? data.shoots.find(s => s.id === checkout.shootId)
+  // - Project: lookup by projectId (with legacy shootId fallback), falls back to title-match
+  const linkedProjectId = (checkout as { projectId?: string; shootId?: string }).projectId
+    ?? (checkout as { shootId?: string }).shootId;
+  const project: Project | undefined = linkedProjectId
+    ? data.projects.find(s => s.id === linkedProjectId)
     : undefined;
   const kits = data.kits.filter(k => checkout.kitIds.includes(k.id));
 
@@ -188,7 +191,7 @@ function CheckoutDetailBody({
                 {!isOverdue && !isReturned && <Badge variant="amber">ACTIVE</Badge>}
               </div>
               <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>
-                for {checkout.shoot}
+                for {(checkout as { project?: string; shoot?: string }).project ?? (checkout as { shoot?: string }).shoot ?? ""}
               </div>
             </div>
 
@@ -308,20 +311,20 @@ function CheckoutDetailBody({
               </div>
             </Card>
 
-            {/* Shoot/project info */}
-            {shoot && (
+            {/* Project info */}
+            {project && (
               <Card style={{ marginBottom: 14 }}>
                 <div style={{ padding: "14px 18px" }}>
                   <SectionLabel>Project</SectionLabel>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: "var(--t1)", marginBottom: 4 }}>
-                    {shoot.title}
+                    {project.title}
                   </div>
                   <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 6 }}>
-                    {shoot.client}
+                    {project.client}
                   </div>
                   <div style={{ display: "flex", gap: 14, fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", flexWrap: "wrap" }}>
-                    <span>📅 {formatShootRange(shoot.startsAt, shoot.endsAt, data.timezone)}</span>
-                    {shoot.location && <span>📍 {shoot.location}</span>}
+                    <span>📅 {formatShootRange(project.startsAt, project.endsAt, data.timezone)}</span>
+                    {project.location && <span>📍 {project.location}</span>}
                   </div>
                 </div>
               </Card>

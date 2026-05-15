@@ -88,34 +88,34 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
     .filter(e => e.actor === profile.name)
     .slice(0, 20);
 
-  // Shoots this person was assigned to
-  const profileShoots = data.shoots
+  // Projects this person was assigned to
+  const profileProjects = data.projects
     .filter(s => s.assignedTeam.includes(profile.initials) || s.leadInitials === profile.initials)
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 
-  // Computed collaborators: count co-occurrences with other team members across shoots
+  // Computed collaborators: count co-occurrences with other team members across projects
   const collaboratorCounts = new Map<string, number>();
-  for (const shoot of data.shoots) {
-    if (!shoot.assignedTeam.includes(profile.initials)) continue;
-    for (const otherInitials of shoot.assignedTeam) {
+  for (const project of data.projects) {
+    if (!project.assignedTeam.includes(profile.initials)) continue;
+    for (const otherInitials of project.assignedTeam) {
       if (otherInitials === profile.initials) continue;
       collaboratorCounts.set(otherInitials, (collaboratorCounts.get(otherInitials) ?? 0) + 1);
     }
   }
   const computedCollaborators = Array.from(collaboratorCounts.entries())
-    .map(([initials, sharedShoots]) => {
+    .map(([initials, sharedProjects]) => {
       const p = data.profiles.find(pp => pp.initials === initials);
-      return p ? { name: p.name, initials: p.initials, color: p.color, sharedShoots } : null;
+      return p ? { name: p.name, initials: p.initials, color: p.color, sharedProjects } : null;
     })
-    .filter((x): x is { name: string; initials: string; color: string; sharedShoots: number } => x !== null)
-    .sort((a, b) => b.sharedShoots - a.sharedShoots)
+    .filter((x): x is { name: string; initials: string; color: string; sharedProjects: number } => x !== null)
+    .sort((a, b) => b.sharedProjects - a.sharedProjects)
     .slice(0, 6);
 
   // Use real collaborators if available, otherwise the baked-in ones (demo data still has them)
   const collaboratorsToShow = computedCollaborators.length > 0 ? computedCollaborators : profile.frequentCollaborators;
 
-  // Use real shoots+events to derive history if profile.history is empty
-  const hasRealActivity = profileShoots.length > 0 || profileEvents.length > 0;
+  // Use real projects+events to derive history if profile.history is empty
+  const hasRealActivity = profileProjects.length > 0 || profileEvents.length > 0;
 
   // ===== Edit helpers =====
 
@@ -219,7 +219,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                     cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                     fontWeight: 500, flex: isMobile ? 1 : "0 0 auto", minHeight: 40,
                   }}>
-                  Assign to shoot
+                  Assign to project
                 </button>
               )}
             </div>
@@ -235,7 +235,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
             {[
               { label: "Checkouts", value: profile.totalCheckouts, sub: "lifetime", color: "var(--blue)", managerOnly: false },
               { label: "Hours", value: profile.totalHours, sub: "lifetime", color: "var(--blue)", managerOnly: false },
-              { label: "Shoots / yr", value: profile.shootsWorkedThisYear, sub: "2026 YTD", color: "var(--acc)", managerOnly: false },
+              { label: "Projects / yr", value: profile.shootsWorkedThisYear, sub: "2026 YTD", color: "var(--acc)", managerOnly: false },
               { label: "Condition", value: profile.conditionScore, sub: "return quality", color: profile.conditionScore >= 95 ? "var(--green)" : profile.conditionScore >= 85 ? "var(--amber)" : "var(--red)", managerOnly: true },
               { label: "Reliability", value: profile.reliabilityScore, sub: "on-time", color: profile.reliabilityScore >= 95 ? "var(--green)" : profile.reliabilityScore >= 85 ? "var(--amber)" : "var(--red)", managerOnly: true },
             ]
@@ -314,20 +314,20 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                 </Card>
               </div>
 
-              {/* Upcoming shoots from workspace */}
+              {/* Upcoming projects from workspace */}
               {(() => {
-                const upcomingShoots = data.shoots.filter(s =>
+                const upcomingProjects = data.projects.filter(s =>
                   (s.status === "active" || s.status === "scheduled") &&
                   (s.assignedTeam.includes(profile.initials) || s.leadInitials === profile.initials)
                 );
-                if (upcomingShoots.length === 0) return null;
+                if (upcomingProjects.length === 0) return null;
                 return (
                   <div style={{ marginBottom: 22 }}>
                     <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>On the calendar</div>
-                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Upcoming shoots</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Upcoming projects</div>
                     <Card>
-                      {upcomingShoots.map((sh, i) => (
-                        <div key={sh.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < upcomingShoots.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      {upcomingProjects.map((sh, i) => (
+                        <div key={sh.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < upcomingProjects.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12, alignItems: "flex-start" }}>
                           <div style={{ width: 4, alignSelf: "stretch", flexShrink: 0, background: sh.status === "active" ? "var(--green)" : "var(--blue)", borderRadius: 2 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
@@ -354,22 +354,22 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
               {/* History */}
               <div>
                 <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Activity</div>
-                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Recent shoots</div>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Recent projects</div>
                 <Card>
-                  {profileShoots.length === 0 && profile.history.length === 0 && (
+                  {profileProjects.length === 0 && profile.history.length === 0 && (
                     <div style={{ padding: 32, textAlign: "center" }}>
                       <div style={{ fontSize: 22, opacity: 0.4, marginBottom: 10 }}>◇</div>
                       <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-                        No shoots yet
+                        No projects yet
                       </div>
                       <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto" }}>
-                        Once {profile.name.split(" ")[0]} is assigned to a shoot, it
+                        Once {profile.name.split(" ")[0]} is assigned to a project, it
                         will appear here with the kits used and the outcome.
                       </div>
                     </div>
                   )}
                   {/* Real shoots from workspace data — preferred when available */}
-                  {profileShoots.length > 0 && profileShoots.slice(0, 12).map((s, i) => {
+                  {profileProjects.length > 0 && profileProjects.slice(0, 12).map((s, i) => {
                     const statusColor =
                       s.status === "active" ? "var(--green)" :
                       s.status === "scheduled" ? "var(--blue)" :
@@ -378,7 +378,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                     const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(startDate);
                     const isLead = s.leadInitials === profile.initials;
                     return (
-                      <div key={s.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < Math.min(profileShoots.length, 12) - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12 }}>
+                      <div key={s.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < Math.min(profileProjects.length, 12) - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12 }}>
                         <div style={{ width: 4, flexShrink: 0, background: statusColor, borderRadius: 2 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8, flexWrap: "wrap" }}>
@@ -408,7 +408,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                     );
                   })}
                   {/* Demo-baked history fallback (only when no real shoots exist) */}
-                  {profileShoots.length === 0 && profile.history.map((h, i) => (
+                  {profileProjects.length === 0 && profile.history.map((h, i) => (
                     <div key={h.id} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderBottom: i < profile.history.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", gap: 12 }}>
                       <div style={{ width: 4, flexShrink: 0, background: h.incident?.severity === "major" ? "var(--red)" : h.incident?.severity === "minor" ? "var(--amber)" : h.notesAdded ? "var(--acc)" : "var(--b2)", borderRadius: 2 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -486,7 +486,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                             <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: c.color }}>{c.initials}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, color: "var(--t1)" }}>{c.name}</div>
-                              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{c.sharedShoots} shared shoots</div>
+                              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{c.sharedProjects} shared projects</div>
                             </div>
                           </div>
                         </Link>

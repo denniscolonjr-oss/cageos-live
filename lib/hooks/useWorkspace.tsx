@@ -16,10 +16,12 @@ import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/loca
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { useAuth, type WorkspaceRole } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
-import type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult } from "./workspaceTypes";
 
-// Re-export types so existing imports from useWorkspace keep working
-export type { WorkspaceData, WorkspaceMode, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult };
+// Re-export types so existing imports from useWorkspace keep working.
+// `Shoot` is a deprecated alias for `Project` (iter-23 rename); both stay
+// exported until every call site is migrated.
+export type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult };
 
 const modeAdapter = localStorageModeAdapter;
 
@@ -29,7 +31,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   checkouts: [],
   alerts: [],
   profiles: [],
-  shoots: [],
+  projects: [],
   events: [],
   flags: [],
   notes: [],
@@ -41,8 +43,9 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   managerMode: false,
 };
 
-// Demo shoots use real ISO timestamps. Built dynamically so "today" is always today.
-function buildDemoShoots(): Shoot[] {
+// Demo projects use real ISO timestamps. Built dynamically so "today" is always today.
+// Renamed from buildDemoShoots in iter-23.
+function buildDemoProjects(): Project[] {
   const now = new Date();
   function atTime(daysFromNow: number, hour: number, minute = 0): string {
     const d = new Date(now);
@@ -177,7 +180,7 @@ function buildDemoWorkspace(): WorkspaceData {
     checkouts: DEMO_CHECKOUTS,
     alerts: DEMO_ALERTS,
     profiles: DEMO_PROFILES,
-    shoots: buildDemoShoots(),
+    projects: buildDemoProjects(),
     events: buildDemoEvents(),
     flags: buildDemoFlags(),
     notes: [],
@@ -416,14 +419,14 @@ function useWorkspaceImpl() {
     // Safety check: kit containing this asset is assigned to upcoming/active shoots?
     const kitContainingThis = data.kits.find(k => k.componentIds.includes(assetId));
     if (kitContainingThis) {
-      const upcomingShoots = data.shoots.filter(s =>
+      const upcomingProjects = data.projects.filter(s =>
         (s.status === "scheduled" || s.status === "active") &&
         s.assignedKits.includes(kitContainingThis.id),
       );
-      if (upcomingShoots.length > 0) {
+      if (upcomingProjects.length > 0) {
         return {
           kind: "blocked",
-          reason: `${target.name} is in ${kitContainingThis.name} which is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`,
+          reason: `${target.name} is in ${kitContainingThis.name} which is assigned to ${upcomingProjects.length} upcoming project${upcomingProjects.length === 1 ? "" : "s"}. Remove from those projects first.`,
         };
       }
     }
@@ -561,13 +564,13 @@ function useWorkspaceImpl() {
     }
 
     // Safety: assigned to upcoming/active shoots?
-    const upcomingShoots = data.shoots.filter(s =>
+    const upcomingProjects = data.projects.filter(s =>
       (s.status === "scheduled" || s.status === "active") && s.assignedKits.includes(kitId),
     );
-    if (upcomingShoots.length > 0) {
+    if (upcomingProjects.length > 0) {
       return {
         kind: "blocked",
-        reason: `${target.name} is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`,
+        reason: `${target.name} is assigned to ${upcomingProjects.length} upcoming project${upcomingProjects.length === 1 ? "" : "s"}. Remove from those projects first.`,
       };
     }
 
@@ -606,7 +609,7 @@ function useWorkspaceImpl() {
         // Detach assets from this kit
         assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
         // Remove from any shoots
-        shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
+        projects: d.projects.map(s => s.assignedKits.includes(kitId)
           ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
           : s),
       };
@@ -650,7 +653,7 @@ function useWorkspaceImpl() {
         ...d,
         kits: d.kits.filter(k => k.id !== kitId),
         assets: d.assets.map(a => a.kitId === kitId ? { ...a, kitId: null } : a),
-        shoots: d.shoots.map(s => s.assignedKits.includes(kitId)
+        projects: d.projects.map(s => s.assignedKits.includes(kitId)
           ? { ...s, assignedKits: s.assignedKits.filter(id => id !== kitId) }
           : s),
       };
@@ -1247,43 +1250,53 @@ function useWorkspaceImpl() {
     });
   }, [auth.user, updateUserData]);
 
-  const addShoot = useCallback((shoot: Shoot) => {
+  /**
+   * Project CRUD (iter-23 rename from "shoot" → "project"). Audit categories
+   * use the new `project_*` enum values for new entries; existing audit
+   * entries in workspace data retain their `shoot_*` categories (locked
+   * decision: don't rewrite history).
+   *
+   * The legacy names (addShoot/updateShoot/deleteShoot) are exposed at the
+   * bottom of the hook's return as aliases so call sites can be migrated
+   * gradually without breaking the build at any point.
+   */
+  const addProject = useCallback((project: Project) => {
     if (isReadOnly) return;
     updateUserData(d => appendEvent(
-      { ...d, shoots: [...d.shoots, shoot] },
-      "shoot_scheduled", `Scheduled ${shoot.title}`,
-      { detail: `${shoot.client} · ${shoot.assignedTeam.length} team · ${shoot.assignedKits.length} kit${shoot.assignedKits.length === 1 ? "" : "s"}` },
+      { ...d, projects: [...d.projects, project] },
+      "project_scheduled", `Scheduled ${project.title}`,
+      { detail: `${project.client} · ${project.assignedTeam.length} team · ${project.assignedKits.length} kit${project.assignedKits.length === 1 ? "" : "s"}` },
     ));
   }, [isReadOnly, updateUserData]);
 
-  const updateShoot = useCallback((id: string, patch: Partial<Shoot>) => {
+  const updateProject = useCallback((id: string, patch: Partial<Project>) => {
     if (isReadOnly) return;
     updateUserData(d => {
-      const before = d.shoots.find(s => s.id === id);
-      const next = { ...d, shoots: d.shoots.map(s => s.id === id ? { ...s, ...patch } : s) };
+      const before = d.projects.find(s => s.id === id);
+      const next = { ...d, projects: d.projects.map(s => s.id === id ? { ...s, ...patch } : s) };
       if (!before) return next;
       // Differentiate status change from generic edit
       if (patch.status && patch.status !== before.status) {
-        return appendEvent(next, "shoot_status_changed",
+        return appendEvent(next, "project_status_changed",
           `${before.title} marked ${patch.status}`);
       }
-      return appendEvent(next, "shoot_updated", `Updated ${before.title}`);
+      return appendEvent(next, "project_updated", `Updated ${before.title}`);
     });
   }, [isReadOnly, updateUserData]);
 
-  const deleteShoot = useCallback((id: string): (() => void) | null => {
+  const deleteProject = useCallback((id: string): (() => void) | null => {
     if (isReadOnly) return null;
     let snapshot: WorkspaceData | null = null;
     updateUserData(d => {
-      const target = d.shoots.find(s => s.id === id);
+      const target = d.projects.find(s => s.id === id);
       if (!target) return d;
       snapshot = d;
-      const next = { ...d, shoots: d.shoots.filter(s => s.id !== id) };
-      return appendEvent(next, "shoot_deleted", `Deleted ${target.title}`);
+      const next = { ...d, projects: d.projects.filter(s => s.id !== id) };
+      return appendEvent(next, "project_deleted", `Deleted ${target.title}`);
     });
     if (!snapshot) return null;
     const captured = snapshot;
-    return () => updateUserData(() => appendEvent(captured, "shoot_scheduled", `Restored deleted shoot`));
+    return () => updateUserData(() => appendEvent(captured, "project_scheduled", `Restored deleted project`));
   }, [isReadOnly, updateUserData]);
 
   // --- Service flag mutators ---
@@ -1426,7 +1439,13 @@ function useWorkspaceImpl() {
   const checkoutKits = useCallback((args: {
     user: { name: string; initials: string; color: string; isGuest?: boolean };
     kitIds: string[];
-    shootTitle: string;
+    /** Project title (iter-23 rename). Old callers may pass `shootTitle`; supported via runtime fallback below. */
+    projectTitle?: string;
+    /** Project id (iter-23 rename). Old callers may pass `shootId`; supported via runtime fallback below. */
+    projectId?: string;
+    /** @deprecated use projectTitle */
+    shootTitle?: string;
+    /** @deprecated use projectId */
     shootId?: string;
     dueBackHoursFromNow?: number;
     /**
@@ -1442,6 +1461,10 @@ function useWorkspaceImpl() {
     const dueBackHours = args.dueBackHoursFromNow ?? 8;
     const now = new Date();
     const due = new Date(now.getTime() + dueBackHours * 60 * 60 * 1000);
+
+    // Accept either project* (new) or shoot* (legacy) for backward compat.
+    const projectTitle = args.projectTitle ?? args.shootTitle ?? "General use";
+    const projectId = args.projectId ?? args.shootId;
 
     let createdCheckout: ActiveCheckout | null = null;
 
@@ -1460,8 +1483,8 @@ function useWorkspaceImpl() {
         user: args.user.name,
         initials: args.user.initials,
         color: args.user.color,
-        shoot: args.shootTitle,
-        shootId: args.shootId,
+        project: projectTitle,
+        projectId: projectId,
         kits: targetKits.map(k => k.name),
         kitIds: args.kitIds,
         assetIds: allComponentIds,
@@ -1482,7 +1505,7 @@ function useWorkspaceImpl() {
       };
       return appendEvent(next, "checkout",
         `${args.user.name} checked out ${targetKits.length === 1 ? targetKits[0].name : `${targetKits.length} kits`}`,
-        { actor: args.user.name, detail: `for ${args.shootTitle}` });
+        { actor: args.user.name, detail: `for ${projectTitle}` });
     });
 
     return createdCheckout;
@@ -1676,9 +1699,16 @@ function useWorkspaceImpl() {
     ensureMyProfile,
     completeMyProfile,
     updateProfile,
-    addShoot,
-    updateShoot,
-    deleteShoot,
+    // Project CRUD (iter-23 rename)
+    addProject,
+    updateProject,
+    deleteProject,
+    // Deprecated aliases — call sites being migrated. Same function references,
+    // just kept under the old names so existing imports don't break during
+    // the rollout. Remove once every call site uses addProject/etc.
+    addShoot: addProject,
+    updateShoot: updateProject,
+    deleteShoot: deleteProject,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

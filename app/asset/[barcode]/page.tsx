@@ -743,7 +743,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   }
                   return false;
                 });
-                const upcomingShoots = asset.kitId ? data.shoots.filter(s =>
+                const upcomingProjects = asset.kitId ? data.projects.filter(s =>
                   (s.status === "scheduled" || s.status === "active") &&
                   s.assignedKits.includes(asset.kitId!),
                 ) : [];
@@ -753,7 +753,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                   return ac.assetIds?.includes(asset.id);
                 }) || data.flags.some(f => f.assetId === asset.id) || rawKits.some(k => k.componentIds.includes(asset.id));
 
-                const blocked = inActiveCheckout || upcomingShoots.length > 0;
+                const blocked = inActiveCheckout || upcomingProjects.length > 0;
                 const verb = everUsed ? "Archive" : "Delete";
 
                 return (
@@ -762,7 +762,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                       <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Danger zone</div>
                       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)", marginBottom: 14, lineHeight: 1.5 }}>
                         {blocked && inActiveCheckout && "This asset is part of an active checkout. Return it first to archive or delete."}
-                        {blocked && !inActiveCheckout && upcomingShoots.length > 0 && `This asset's kit is assigned to ${upcomingShoots.length} upcoming shoot${upcomingShoots.length === 1 ? "" : "s"}. Remove from those shoots first.`}
+                        {blocked && !inActiveCheckout && upcomingProjects.length > 0 && `This asset's kit is assigned to ${upcomingProjects.length} upcoming project${upcomingProjects.length === 1 ? "" : "s"}. Remove from those projects first.`}
                         {!blocked && "Archive moves the asset to the Archived list (recoverable). Permanent delete removes it forever (no undo)."}
                       </div>
 

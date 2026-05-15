@@ -315,7 +315,8 @@ function parentTypeLabel(t: Note["parentType"]): string {
   switch (t) {
     case "asset":    return "an asset";
     case "kit":      return "a kit";
-    case "shoot":    return "a shoot";
+    case "shoot":    return "a project";  // legacy parentType, treat as project
+    case "project":  return "a project";
     case "checkout": return "a checkout";
     case "user":     return "a message";
   }

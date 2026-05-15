@@ -304,7 +304,7 @@ function CheckoutRow({ checkout, onClick }: { checkout: ActiveCheckout; onClick:
               {checkout.user}
             </span>
             <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
-              · {checkout.shoot}
+              · {(checkout as { project?: string; shoot?: string }).project ?? (checkout as { shoot?: string }).shoot ?? ""}
             </span>
             {isOverdue && (
               <Badge variant="red" style={{ fontSize: 9 }}>OVERDUE</Badge>

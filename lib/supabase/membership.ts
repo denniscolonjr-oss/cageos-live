@@ -626,8 +626,11 @@ export async function createWorkspace(args: {
 
   // Empty workspace data shape — matches what onboarding initializes.
   // We keep this minimal so the workspace is editable from first load.
+  // iter-23: shoots → projects rename. Also ensures `notes` (iter-17) and
+  // `orgLocation` are present so consumers don't crash on undefined access.
   const initialData = {
     orgName: name,
+    orgLocation: "—",
     timezone: "auto",
     barcodePrefix: "",
     filterableFields: [],
@@ -635,10 +638,11 @@ export async function createWorkspace(args: {
     assets: [],
     kits: [],
     profiles: [],
-    shoots: [],
+    projects: [],
     flags: [],
     checkouts: [],
     events: [],
+    notes: [],
   };
 
   const { data: ws, error: wsErr } = await sb
