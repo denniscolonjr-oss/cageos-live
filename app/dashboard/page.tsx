@@ -169,6 +169,15 @@ export default function DashboardPage() {
        * — filter tabs, stat strip, sortable rows, drill-into-detail.
        */
       router.push("/checkouts");
+    } else if (item.key === "projects") {
+      /*
+       * "Projects" navigates to the /projects calendar view added in iter-24.
+       * The dashboard's project list block is still useful as a quick glance
+       * (rendered when activeKey === "projects" is the default tab on dash)
+       * but the sidebar item is now a teleport to the dedicated calendar
+       * page — same pattern as Active Checkouts.
+       */
+      router.push("/projects");
     } else {
       setActiveKey(item.key);
     }
