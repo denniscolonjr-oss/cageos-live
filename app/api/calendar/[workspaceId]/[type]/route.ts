@@ -33,7 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildProjectsICal, buildCheckoutsICal } from "@/lib/calendar/ical";
-import type { WorkspaceData } from "@/lib/hooks/workspaceTypes";
+import type { WorkspaceData, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
 
 export const runtime = "nodejs";  // not edge — needs service role key
 export const dynamic = "force-dynamic";  // no caching at the route layer
@@ -110,7 +110,20 @@ export async function GET(
     // Apply the same migration shim used at app load — old workspaces may
     // still have `shoots: [...]` and ActiveCheckouts with `shoot`/`shootId`.
     const projects = (data.projects ?? (data.shoots as WorkspaceData["projects"]) ?? []);
-    const checkouts = (data.checkouts ?? []) as WorkspaceData["checkouts"];
+
+    /*
+     * WorkspaceData.checkouts is the union `(CheckoutRecord | ActiveCheckout)[]`
+     * because legacy demo data uses CheckoutRecord. The iCal builder only
+     * accepts ActiveCheckout, so we narrow here using a type guard. Real
+     * customer data shouldn't contain CheckoutRecord — that's demo-seed
+     * only — but the type system doesn't know that.
+     *
+     * The guard checks for `checkedOutAtISO` since CheckoutRecord lacks it.
+     */
+    const allCheckouts = data.checkouts ?? [];
+    const checkouts = allCheckouts.filter(
+      (c): c is ActiveCheckout => "checkedOutAtISO" in c && typeof (c as ActiveCheckout).checkedOutAtISO === "string"
+    );
 
     let body: string;
     if (type === "projects") {
