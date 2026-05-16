@@ -15,6 +15,7 @@ import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import MembersCard from "@/components/shared/MembersCard";
+import CalendarExportCard from "@/components/shared/CalendarExportCard";
 import PasscodesCard from "@/components/shared/PasscodesCard";
 import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
@@ -1237,6 +1238,15 @@ export default function DashboardPage() {
                   </div>
                 </Card>
               )}
+
+              {/*
+               * Calendar export — iCal subscription feed for projects + active
+               * checkouts. Visible to everyone in the workspace (anyone can copy
+               * the URL); only owners can generate, rotate, or disable.
+               * Real-mode only since the demo workspace shouldn't expose calendar
+               * tokens.
+               */}
+              {mode === "user" && <CalendarExportCard />}
 
               {/*
                * Danger Zone — Delete the entire workspace.

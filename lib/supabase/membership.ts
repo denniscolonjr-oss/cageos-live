@@ -720,3 +720,102 @@ export async function deleteWorkspace(workspaceId: string): Promise<{ ok: boolea
 
   return { ok: true };
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Calendar export tokens (iter-25)
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get the calendar token for a workspace. Returns null if the workspace
+ * exists but no token is set, or null on any error (caller treats as
+ * "calendar export disabled").
+ *
+ * Anyone with workspace read access can fetch the token — they already
+ * have the data, so the token doesn't grant additional power. Only Owners
+ * can rotate or clear.
+ */
+export async function getCalendarToken(workspaceId: string): Promise<string | null> {
+  const sb = getSupabaseClient();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from("workspaces")
+    .select("calendar_token")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return (data.calendar_token as string | null) ?? null;
+}
+
+/**
+ * Generate a new calendar token (or rotate an existing one — same operation).
+ * Owner-only via RLS policy on the workspaces UPDATE. If a non-owner calls
+ * this, Supabase rejects the update and we return ok:false.
+ *
+ * Token format: 32 hex chars from crypto.randomUUID() without hyphens.
+ * Sufficient entropy (128 bits) for an unguessable secret.
+ */
+export async function rotateCalendarToken(workspaceId: string): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured." };
+
+  const newToken = generateCalendarToken();
+
+  const { error } = await sb
+    .from("workspaces")
+    .update({ calendar_token: newToken })
+    .eq("id", workspaceId);
+
+  if (error) {
+    console.error("[rotateCalendarToken] failed:", error);
+    const isPermission = error.message?.toLowerCase().includes("policy")
+      || error.code === "42501";
+    return {
+      ok: false,
+      error: isPermission
+        ? "Only the workspace owner can manage calendar export."
+        : error.message || "Failed to rotate token.",
+    };
+  }
+
+  return { ok: true, token: newToken };
+}
+
+/**
+ * Clear the calendar token, disabling export. Existing subscriptions on
+ * calendar apps will start returning empty feeds (the route returns 401
+ * → empty iCal so they don't error out, just show no events).
+ */
+export async function disableCalendarToken(workspaceId: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabaseClient();
+  if (!sb) return { ok: false, error: "Supabase not configured." };
+
+  const { error } = await sb
+    .from("workspaces")
+    .update({ calendar_token: null })
+    .eq("id", workspaceId);
+
+  if (error) {
+    console.error("[disableCalendarToken] failed:", error);
+    const isPermission = error.message?.toLowerCase().includes("policy")
+      || error.code === "42501";
+    return {
+      ok: false,
+      error: isPermission
+        ? "Only the workspace owner can manage calendar export."
+        : error.message || "Failed to disable token.",
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Generate a fresh calendar token. 32-char hex string from a UUID.
+ * crypto.randomUUID is available in modern browsers and Node 19+, which
+ * Next.js requires.
+ */
+function generateCalendarToken(): string {
+  return crypto.randomUUID().replace(/-/g, "");
+}
