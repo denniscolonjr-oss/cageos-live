@@ -142,6 +142,7 @@ export default function DashboardPage() {
       { label: "All assets", key: "assets", count: data.assets.length || null, countStyle: null },
       { label: "Kits", key: "kits", count: data.kits.length || null, countStyle: null },
       { label: "Projects", key: "projects", count: data.projects.length || null, countStyle: null },
+      { label: "SOPs", key: "sops", count: data.sops.length || null, countStyle: null },
       { label: "Service flags", key: "flags", count: stats.serviceFlags || null, countStyle: stats.serviceFlags > 0 ? "alert" : null },
       ...(data.managerMode && (archivedAssets.length > 0 || archivedKits.length > 0)
         ? [{ label: "Archived", key: "archived", count: archivedAssets.length + archivedKits.length, countStyle: null }]
@@ -183,6 +184,13 @@ export default function DashboardPage() {
        * page — same pattern as Active Checkouts.
        */
       router.push("/projects");
+    } else if (item.key === "sops") {
+      /*
+       * "SOPs" navigates to the /sops library added in iter-27a. Same
+       * pattern as the previous dedicated-page nav items (Active checkouts,
+       * Projects) — sidebar teleports rather than switching dashboard tabs.
+       */
+      router.push("/sops");
     } else {
       setActiveKey(item.key);
     }

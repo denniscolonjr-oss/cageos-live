@@ -63,6 +63,16 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
       ...n,
       readBy: n.readBy ?? [],
     })),
+    /*
+     * SOPs (iter-27a). Default to empty array for workspaces created before
+     * SOPs existed. Each existing SOP gets its `versions` array initialized
+     * to empty if missing (forward-compat for any pre-versioned data).
+     */
+    sops: (legacy.sops ?? []).map(s => ({
+      ...s,
+      versions: s.versions ?? [],
+      categories: s.categories ?? [],
+    })),
     orgName: legacy.orgName ?? "Your Org",
     orgLocation: legacy.orgLocation ?? "—",
     barcodePrefix: legacy.barcodePrefix ?? "AST",

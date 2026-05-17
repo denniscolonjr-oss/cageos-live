@@ -27,6 +27,7 @@ const EMPTY: WorkspaceData = {
   events: [],
   flags: [],
   notes: [],
+  sops: [],
   orgName: "Your Org",
   orgLocation: "—",
   barcodePrefix: "AST",
@@ -81,6 +82,15 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
     notes: (legacy.notes ?? []).map(n => ({
       ...n,
       readBy: n.readBy ?? [],
+    })),
+    /*
+     * SOPs (iter-27a). Default to empty array for workspaces created before
+     * SOPs existed. Each existing SOP gets defensive defaults for arrays.
+     */
+    sops: (legacy.sops ?? []).map(s => ({
+      ...s,
+      versions: s.versions ?? [],
+      categories: s.categories ?? [],
     })),
     orgName: legacy.orgName ?? "Your Org",
     orgLocation: legacy.orgLocation ?? "—",

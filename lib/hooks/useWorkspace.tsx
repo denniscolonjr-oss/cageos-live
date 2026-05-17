@@ -16,12 +16,12 @@ import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/loca
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { useAuth, type WorkspaceRole } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
-import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working.
 // `Shoot` is a deprecated alias for `Project` (iter-23 rename); both stay
 // exported until every call site is migrated.
-export type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult };
+export type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion };
 
 const modeAdapter = localStorageModeAdapter;
 
@@ -35,6 +35,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   events: [],
   flags: [],
   notes: [],
+  sops: [],
   orgName: "Your Org",
   orgLocation: "—",
   barcodePrefix: "AST",
@@ -184,6 +185,7 @@ function buildDemoWorkspace(): WorkspaceData {
     events: buildDemoEvents(),
     flags: buildDemoFlags(),
     notes: [],
+    sops: [],
     orgName: "MMG Production",
     orgLocation: "DC",
     barcodePrefix: "MMG",
@@ -1010,7 +1012,7 @@ function useWorkspaceImpl() {
    * Returns the created note's id so callers can scroll to it / focus it.
    */
   const addNote = useCallback((args: {
-    parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user";
+    parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "sop" | "user";
     parentId: string;
     body: string;
     isTask?: boolean;
@@ -1149,7 +1151,7 @@ function useWorkspaceImpl() {
   }, [isReadOnly, auth.user, userData.profiles, updateUserData]);
 
   /** Helper: get all notes for a given parent. */
-  const notesForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user", parentId: string) => {
+  const notesForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "sop" | "user", parentId: string) => {
     const notes = data.notes ?? [];
     return notes
       .filter(n => n.parentType === parentType && n.parentId === parentId)
@@ -1228,7 +1230,7 @@ function useWorkspaceImpl() {
    * Called when the user opens an asset/kit detail page, clearing the
    * inbox badge for everything visible there in one batched state update.
    */
-  const markNotesReadForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "user", parentId: string) => {
+  const markNotesReadForParent = useCallback((parentType: "asset" | "kit" | "shoot" | "project" | "checkout" | "sop" | "user", parentId: string) => {
     if (!auth.user) return;
     const userId = auth.user.id;
     updateUserData(d => {
@@ -1299,7 +1301,154 @@ function useWorkspaceImpl() {
     return () => updateUserData(() => appendEvent(captured, "project_scheduled", `Restored deleted project`));
   }, [isReadOnly, updateUserData]);
 
-  // --- Service flag mutators ---
+  // --- SOP mutators (iter-27a) ---
+
+  /**
+   * SOP — Standard Operating Procedure CRUD.
+   *
+   * Permissions:
+   *   - addSOP: Crew, Manager, Owner (Viewer cannot author)
+   *   - updateSOP: Owner+Manager can update any; Crew can update only their
+   *     own (createdBy === their initials)
+   *   - deleteSOP: same as updateSOP — Owner+Manager any, Crew own only
+   *
+   * Version history: every successful update pushes a snapshot of the
+   * PRE-EDIT state to the SOP's versions array. Capped at 50 entries
+   * (oldest dropped). Revert is implemented as updateSOP with the old
+   * version's content, which itself creates a new version — so the audit
+   * trail is preserved.
+   *
+   * The permission checks are enforced here (in the hook), not at the UI
+   * layer. UI hides buttons based on the same rules, but the hook is the
+   * source of truth for write authorization.
+   */
+
+  /** Add a new SOP. Returns the created SOP id on success, null on permission denial. */
+  const addSOP = useCallback((args: {
+    title: string;
+    body: string;
+    categories: string[];
+    authorInitials: string;
+  }): string | null => {
+    if (isReadOnly) return null;
+    // Anyone Crew+ can create SOPs. role is null in demo mode (allowed).
+    const role = auth.currentRole;
+    if (role === "viewer") return null;
+
+    const now = new Date().toISOString();
+    const id = `sop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const sop: SOP = {
+      id,
+      title: args.title.trim() || "Untitled SOP",
+      body: args.body,
+      categories: args.categories.filter(c => c.trim() !== ""),
+      createdBy: args.authorInitials,
+      createdAt: now,
+      lastEditedBy: args.authorInitials,
+      lastEditedAt: now,
+      // No initial version snapshot — the SOP at createdAt IS the v1.
+      // Versions accumulate from subsequent edits.
+      versions: [],
+    };
+
+    updateUserData(d => appendEvent(
+      { ...d, sops: [...d.sops, sop] },
+      "sop_created", `Created SOP: ${sop.title}`,
+      { actor: args.authorInitials, detail: sop.categories.length > 0 ? sop.categories.join(", ") : undefined }
+    ));
+
+    return id;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /**
+   * Update an SOP. Pushes a pre-edit snapshot to versions before applying
+   * the patch. Caller must pass `editorInitials` so we can attribute the
+   * version snapshot and the audit entry to the right user.
+   *
+   * The `reverting` flag changes the audit event from sop_updated to
+   * sop_reverted (when invoked via the revert UI) for cleaner history.
+   */
+  const updateSOP = useCallback((
+    id: string,
+    patch: Partial<Pick<SOP, "title" | "body" | "categories">>,
+    editorInitials: string,
+    reverting = false,
+  ): boolean => {
+    if (isReadOnly) return false;
+    const role = auth.currentRole;
+    if (role === "viewer") return false;
+
+    let allowed = false;
+    updateUserData(d => {
+      const before = d.sops.find(s => s.id === id);
+      if (!before) return d;
+      // Crew can only edit their own. Manager+ can edit any.
+      if (role === "crew" && before.createdBy !== editorInitials) {
+        return d;
+      }
+      allowed = true;
+
+      // Push pre-edit snapshot to versions. Cap at last 50.
+      const snapshot: SOPVersion = {
+        id: `ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        savedAt: before.lastEditedAt,
+        savedBy: before.lastEditedBy,
+        title: before.title,
+        body: before.body,
+        categories: before.categories,
+      };
+      const trimmedVersions = [...before.versions, snapshot].slice(-50);
+
+      const now = new Date().toISOString();
+      const updated: SOP = {
+        ...before,
+        ...patch,
+        // Sanitize patch values
+        title: patch.title !== undefined ? (patch.title.trim() || before.title) : before.title,
+        categories: patch.categories !== undefined ? patch.categories.filter(c => c.trim() !== "") : before.categories,
+        lastEditedBy: editorInitials,
+        lastEditedAt: now,
+        versions: trimmedVersions,
+      };
+
+      const next = { ...d, sops: d.sops.map(s => s.id === id ? updated : s) };
+      const auditCategory: AuditCategory = reverting ? "sop_reverted" : "sop_updated";
+      const auditLabel = reverting
+        ? `Reverted SOP: ${updated.title}`
+        : `Updated SOP: ${updated.title}`;
+      return appendEvent(next, auditCategory, auditLabel,
+        { actor: editorInitials });
+    });
+    return allowed;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /** Delete an SOP. Returns undo closure on success, null on denial. */
+  const deleteSOP = useCallback((id: string, deleterInitials: string): (() => void) | null => {
+    if (isReadOnly) return null;
+    const role = auth.currentRole;
+    if (role === "viewer") return null;
+
+    let snapshot: WorkspaceData | null = null;
+    let allowed = false;
+    updateUserData(d => {
+      const target = d.sops.find(s => s.id === id);
+      if (!target) return d;
+      if (role === "crew" && target.createdBy !== deleterInitials) {
+        return d;
+      }
+      allowed = true;
+      snapshot = d;
+      const next = { ...d, sops: d.sops.filter(s => s.id !== id) };
+      return appendEvent(next, "sop_deleted", `Deleted SOP: ${target.title}`,
+        { actor: deleterInitials });
+    });
+    if (!allowed || !snapshot) return null;
+    const captured = snapshot;
+    return () => updateUserData(() => appendEvent(captured, "sop_created", `Restored deleted SOP`,
+      { actor: deleterInitials }));
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
 
   /** Open a new flag on an asset. Reason should be 20+ words (UI enforces). */
   const flagAsset = useCallback((args: {
@@ -1709,6 +1858,10 @@ function useWorkspaceImpl() {
     addShoot: addProject,
     updateShoot: updateProject,
     deleteShoot: deleteProject,
+    // SOP CRUD (iter-27a)
+    addSOP,
+    updateSOP,
+    deleteSOP,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

@@ -144,7 +144,7 @@ export interface UserProfile {
  * rename) so historical notes attached to projects don't break the type
  * check. New code uses "project" exclusively.
  */
-export type NoteParentType = "asset" | "kit" | "shoot" | "project" | "checkout" | "user";
+export type NoteParentType = "asset" | "kit" | "shoot" | "project" | "checkout" | "sop" | "user";
 
 export interface Note {
   id: string;

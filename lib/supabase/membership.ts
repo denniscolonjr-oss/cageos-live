@@ -643,6 +643,7 @@ export async function createWorkspace(args: {
     checkouts: [],
     events: [],
     notes: [],
+    sops: [],
   };
 
   const { data: ws, error: wsErr } = await sb

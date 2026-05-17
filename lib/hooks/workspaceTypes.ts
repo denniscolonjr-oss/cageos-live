@@ -129,7 +129,12 @@ export type AuditCategory =
   | "flag_status_changed"
   | "flag_note_added"
   | "flag_resolved"
-  | "note_added";
+  | "note_added"
+  // SOPs (iter-27a) — Standard Operating Procedures
+  | "sop_created"
+  | "sop_updated"
+  | "sop_reverted"
+  | "sop_deleted";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -189,6 +194,67 @@ export interface AuditEvent {
   detail?: string;
 }
 
+/**
+ * SOP — Standard Operating Procedure (iter-27a).
+ *
+ * Institutional knowledge captured as markdown documents. Each SOP is
+ * authored by a workspace member and visible to everyone in the workspace.
+ * SOPs can be categorized using the existing asset-category vocabulary
+ * (multi-select — an SOP can belong to several categories).
+ *
+ * Version history: every save creates a new SOPVersion entry. Capped at
+ * the last 50 versions per SOP to bound growth. Revert from an old version
+ * by writing it as the new current body — that creates yet another version
+ * in the history, preserving the audit trail.
+ *
+ * Future (iter-27b): attached files. The current shape supports authored
+ * markdown only via `body`. iter-27b will add an optional `attachment` field
+ * (file URL + filename + mime) to support uploaded documents alongside.
+ */
+export interface SOP {
+  id: string;
+  title: string;
+  /** Markdown body. Rendered to HTML on display via the same renderer used in comments. */
+  body: string;
+  /**
+   * Categories this SOP applies to. Multi-select. Values come from the
+   * union of (a) unique asset categories and (b) categories already in
+   * use by other SOPs. Empty array = uncategorized.
+   */
+  categories: string[];
+  /** Initials of the original creator. */
+  createdBy: string;
+  /** ISO UTC. */
+  createdAt: string;
+  /** Initials of the last person to edit. May equal createdBy. */
+  lastEditedBy: string;
+  /** ISO UTC. */
+  lastEditedAt: string;
+  /**
+   * Version history (newest last). Each save pushes a snapshot before
+   * applying the new content. Capped at last 50 entries.
+   */
+  versions: SOPVersion[];
+}
+
+/**
+ * A single point-in-time snapshot of an SOP's content. Created automatically
+ * on every save (and on revert). Used to render history view + power revert.
+ */
+export interface SOPVersion {
+  id: string;
+  /** ISO UTC. When this version was saved. */
+  savedAt: string;
+  /** Initials of who saved this version. */
+  savedBy: string;
+  /** Snapshot of title at this version. */
+  title: string;
+  /** Snapshot of body at this version. */
+  body: string;
+  /** Snapshot of categories at this version. */
+  categories: string[];
+}
+
 export interface WorkspaceData {
   assets: Asset[];
   kits: Kit[];
@@ -220,6 +286,13 @@ export interface WorkspaceData {
    * See lib/data.ts for the Note interface details.
    */
   notes: Note[];
+  /**
+   * Standard Operating Procedures (iter-27a). Markdown-authored documents
+   * capturing institutional knowledge. Versioned (each save creates a
+   * snapshot); categorized using the existing asset-category vocabulary;
+   * commentable via parentType: "sop".
+   */
+  sops: SOP[];
   orgName: string;
   orgLocation: string;
   barcodePrefix: string;

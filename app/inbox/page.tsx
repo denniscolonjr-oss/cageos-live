@@ -75,6 +75,8 @@ export default function InboxPage() {
       case "project":  // iter-26: project detail page exists
       case "shoot":    // legacy parentType, treat as project
         return `/projects/${encodeURIComponent(parentId)}`;
+      case "sop":      // iter-27a: SOP detail page
+        return `/sops/${encodeURIComponent(parentId)}`;
       default:         return "/dashboard";
     }
   }
@@ -104,6 +106,10 @@ export default function InboxPage() {
     if (n.parentType === "project" || n.parentType === "shoot") {
       const p = data.projects.find(x => x.id === n.parentId);
       return p?.title ?? `Project ${n.parentId}`;
+    }
+    if (n.parentType === "sop") {
+      const s = data.sops.find(x => x.id === n.parentId);
+      return s?.title ?? `SOP ${n.parentId}`;
     }
     return n.parentId;
   }
@@ -325,6 +331,7 @@ function parentTypeLabel(t: Note["parentType"]): string {
     case "shoot":    return "a project";  // legacy parentType, treat as project
     case "project":  return "a project";
     case "checkout": return "a checkout";
+    case "sop":      return "an SOP";
     case "user":     return "a message";
   }
 }
