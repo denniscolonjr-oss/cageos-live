@@ -136,7 +136,9 @@ export type AuditCategory =
   | "sop_reverted"
   | "sop_deleted"
   | "sop_attachment_added"
-  | "sop_attachment_removed";
+  | "sop_attachment_removed"
+  | "sop_linked"
+  | "sop_unlinked";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -246,6 +248,20 @@ export interface SOP {
    * snapshot. Files live in Supabase Storage under the `sop-files` bucket.
    */
   attachments: SOPAttachment[];
+  /**
+   * Entities this SOP is explicitly linked to (iter-27c). Granular,
+   * intentional linking — SOPs do NOT auto-surface via category match.
+   * Manager+ controls all linking (linking is an editorial decision about
+   * the entity, not the SOP). Each array stores entity ids only; the
+   * matching helper resolves them against current data.
+   *
+   * Note for kits: SOPs linked to a kit AND SOPs linked to any of its
+   * component assets all surface on the kit detail page. See
+   * lib/sopMatching.ts for the aggregation helper.
+   */
+  linkedAssetIds: string[];
+  linkedKitIds: string[];
+  linkedProjectIds: string[];
 }
 
 /**

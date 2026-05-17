@@ -11,6 +11,8 @@ import type { Project, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
 import { formatShootRange } from "@/lib/timezone";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import CameraCapture from "@/components/shared/CameraCapture";
+import ProceduresSection from "@/components/shared/ProceduresSection";
+import { getSOPsForKit } from "@/lib/sopMatching";
 
 type Flow = "menu" | "checkout" | "return";
 type CheckoutStep = 1 | 2 | 3 | 4 | 5;
@@ -636,6 +638,46 @@ export default function KioskPage() {
 
             {step === 4 && (
               <div>
+                {/*
+                 * Procedures panel (iter-27c). Aggregates SOPs across all
+                 * kits being checked out. De-duped — an SOP linked to two
+                 * different kits in this checkout shows once. Render only
+                 * if there's at least one matching SOP; otherwise we'd
+                 * waste vertical space at the top of the condition check.
+                 *
+                 * Read-only here — kiosk users (who may not have edit
+                 * access to the workspace) can view and click into SOPs
+                 * but can't link or unlink from this view.
+                 */}
+                {(() => {
+                  const allKitSOPs = new Map<string, typeof data.sops[number]>();
+                  for (const kit of kitsForCheckout) {
+                    for (const sop of getSOPsForKit(kit, data.sops)) {
+                      allKitSOPs.set(sop.id, sop);
+                    }
+                  }
+                  const sops = Array.from(allKitSOPs.values());
+                  if (sops.length === 0) return null;
+                  return (
+                    <div style={{
+                      marginBottom: 18,
+                      background: "color-mix(in srgb, var(--acc) 5%, var(--s2))",
+                      border: "1px solid color-mix(in srgb, var(--acc) 40%, var(--b1))",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                    }}>
+                      <ProceduresSection
+                        targetType="kit"
+                        targetId={kitsForCheckout[0]?.id ?? ""}
+                        targetName="this checkout"
+                        sops={sops}
+                        readOnly
+                        headerLabel="Review before taking"
+                      />
+                    </div>
+                  );
+                })()}
+
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Condition check</div>
                 <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 14 }}>Capture photos before leaving the cage. Optional but recommended.</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>

@@ -1362,6 +1362,11 @@ function useWorkspaceImpl() {
       // iter-27b: empty attachments list at creation. Files are added via
       // addSOPAttachment AFTER upload completes.
       attachments: args.attachments ?? [],
+      // iter-27c: empty link arrays at creation. Manager+ links the SOP
+      // to entities via linkSOP after the SOP exists.
+      linkedAssetIds: [],
+      linkedKitIds: [],
+      linkedProjectIds: [],
     };
 
     updateUserData(d => appendEvent(
@@ -1543,6 +1548,124 @@ function useWorkspaceImpl() {
     return allowed;
   }, [isReadOnly, auth.currentRole, updateUserData]);
 
+  /**
+   * Link an SOP to an entity (asset / kit / project) — iter-27c.
+   *
+   * Permission: Manager+ only. Linking is an editorial decision about the
+   * ENTITY ("this camera has this procedure"), not the SOP. Crew can author
+   * SOPs but not curate where they surface — same pattern as flag/note
+   * permissions where Crew records and Manager curates.
+   *
+   * Returns true on success. False on permission denial, missing SOP, or
+   * already-linked (idempotent — no error, just no-op).
+   *
+   * No category auto-surfacing: SOPs only appear on entities where they're
+   * explicitly linked. The category field on SOPs is for library
+   * filtering/search only.
+   */
+  const linkSOP = useCallback((
+    sopId: string,
+    targetType: "asset" | "kit" | "project",
+    targetId: string,
+    actorInitials: string,
+  ): boolean => {
+    if (isReadOnly) return false;
+    // Manager+ only — see permission rationale in JSDoc above.
+    const role = auth.currentRole;
+    if (role !== "owner" && role !== "manager") return false;
+
+    let allowed = false;
+    updateUserData(d => {
+      const sop = d.sops.find(s => s.id === sopId);
+      if (!sop) return d;
+
+      // Resolve the entity for the audit message + verify it exists
+      let entityName = targetId;
+      if (targetType === "asset") {
+        const a = d.assets.find(x => x.id === targetId);
+        if (!a) return d;
+        entityName = a.name;
+      } else if (targetType === "kit") {
+        const k = d.kits.find(x => x.id === targetId);
+        if (!k) return d;
+        entityName = k.name;
+      } else {
+        const p = d.projects.find(x => x.id === targetId);
+        if (!p) return d;
+        entityName = p.title;
+      }
+
+      // Build the new array based on target type. Already-linked = no-op
+      // but still treat as allowed (idempotent).
+      const field = targetType === "asset" ? "linkedAssetIds"
+                  : targetType === "kit"   ? "linkedKitIds"
+                  : "linkedProjectIds";
+      if (sop[field].includes(targetId)) {
+        allowed = true;
+        return d;
+      }
+      allowed = true;
+
+      const updated: SOP = {
+        ...sop,
+        [field]: [...sop[field], targetId],
+      };
+      const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
+      return appendEvent(next, "sop_linked",
+        `Linked SOP "${sop.title}" to ${targetType}: ${entityName}`,
+        { actor: actorInitials });
+    });
+    return allowed;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /**
+   * Unlink an SOP from an entity. Same permission rules as linkSOP.
+   * Idempotent — unlinking something that isn't linked is a no-op.
+   */
+  const unlinkSOP = useCallback((
+    sopId: string,
+    targetType: "asset" | "kit" | "project",
+    targetId: string,
+    actorInitials: string,
+  ): boolean => {
+    if (isReadOnly) return false;
+    const role = auth.currentRole;
+    if (role !== "owner" && role !== "manager") return false;
+
+    let allowed = false;
+    updateUserData(d => {
+      const sop = d.sops.find(s => s.id === sopId);
+      if (!sop) return d;
+
+      let entityName = targetId;
+      if (targetType === "asset") {
+        entityName = d.assets.find(x => x.id === targetId)?.name ?? targetId;
+      } else if (targetType === "kit") {
+        entityName = d.kits.find(x => x.id === targetId)?.name ?? targetId;
+      } else {
+        entityName = d.projects.find(x => x.id === targetId)?.title ?? targetId;
+      }
+
+      const field = targetType === "asset" ? "linkedAssetIds"
+                  : targetType === "kit"   ? "linkedKitIds"
+                  : "linkedProjectIds";
+      if (!sop[field].includes(targetId)) {
+        allowed = true;
+        return d;
+      }
+      allowed = true;
+
+      const updated: SOP = {
+        ...sop,
+        [field]: sop[field].filter(id => id !== targetId),
+      };
+      const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
+      return appendEvent(next, "sop_unlinked",
+        `Unlinked SOP "${sop.title}" from ${targetType}: ${entityName}`,
+        { actor: actorInitials });
+    });
+    return allowed;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
 
   /** Open a new flag on an asset. Reason should be 20+ words (UI enforces). */
   const flagAsset = useCallback((args: {
@@ -1959,6 +2082,9 @@ function useWorkspaceImpl() {
     // SOP attachments (iter-27b)
     addSOPAttachment,
     removeSOPAttachment,
+    // SOP linking (iter-27c)
+    linkSOP,
+    unlinkSOP,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

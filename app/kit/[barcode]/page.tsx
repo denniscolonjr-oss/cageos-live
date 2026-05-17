@@ -8,6 +8,8 @@ import Card from "@/components/ui/Card";
 import AddComponentsModal from "@/components/forms/AddComponentsModal";
 import SwapComponentModal from "@/components/forms/SwapComponentModal";
 import CommentsThread from "@/components/shared/CommentsThread";
+import ProceduresSection from "@/components/shared/ProceduresSection";
+import { getSOPsForKit } from "@/lib/sopMatching";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -459,6 +461,17 @@ export default function KitDetailPage({ params }: { params: Promise<{ barcode: s
                * parentId=kit.id. CommentsThread handles all the data fetching,
                * permission gating, and rendering itself.
                */}
+              {/* Procedures linked to this kit OR its component assets (iter-27c) */}
+              <Card style={{ marginBottom: 14 }}>
+                <ProceduresSection
+                  targetType="kit"
+                  targetId={kit.id}
+                  targetName={kit.name}
+                  sops={getSOPsForKit(kit, data.sops)}
+                  parentKit={kit}
+                />
+              </Card>
+
               <Card>
                 <div style={{ padding: "14px 18px 18px" }}>
                   <CommentsThread

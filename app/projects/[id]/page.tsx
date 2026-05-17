@@ -31,11 +31,13 @@ import TopNav from "@/components/shared/TopNav";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import CommentsThread from "@/components/shared/CommentsThread";
+import ProceduresSection from "@/components/shared/ProceduresSection";
 import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { formatShootRange } from "@/lib/timezone";
+import { getSOPsForProject } from "@/lib/sopMatching";
 import { toast } from "@/components/ui/Toast";
 import type { Project, ActiveCheckout } from "@/lib/hooks/workspaceTypes";
 
@@ -406,6 +408,16 @@ function ProjectDetailBody({
               </div>
             </Card>
           )}
+
+          {/* Procedures linked to this project (iter-27c) */}
+          <Card style={{ marginBottom: 14 }}>
+            <ProceduresSection
+              targetType="project"
+              targetId={project.id}
+              targetName={project.title}
+              sops={getSOPsForProject(project, data.sops)}
+            />
+          </Card>
 
           {/* Comments */}
           <Card style={{ marginBottom: 14 }}>

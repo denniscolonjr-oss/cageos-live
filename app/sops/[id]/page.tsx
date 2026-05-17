@@ -36,6 +36,7 @@ import CommentsThread from "@/components/shared/CommentsThread";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import { getEntitiesForSOP } from "@/lib/sopMatching";
 import { toast } from "@/components/ui/Toast";
 import type { SOP, SOPVersion } from "@/lib/hooks/workspaceTypes";
 
@@ -144,6 +145,18 @@ function SOPDetailBody({ sop, isMobile }: { sop: SOP; isMobile: boolean }) {
   const creator = data.profiles.find(p => p.initials === sop.createdBy);
   const lastEditor = data.profiles.find(p => p.initials === sop.lastEditedBy);
   const wasEdited = sop.lastEditedAt !== sop.createdAt;
+
+  /**
+   * Entities this SOP is currently linked to (iter-27c). Resolved against
+   * current workspace data so deleted entities are naturally excluded
+   * (their ids stay in the link arrays but the lookup misses them).
+   * The detail page renders three lists below — assets, kits, projects.
+   */
+  const linkedEntities = useMemo(
+    () => getEntitiesForSOP(sop, { assets: data.assets, kits: data.kits, projects: data.projects }),
+    [sop, data.assets, data.kits, data.projects]
+  );
+  const totalLinks = linkedEntities.assets.length + linkedEntities.kits.length + linkedEntities.projects.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
@@ -326,6 +339,56 @@ function SOPDetailBody({ sop, isMobile }: { sop: SOP; isMobile: boolean }) {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Linked to (iter-27c) — which entities reference this SOP */}
+          {totalLinks > 0 && (
+            <Card style={{ marginBottom: 14 }}>
+              <div style={{ padding: "14px 18px" }}>
+                <div style={{
+                  fontFamily: "'DM Mono',monospace", fontSize: 9,
+                  color: "var(--t3)", letterSpacing: "0.1em",
+                  textTransform: "uppercase", marginBottom: 10,
+                }}>
+                  Linked to ({totalLinks})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {linkedEntities.assets.length > 0 && (
+                    <LinkedGroup
+                      label="Assets"
+                      items={linkedEntities.assets.map(a => ({
+                        id: a.id,
+                        name: a.name,
+                        href: `/asset/${encodeURIComponent(a.barcode)}`,
+                        secondary: a.barcode,
+                      }))}
+                    />
+                  )}
+                  {linkedEntities.kits.length > 0 && (
+                    <LinkedGroup
+                      label="Kits"
+                      items={linkedEntities.kits.map(k => ({
+                        id: k.id,
+                        name: k.name,
+                        href: `/kit/${encodeURIComponent(k.barcode)}`,
+                        secondary: `${k.componentIds.length} component${k.componentIds.length === 1 ? "" : "s"}`,
+                      }))}
+                    />
+                  )}
+                  {linkedEntities.projects.length > 0 && (
+                    <LinkedGroup
+                      label="Projects"
+                      items={linkedEntities.projects.map(p => ({
+                        id: p.id,
+                        name: p.title,
+                        href: `/projects/${encodeURIComponent(p.id)}`,
+                        secondary: p.client,
+                      }))}
+                    />
+                  )}
                 </div>
               </div>
             </Card>
@@ -732,4 +795,47 @@ function formatDateTime(iso: string): string {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
+}
+
+/**
+ * Display a group of linked entities (assets / kits / projects) on the
+ * SOP detail page's "Linked to" section. Each item has a name, secondary
+ * line, and link to the entity's detail page.
+ */
+function LinkedGroup({ label, items }: {
+  label: string;
+  items: { id: string; name: string; href: string; secondary: string }[];
+}) {
+  return (
+    <div>
+      <div style={{
+        fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+        color: "var(--t3)", letterSpacing: "0.05em",
+        textTransform: "uppercase", marginBottom: 5,
+      }}>
+        {label} ({items.length})
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {items.map(item => (
+          <Link key={item.id} href={item.href} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "7px 11px",
+            background: "var(--s2)", border: "1px solid var(--b1)",
+            borderRadius: 5, textDecoration: "none",
+            transition: "background 0.12s",
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.name}
+              </div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
+                {item.secondary}
+              </div>
+            </div>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>→</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }

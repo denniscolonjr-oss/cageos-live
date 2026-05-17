@@ -15,6 +15,8 @@ import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import PickKitModal from "@/components/forms/PickKitModal";
 import CommentsThread from "@/components/shared/CommentsThread";
+import ProceduresSection from "@/components/shared/ProceduresSection";
+import { getSOPsForAsset } from "@/lib/sopMatching";
 
 const CATEGORIES = ["Video", "Audio", "Lighting", "Grip", "Power", "Misc Prod", "IT / Network"];
 const LIFECYCLE_OPTIONS = ["active", "retired", "lost"] as const;
@@ -652,6 +654,15 @@ export default function AssetDetailPage({ params }: { params: Promise<{ barcode:
                * sections (Service history, Flag history). The thread itself
                * supplies the "Comments" heading and the count.
                */}
+              <Card style={{ marginBottom: 14 }}>
+                <ProceduresSection
+                  targetType="asset"
+                  targetId={asset.id}
+                  targetName={asset.name}
+                  sops={getSOPsForAsset(asset, data.sops)}
+                />
+              </Card>
+
               <Card>
                 <div style={{ padding: "14px 18px 18px" }}>
                   <CommentsThread
