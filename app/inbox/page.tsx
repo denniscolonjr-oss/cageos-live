@@ -72,6 +72,9 @@ export default function InboxPage() {
       case "asset":    return `/asset/${encodeURIComponent(parentId)}`;
       case "kit":      return `/kit/${encodeURIComponent(parentId)}`;
       case "checkout": return `/checkouts/${encodeURIComponent(parentId)}`;
+      case "project":  // iter-26: project detail page exists
+      case "shoot":    // legacy parentType, treat as project
+        return `/projects/${encodeURIComponent(parentId)}`;
       default:         return "/dashboard";
     }
   }
@@ -97,6 +100,10 @@ export default function InboxPage() {
       // than the bare id.
       const kitsLabel = c.kits?.length ? c.kits.join(" · ") : `${c.kits?.length ?? 0} kits`;
       return `${kitsLabel} (${c.user})`;
+    }
+    if (n.parentType === "project" || n.parentType === "shoot") {
+      const p = data.projects.find(x => x.id === n.parentId);
+      return p?.title ?? `Project ${n.parentId}`;
     }
     return n.parentId;
   }

@@ -255,9 +255,9 @@ function buildDeepLink(parentType: string, parentId: string): string {
       return `${base}/checkouts/${encodeURIComponent(parentId)}`;
     case "project":
     case "shoot":
-      // Both route to /projects (the placeholder list / future calendar in iter-24).
-      // Project detail routes don't exist yet; for now we land users on the list.
-      return `${base}/projects`;
+      // iter-26: project detail page is live. Both legacy "shoot" and new
+      // "project" parentTypes route to the dedicated detail view.
+      return `${base}/projects/${encodeURIComponent(parentId)}`;
     case "user":
     default:
       return `${base}/dashboard`;

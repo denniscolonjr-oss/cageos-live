@@ -11,7 +11,6 @@ import AddKitModal from "@/components/forms/AddKitModal";
 import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
 import CSVUploadModal from "@/components/forms/CSVUploadModal";
 import AddShootModal from "@/components/forms/AddShootModal";
-import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import FlagItemModal from "@/components/forms/FlagItemModal";
 import FlagDetailModal from "@/components/forms/FlagDetailModal";
 import MembersCard from "@/components/shared/MembersCard";
@@ -51,7 +50,12 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [openModal, setOpenModal] = useState<"asset" | "kit" | "team" | "csv" | "shoot" | null>(null);
-  const [selectedShoot, setSelectedShoot] = useState<Project | null>(null);
+  /*
+   * iter-26: project clicks navigate to /projects/[id] now instead of
+   * opening ShootDetailModal here. Dashboard no longer needs selectedShoot
+   * state or the ShootDetailModal mount. AddShootModal still uses
+   * setOpenModal("shoot") for the "+ Schedule project" sidebar action.
+   */
   const [flagAssetTarget, setFlagAssetTarget] = useState<Asset | null>(null);
   const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null);
   const selectedFlag = selectedFlagId ? data.flags.find(f => f.id === selectedFlagId) ?? null : null;
@@ -744,7 +748,7 @@ export default function DashboardPage() {
                       sh.status === "completed" ? "var(--t3)" :
                       "var(--red)";
                     return (
-                      <div key={sh.id} onClick={() => setSelectedShoot(sh)} style={{ cursor: "pointer" }}>
+                      <div key={sh.id} onClick={() => router.push(`/projects/${encodeURIComponent(sh.id)}`)} style={{ cursor: "pointer" }}>
                       <Card accentColor={accent}>
                         <div style={{ padding: "16px 18px" }}>
                           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
@@ -1437,7 +1441,6 @@ export default function DashboardPage() {
       <AddTeamMemberModal open={openModal === "team"} onClose={() => setOpenModal(null)} />
       <CSVUploadModal open={openModal === "csv"} onClose={() => setOpenModal(null)} />
       <AddShootModal open={openModal === "shoot"} onClose={() => setOpenModal(null)} />
-      <ShootDetailModal open={!!selectedShoot} onClose={() => setSelectedShoot(null)} project={selectedShoot} />
       <FlagItemModal open={!!flagAssetTarget} onClose={() => setFlagAssetTarget(null)} asset={flagAssetTarget} />
       <FlagDetailModal open={!!selectedFlag} onClose={() => setSelectedFlagId(null)} flag={selectedFlag} />
       {/* Self-gates on pendingSetup; renders nothing if profile already complete */}
@@ -1452,7 +1455,14 @@ export default function DashboardPage() {
        */}
       {deleteModalOpen && (
         <div
-          onClick={() => !deleting && setDeleteModalOpen(false)}
+          /*
+           * iter-26: removed click-outside-to-close on this overlay entirely.
+           * Deletion is destructive enough that an accidental dismiss isn't
+           * the worst case — but a stray click that loses the typed
+           * confirmation text IS frustrating. Force explicit Cancel or × to
+           * close. Escape key (handled below) is fine since it requires
+           * deliberate intent.
+           */
           style={{
             position: "fixed", inset: 0, zIndex: 200,
             background: "rgba(0,0,0,0.85)",
@@ -1461,7 +1471,6 @@ export default function DashboardPage() {
           }}
         >
           <div
-            onClick={e => e.stopPropagation()}
             style={{
               background: "var(--s1)",
               border: "1px solid var(--red)",

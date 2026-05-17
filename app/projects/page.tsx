@@ -12,7 +12,7 @@
  *
  * Crew+ can click an empty cell to quick-create a project (title-only,
  * defaults to 9am-5pm on the clicked date). Click an existing project
- * pill to open ShootDetailModal for editing.
+ * pill to navigate to that project's detail page.
  *
  * Multi-day project pills span across cells within a row with rounded
  * ends. Past projects render at slightly reduced opacity. Today's cell
@@ -31,7 +31,6 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Card from "@/components/ui/Card";
-import ShootDetailModal from "@/components/forms/ShootDetailModal";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
@@ -73,6 +72,7 @@ export default function ProjectsPage() {
 
 function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
+  const router = useRouter();
   const { data, addProject } = useWorkspace();
 
   // Default to agenda on mobile (month grid is too cramped), month on desktop.
@@ -85,9 +85,6 @@ function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  // Selected project for the detail modal. null = modal closed.
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-
   // Quick-create popover state. anchored to a specific day cell.
   const [quickCreate, setQuickCreate] = useState<{ date: Date } | null>(null);
 
@@ -98,6 +95,15 @@ function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
   const canWrite = auth.currentRole === "owner"
     || auth.currentRole === "manager"
     || auth.currentRole === "crew";
+
+  /**
+   * Project clicks navigate to the detail page (iter-26). Previously this
+   * opened ShootDetailModal directly. Now the detail page is the canonical
+   * view; users can Edit from there.
+   */
+  function handleProjectClick(p: Project) {
+    router.push(`/projects/${encodeURIComponent(p.id)}`);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", maxHeight: "100dvh", overflow: "hidden" }}>
@@ -124,7 +130,7 @@ function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
               timezone={data.timezone}
               isMobile={isMobile}
               canWrite={canWrite}
-              onProjectClick={setSelectedProject}
+              onProjectClick={handleProjectClick}
               onEmptyCellClick={(date) => canWrite && setQuickCreate({ date })}
             />
           ) : (
@@ -132,7 +138,7 @@ function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
               projects={data.projects}
               profiles={data.profiles}
               timezone={data.timezone}
-              onProjectClick={setSelectedProject}
+              onProjectClick={handleProjectClick}
             />
           )}
 
@@ -161,19 +167,14 @@ function ProjectsPageBody({ isMobile }: { isMobile: boolean }) {
             };
             addProject(newProject);
             setQuickCreate(null);
-            toast(`${newProject.title} scheduled`, {
-              detail: "Click the project to add team, kits, and details.",
-            });
+            toast(`${newProject.title} scheduled`);
+            // Land the user on the detail page to flesh out team/kits/client.
+            // Removed the in-popover instruction message because this is now
+            // the active flow, not a "see you later" toast.
+            router.push(`/projects/${encodeURIComponent(newProject.id)}`);
           }}
         />
       )}
-
-      {/* Project detail / edit modal */}
-      <ShootDetailModal
-        open={!!selectedProject}
-        onClose={() => setSelectedProject(null)}
-        project={selectedProject}
-      />
     </div>
   );
 }
@@ -800,9 +801,30 @@ function QuickCreatePopover({
     weekday: "long", month: "long", day: "numeric",
   });
 
+  /*
+   * Click-outside-to-close, fixed iter-26. Uses the same mousedown/mouseup
+   * pattern as the canonical Modal component: only close when BOTH the
+   * mousedown AND the mouseup landed on the overlay. Prevents the modal
+   * from disappearing when a user is highlighting text and the cursor
+   * drifts outside before they release.
+   */
+  const mouseDownOnOverlayRef = useRef(false);
+
+  function handleOverlayMouseDown(e: React.MouseEvent) {
+    mouseDownOnOverlayRef.current = e.target === e.currentTarget;
+  }
+  function handleOverlayMouseUp(e: React.MouseEvent) {
+    const releasedOnOverlay = e.target === e.currentTarget;
+    if (releasedOnOverlay && mouseDownOnOverlayRef.current) {
+      onClose();
+    }
+    mouseDownOnOverlayRef.current = false;
+  }
+
   return (
     <div
-      onClick={onClose}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
       style={{
         position: "fixed", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.7)",
@@ -811,7 +833,6 @@ function QuickCreatePopover({
       }}
     >
       <div
-        onClick={e => e.stopPropagation()}
         style={{
           background: "var(--s1)",
           border: "1px solid var(--b2)",

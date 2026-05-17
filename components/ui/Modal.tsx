@@ -1,5 +1,5 @@
 "use client";
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 export default function Modal({ open, onClose, title, children, maxWidth = 540 }: {
@@ -10,6 +10,24 @@ export default function Modal({ open, onClose, title, children, maxWidth = 540 }
   maxWidth?: number;
 }) {
   const isMobile = useIsMobile();
+
+  /**
+   * Click-outside-to-close, fixed iter-26.
+   *
+   * Previous behavior: onClick on the overlay → close. Problem: click events
+   * fire on mouseup, but the click TARGET is where mousedown happened. If a
+   * user highlights text inside the modal (mousedown on content), drifts
+   * outside while still pressing (e.g. selecting toward the edge), and
+   * releases outside (mouseup on overlay) — that's a click on the overlay
+   * from the browser's perspective. The modal closes mid-selection and the
+   * user loses their work.
+   *
+   * Fix: track where mousedown started. Only treat the gesture as a close
+   * if BOTH the mousedown AND the mouseup happened on the overlay itself,
+   * outside the modal content. Mousedown inside the modal → never closes,
+   * regardless of where mouseup lands.
+   */
+  const mouseDownOnOverlayRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -24,19 +42,48 @@ export default function Modal({ open, onClose, title, children, maxWidth = 540 }
 
   if (!open) return null;
 
+  function handleOverlayMouseDown(e: React.MouseEvent) {
+    // Did the mousedown happen directly on the overlay (not on a descendant)?
+    // If e.target === e.currentTarget, the press started on the overlay.
+    // If they differ, the press started on the modal content or a child.
+    mouseDownOnOverlayRef.current = e.target === e.currentTarget;
+  }
+
+  function handleOverlayMouseUp(e: React.MouseEvent) {
+    /*
+     * Close only if BOTH:
+     *   - mousedown was on the overlay (not bubbled up from modal content), AND
+     *   - mouseup is on the overlay (current event target matches)
+     *
+     * Blocks the common annoying case: user highlights text inside the
+     * modal and the mouse drifts outside while still pressing. mousedown was
+     * inside → ref is false → close not fired. Selection is preserved.
+     */
+    const releasedOnOverlay = e.target === e.currentTarget;
+    if (releasedOnOverlay && mouseDownOnOverlayRef.current) {
+      onClose();
+    }
+    // Reset for next interaction
+    mouseDownOnOverlayRef.current = false;
+  }
+
   return (
-    <div onClick={onClose} style={{
-      position: "fixed", inset: 0,
-      background: "rgba(0,0,0,0.7)",
-      display: "flex",
-      alignItems: isMobile ? "flex-end" : "center",
-      justifyContent: "center",
-      zIndex: 200,
-      padding: isMobile ? 0 : 20,
-      backdropFilter: "blur(4px)",
-      animation: "fade-up 0.15s ease",
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
+    <div
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: isMobile ? "flex-end" : "center",
+        justifyContent: "center",
+        zIndex: 200,
+        padding: isMobile ? 0 : 20,
+        backdropFilter: "blur(4px)",
+        animation: "fade-up 0.15s ease",
+      }}
+    >
+      <div style={{
         width: "100%",
         maxWidth: isMobile ? "100%" : maxWidth,
         maxHeight: isMobile ? "92vh" : "85vh",
