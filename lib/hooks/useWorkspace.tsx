@@ -1556,12 +1556,12 @@ function useWorkspaceImpl() {
    * SOPs but not curate where they surface — same pattern as flag/note
    * permissions where Crew records and Manager curates.
    *
-   * Returns true on success. False on permission denial, missing SOP, or
-   * already-linked (idempotent — no error, just no-op).
+   * Returns true on success. False on permission denial or missing SOP/entity.
+   * Already-linked is treated as success (idempotent — no error, just no-op).
    *
-   * No category auto-surfacing: SOPs only appear on entities where they're
-   * explicitly linked. The category field on SOPs is for library
-   * filtering/search only.
+   * iter-27c-fix: validates synchronously against current data, then calls
+   * updateUserData. Avoids the queued-updater closure-flag bug that
+   * surfaced the wrong toast on unlink.
    */
   const linkSOP = useCallback((
     sopId: string,
@@ -1570,57 +1570,67 @@ function useWorkspaceImpl() {
     actorInitials: string,
   ): boolean => {
     if (isReadOnly) return false;
-    // Manager+ only — see permission rationale in JSDoc above.
     const role = auth.currentRole;
     if (role !== "owner" && role !== "manager") return false;
 
-    let allowed = false;
+    const sop = userData.sops.find(s => s.id === sopId);
+    if (!sop) return false;
+
+    // Verify target exists and resolve its display name
+    let entityName = targetId;
+    if (targetType === "asset") {
+      const a = userData.assets.find(x => x.id === targetId);
+      if (!a) return false;
+      entityName = a.name;
+    } else if (targetType === "kit") {
+      const k = userData.kits.find(x => x.id === targetId);
+      if (!k) return false;
+      entityName = k.name;
+    } else {
+      const p = userData.projects.find(x => x.id === targetId);
+      if (!p) return false;
+      entityName = p.title;
+    }
+
+    const field = targetType === "asset" ? "linkedAssetIds"
+                : targetType === "kit"   ? "linkedKitIds"
+                : "linkedProjectIds";
+    // Idempotent: already linked = success without re-writing.
+    if (sop[field].includes(targetId)) return true;
+
     updateUserData(d => {
-      const sop = d.sops.find(s => s.id === sopId);
-      if (!sop) return d;
-
-      // Resolve the entity for the audit message + verify it exists
-      let entityName = targetId;
-      if (targetType === "asset") {
-        const a = d.assets.find(x => x.id === targetId);
-        if (!a) return d;
-        entityName = a.name;
-      } else if (targetType === "kit") {
-        const k = d.kits.find(x => x.id === targetId);
-        if (!k) return d;
-        entityName = k.name;
-      } else {
-        const p = d.projects.find(x => x.id === targetId);
-        if (!p) return d;
-        entityName = p.title;
-      }
-
-      // Build the new array based on target type. Already-linked = no-op
-      // but still treat as allowed (idempotent).
-      const field = targetType === "asset" ? "linkedAssetIds"
-                  : targetType === "kit"   ? "linkedKitIds"
-                  : "linkedProjectIds";
-      if (sop[field].includes(targetId)) {
-        allowed = true;
-        return d;
-      }
-      allowed = true;
-
+      const latest = d.sops.find(s => s.id === sopId);
+      if (!latest) return d;
+      if (latest[field].includes(targetId)) return d;
       const updated: SOP = {
-        ...sop,
-        [field]: [...sop[field], targetId],
+        ...latest,
+        [field]: [...latest[field], targetId],
       };
       const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
       return appendEvent(next, "sop_linked",
-        `Linked SOP "${sop.title}" to ${targetType}: ${entityName}`,
+        `Linked SOP "${latest.title}" to ${targetType}: ${entityName}`,
         { actor: actorInitials });
     });
-    return allowed;
-  }, [isReadOnly, auth.currentRole, updateUserData]);
+    return true;
+  }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
   /**
    * Unlink an SOP from an entity. Same permission rules as linkSOP.
    * Idempotent — unlinking something that isn't linked is a no-op.
+   *
+   * iter-27c-fix: previously used a closure flag (`let allowed = false`)
+   * set INSIDE the updater function passed to updateUserData. That's
+   * unsafe because React queues the updater asynchronously — the function
+   * returns `allowed` BEFORE the updater has executed, so the caller saw
+   * `false` even though the update would eventually succeed. Symptom:
+   * "Couldn't unlink — permission denied" toast on a successful unlink.
+   *
+   * Fix: do all permission/existence checks SYNCHRONOUSLY using the
+   * current `data` ref before calling updateUserData. If everything
+   * checks out, return true immediately and let the updater apply the
+   * change (and write the audit event). The updater itself becomes
+   * unconditional — no early returns for "already unlinked", since we
+   * checked that synchronously already.
    */
   const unlinkSOP = useCallback((
     sopId: string,
@@ -1632,40 +1642,46 @@ function useWorkspaceImpl() {
     const role = auth.currentRole;
     if (role !== "owner" && role !== "manager") return false;
 
-    let allowed = false;
+    // Synchronous validation against current data — uses the userData
+    // captured by closure (fresh on every render via useCallback dep).
+    const sop = userData.sops.find(s => s.id === sopId);
+    if (!sop) return false;
+
+    const field = targetType === "asset" ? "linkedAssetIds"
+                : targetType === "kit"   ? "linkedKitIds"
+                : "linkedProjectIds";
+    // Idempotent: not linked means nothing to do but caller success.
+    if (!sop[field].includes(targetId)) return true;
+
+    let entityName = targetId;
+    if (targetType === "asset") {
+      entityName = userData.assets.find(x => x.id === targetId)?.name ?? targetId;
+    } else if (targetType === "kit") {
+      entityName = userData.kits.find(x => x.id === targetId)?.name ?? targetId;
+    } else {
+      entityName = userData.projects.find(x => x.id === targetId)?.title ?? targetId;
+    }
+
+    // Apply via updateUserData. Since we already validated, the updater
+    // is unconditional — re-read sop from the latest state inside the
+    // updater so concurrent edits don't get clobbered.
     updateUserData(d => {
-      const sop = d.sops.find(s => s.id === sopId);
-      if (!sop) return d;
-
-      let entityName = targetId;
-      if (targetType === "asset") {
-        entityName = d.assets.find(x => x.id === targetId)?.name ?? targetId;
-      } else if (targetType === "kit") {
-        entityName = d.kits.find(x => x.id === targetId)?.name ?? targetId;
-      } else {
-        entityName = d.projects.find(x => x.id === targetId)?.title ?? targetId;
-      }
-
-      const field = targetType === "asset" ? "linkedAssetIds"
-                  : targetType === "kit"   ? "linkedKitIds"
-                  : "linkedProjectIds";
-      if (!sop[field].includes(targetId)) {
-        allowed = true;
-        return d;
-      }
-      allowed = true;
-
+      const latest = d.sops.find(s => s.id === sopId);
+      if (!latest) return d;
+      // If the link was removed between validation and update (race
+      // with another tab), no-op gracefully.
+      if (!latest[field].includes(targetId)) return d;
       const updated: SOP = {
-        ...sop,
-        [field]: sop[field].filter(id => id !== targetId),
+        ...latest,
+        [field]: latest[field].filter(id => id !== targetId),
       };
       const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
       return appendEvent(next, "sop_unlinked",
-        `Unlinked SOP "${sop.title}" from ${targetType}: ${entityName}`,
+        `Unlinked SOP "${latest.title}" from ${targetType}: ${entityName}`,
         { actor: actorInitials });
     });
-    return allowed;
-  }, [isReadOnly, auth.currentRole, updateUserData]);
+    return true;
+  }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
   /** Open a new flag on an asset. Reason should be 20+ words (UI enforces). */
   const flagAsset = useCallback((args: {

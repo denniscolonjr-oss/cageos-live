@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import TopNav from "@/components/shared/TopNav";
 import Badge from "@/components/ui/Badge";
@@ -28,7 +28,7 @@ interface KioskUser {
 export default function KioskPage() {
   const isMobile = useIsMobile();
   const { data, hydrated, isReadOnly, checkoutKits, returnCheckout, getBlockingFlags } = useWorkspace();
-  const { activeWorkspaceId } = useAuth();
+  const { activeWorkspaceId, currentRole } = useAuth();
   const [flow, setFlow] = useState<Flow>("menu");
 
   // Checkout state
@@ -145,6 +145,32 @@ export default function KioskPage() {
 
   // Kits the user has selected for this checkout (from full workspace, not filtered list)
   const kitsForCheckout = data.kits.filter(k => selectedKitIds.has(k.id));
+
+  /**
+   * SOPs surfaced during checkout — iter-27c.
+   *
+   * Aggregated across all currently-selected kits, deduplicated. Reactive
+   * to selectedKitIds changes (the dep array forces fresh computation when
+   * a user backtracks to step 3 and changes their kit selection).
+   *
+   * iter-27c-fix: previously computed inline inside step 4's JSX via an
+   * IIFE which can stale-cache across React's batched updates. Lifting
+   * to useMemo with explicit deps guarantees the panel reflects the
+   * CURRENT selection on every render.
+   *
+   * Returns an array of SOPs (deduped by id, preserving the order from
+   * getSOPsForKit which sorts by lastEditedAt desc).
+   */
+  const surfacedSOPs = useMemo(() => {
+    const seen = new Map<string, typeof data.sops[number]>();
+    for (const kit of kitsForCheckout) {
+      for (const sop of getSOPsForKit(kit, data.sops)) {
+        if (!seen.has(sop.id)) seen.set(sop.id, sop);
+      }
+    }
+    return Array.from(seen.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKitIds, data.kits, data.sops]);
 
   // The kits assigned to the active shoot (for visual grouping)
   const shootAssignedKitIds = new Set(shoot?.assignedKits ?? []);
@@ -639,44 +665,34 @@ export default function KioskPage() {
             {step === 4 && (
               <div>
                 {/*
-                 * Procedures panel (iter-27c). Aggregates SOPs across all
-                 * kits being checked out. De-duped — an SOP linked to two
-                 * different kits in this checkout shows once. Render only
-                 * if there's at least one matching SOP; otherwise we'd
-                 * waste vertical space at the top of the condition check.
+                 * Procedures panel (iter-27c). Renders only when the current
+                 * kit selection produces at least one linked SOP. The
+                 * surfacedSOPs array is computed at the top of this component
+                 * via useMemo so it's guaranteed to reflect the LATEST
+                 * selectedKitIds even after step backtracking.
                  *
-                 * Read-only here — kiosk users (who may not have edit
-                 * access to the workspace) can view and click into SOPs
-                 * but can't link or unlink from this view.
+                 * Read-only — kiosk users (who may not have edit access to
+                 * the workspace) can view and click into SOPs but can't
+                 * link or unlink from this view.
                  */}
-                {(() => {
-                  const allKitSOPs = new Map<string, typeof data.sops[number]>();
-                  for (const kit of kitsForCheckout) {
-                    for (const sop of getSOPsForKit(kit, data.sops)) {
-                      allKitSOPs.set(sop.id, sop);
-                    }
-                  }
-                  const sops = Array.from(allKitSOPs.values());
-                  if (sops.length === 0) return null;
-                  return (
-                    <div style={{
-                      marginBottom: 18,
-                      background: "color-mix(in srgb, var(--acc) 5%, var(--s2))",
-                      border: "1px solid color-mix(in srgb, var(--acc) 40%, var(--b1))",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                    }}>
-                      <ProceduresSection
-                        targetType="kit"
-                        targetId={kitsForCheckout[0]?.id ?? ""}
-                        targetName="this checkout"
-                        sops={sops}
-                        readOnly
-                        headerLabel="Review before taking"
-                      />
-                    </div>
-                  );
-                })()}
+                {surfacedSOPs.length > 0 && (
+                  <div style={{
+                    marginBottom: 18,
+                    background: "color-mix(in srgb, var(--acc) 5%, var(--s2))",
+                    border: "1px solid color-mix(in srgb, var(--acc) 40%, var(--b1))",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                  }}>
+                    <ProceduresSection
+                      targetType="kit"
+                      targetId={kitsForCheckout[0]?.id ?? ""}
+                      targetName="this checkout"
+                      sops={surfacedSOPs}
+                      readOnly
+                      headerLabel="Review before taking"
+                    />
+                  </div>
+                )}
 
                 <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Condition check</div>
                 <div style={{ fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: 14 }}>Capture photos before leaving the cage. Optional but recommended.</div>
@@ -846,15 +862,47 @@ export default function KioskPage() {
                     toast("No kits available to check out.", { variant: "error" });
                     return;
                   }
-                  // Block on open service flags
+                  // Block on open service flags — with role-aware override
+                  // logic (iter-27c-fix). Owner has absolute authority and can
+                  // override any flag, including critical. Manager can override
+                  // warning-severity flags but NOT critical (critical means "out
+                  // of service" — that decision sits with the Owner). Crew is
+                  // always blocked by any open flag.
                   const blocking = getBlockingFlags(kitsForCheckout.map(k => k.id));
                   if (blocking.length > 0) {
                     const critical = blocking.filter(b => b.severity === "critical");
-                    const summary = critical.length > 0
-                      ? `${critical[0].assetName} has a critical flag and is out of service. Resolve the flag in the Service Flags page before checkout.`
-                      : `${blocking[0].assetName} has a warning flag. Manager review required before checkout.`;
-                    toast("Checkout blocked", { variant: "error", detail: summary });
-                    return;
+                    // Critical flags: Owner-only override.
+                    if (critical.length > 0 && currentRole !== "owner") {
+                      toast("Checkout blocked", {
+                        variant: "error",
+                        detail: `${critical[0].assetName} has a critical flag and is out of service. Resolve the flag in the Service Flags page before checkout.`,
+                      });
+                      return;
+                    }
+                    // Warning flags: Manager+ override. Crew gets the "manager
+                    // review required" message that prompts them to find someone.
+                    if (critical.length === 0
+                        && currentRole !== "owner"
+                        && currentRole !== "manager") {
+                      toast("Checkout blocked", {
+                        variant: "error",
+                        detail: `${blocking[0].assetName} has a warning flag. Manager review required before checkout.`,
+                      });
+                      return;
+                    }
+                    // Owner OR Manager (depending on severity) is allowed
+                    // through — surface an info-level confirmation so we
+                    // capture intent without forcing extra clicks.
+                    const overrideCount = blocking.length;
+                    toast(
+                      `Proceeding with ${overrideCount} open flag${overrideCount === 1 ? "" : "s"}`,
+                      {
+                        variant: "info",
+                        detail: critical.length > 0
+                          ? `Owner override on critical flag: ${critical[0].assetName}`
+                          : `Manager+ override on ${blocking[0].assetName}`,
+                      }
+                    );
                   }
                   const result = checkoutKits({
                     user: { name: user.name, initials: user.initials, color: user.color, isGuest: user.isGuest },
