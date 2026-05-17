@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import TopNav from "@/components/shared/TopNav";
 import Card from "@/components/ui/Card";
 import EditSOPModal from "@/components/forms/EditSOPModal";
+import AttachmentsList from "@/components/shared/AttachmentsList";
 import CommentsThread from "@/components/shared/CommentsThread";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -250,6 +251,28 @@ function SOPDetailBody({ sop, isMobile }: { sop: SOP; isMobile: boolean }) {
               )}
             </div>
           </Card>
+
+          {/* Attachments (iter-27b) */}
+          {sop.attachments.length > 0 && (
+            <Card style={{ marginBottom: 14 }}>
+              <div style={{ padding: "14px 18px" }}>
+                <div style={{
+                  fontFamily: "'DM Mono',monospace", fontSize: 9,
+                  color: "var(--t3)", letterSpacing: "0.1em",
+                  textTransform: "uppercase", marginBottom: 10,
+                }}>
+                  Attachments ({sop.attachments.length})
+                </div>
+                <AttachmentsList
+                  sopId={sop.id}
+                  attachments={sop.attachments}
+                  canEdit={canEdit}
+                  actorInitials={userInitials}
+                  profiles={data.profiles}
+                />
+              </div>
+            </Card>
+          )}
 
           {/* Version history */}
           {showHistory && sop.versions.length > 0 && (

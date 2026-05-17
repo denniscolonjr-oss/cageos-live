@@ -18,10 +18,11 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Modal from "@/components/ui/Modal";
+import AttachmentPicker from "@/components/shared/AttachmentPicker";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
-import type { SOP } from "@/lib/hooks/workspaceTypes";
+import type { SOP, SOPAttachment } from "@/lib/hooks/workspaceTypes";
 
 export default function EditSOPModal({ open, onClose, sop }: {
   open: boolean;
@@ -29,11 +30,12 @@ export default function EditSOPModal({ open, onClose, sop }: {
   sop: SOP | null;
 }) {
   const auth = useAuth();
-  const { data, updateSOP } = useWorkspace();
+  const { data, updateSOP, addSOPAttachment } = useWorkspace();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [newAttachments, setNewAttachments] = useState<SOPAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +45,7 @@ export default function EditSOPModal({ open, onClose, sop }: {
       setTitle(sop.title);
       setBody(sop.body);
       setSelectedCategories(sop.categories);
+      setNewAttachments([]);
       setSubmitting(false);
       setTimeout(() => titleRef.current?.focus(), 50);
     }
@@ -76,28 +79,49 @@ export default function EditSOPModal({ open, onClose, sop }: {
       return;
     }
 
-    // Skip update if nothing actually changed — avoids version-history noise
-    const unchanged = trimmed === sop.title
+    // Skip BODY update if nothing changed AND no new attachments — avoids
+    // version-history noise. Attachments aren't versioned but they ARE
+    // a reason to commit the modal.
+    const bodyUnchanged = trimmed === sop.title
       && body === sop.body
       && arraysEqual(selectedCategories, sop.categories);
-    if (unchanged) {
+
+    if (bodyUnchanged && newAttachments.length === 0) {
       onClose();
       return;
     }
 
     setSubmitting(true);
-    const ok = updateSOP(sop.id, {
-      title: trimmed,
-      body,
-      categories: selectedCategories,
-    }, editorInitials);
-    setSubmitting(false);
 
-    if (!ok) {
-      toast("Couldn't save changes", { variant: "error", detail: "You may not have permission to edit this SOP." });
-      return;
+    // 1) Body update — creates a version snapshot. Skip if nothing
+    //    changed about the body fields.
+    if (!bodyUnchanged) {
+      const ok = updateSOP(sop.id, {
+        title: trimmed,
+        body,
+        categories: selectedCategories,
+      }, editorInitials);
+      if (!ok) {
+        setSubmitting(false);
+        toast("Couldn't save changes", { variant: "error", detail: "You may not have permission to edit this SOP." });
+        return;
+      }
     }
-    toast("SOP updated");
+
+    // 2) Attach new files. These were already uploaded by the picker;
+    //    here we just link them to the SOP record. Each goes through its
+    //    own audit event for clean history.
+    let attachedCount = 0;
+    for (const attachment of newAttachments) {
+      const ok = addSOPAttachment(sop.id, attachment, editorInitials);
+      if (ok) attachedCount++;
+    }
+
+    setSubmitting(false);
+    const attachMsg = attachedCount > 0
+      ? ` (+ ${attachedCount} attachment${attachedCount === 1 ? "" : "s"})`
+      : "";
+    toast(`SOP updated${attachMsg}`);
     onClose();
   }
 
@@ -221,6 +245,25 @@ export default function EditSOPModal({ open, onClose, sop }: {
           }}>
             Saving creates a new version snapshot. Past versions are accessible from the SOP detail page. Press Cmd+Enter to save.
           </div>
+        </div>
+
+        {/* Attachments (iter-27b). Existing attachments are listed for reference
+            but can only be removed from the detail page. New uploads happen here. */}
+        <div>
+          <label style={{
+            display: "block",
+            fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+            color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase",
+            marginBottom: 6,
+          }}>
+            Add attachments
+          </label>
+          <AttachmentPicker
+            sopId={sop.id}
+            existing={sop.attachments}
+            uploaderInitials={editorInitials}
+            onAttachmentsChange={setNewAttachments}
+          />
         </div>
 
         {/* Actions */}

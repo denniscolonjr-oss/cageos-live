@@ -16,9 +16,11 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Modal from "@/components/ui/Modal";
+import AttachmentPicker from "@/components/shared/AttachmentPicker";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
+import type { SOPAttachment } from "@/lib/hooks/workspaceTypes";
 
 export default function AddSOPModal({ open, onClose }: {
   open: boolean;
@@ -30,8 +32,19 @@ export default function AddSOPModal({ open, onClose }: {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<SOPAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  /*
+   * Draft SOP id for storage path scoping. Generated once per modal open,
+   * shared with AttachmentPicker so uploaded files land at
+   *   sop-files/<workspaceId>/<draftSopId>/<file>
+   * On submit, we pass this same id into addSOP so the storage path and
+   * the SOP record's id stay aligned. If the user cancels, the uploaded
+   * files orphan (cleanup is a future iteration).
+   */
+  const [draftSopId, setDraftSopId] = useState<string>("");
 
   // Reset form whenever the modal opens
   useEffect(() => {
@@ -39,7 +52,9 @@ export default function AddSOPModal({ open, onClose }: {
       setTitle("");
       setBody("");
       setSelectedCategories([]);
+      setAttachments([]);
       setSubmitting(false);
+      setDraftSopId(`sop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
       // Focus title input on open
       setTimeout(() => titleRef.current?.focus(), 50);
     }
@@ -82,17 +97,22 @@ export default function AddSOPModal({ open, onClose }: {
     }
     setSubmitting(true);
     const id = addSOP({
+      id: draftSopId,
       title: trimmed,
       body: body,
       categories: selectedCategories,
       authorInitials,
+      attachments,
     });
     setSubmitting(false);
     if (!id) {
       toast("Couldn't create SOP", { variant: "error", detail: "Permission denied or workspace not ready." });
       return;
     }
-    toast(`Created: ${trimmed}`);
+    const attachNote = attachments.length > 0
+      ? ` with ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`
+      : "";
+    toast(`Created: ${trimmed}${attachNote}`);
     onClose();
   }
 
@@ -216,6 +236,25 @@ export default function AddSOPModal({ open, onClose }: {
           }}>
             Supports: # headings (one or two #), - lists, **bold**, *italic*, `code`, [links](url). Press Cmd+Enter to save.
           </div>
+        </div>
+
+        {/* Attachments (iter-27b) */}
+        <div>
+          <label style={{
+            display: "block",
+            fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+            color: "var(--t3)", letterSpacing: "0.08em", textTransform: "uppercase",
+            marginBottom: 6,
+          }}>
+            Attachments <span style={{ textTransform: "none", color: "var(--t3)", fontWeight: 400 }}>(optional)</span>
+          </label>
+          {draftSopId && (
+            <AttachmentPicker
+              sopId={draftSopId}
+              uploaderInitials={authorInitials}
+              onAttachmentsChange={setAttachments}
+            />
+          )}
         </div>
 
         {/* Actions */}

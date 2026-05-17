@@ -134,7 +134,9 @@ export type AuditCategory =
   | "sop_created"
   | "sop_updated"
   | "sop_reverted"
-  | "sop_deleted";
+  | "sop_deleted"
+  | "sop_attachment_added"
+  | "sop_attachment_removed";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -207,9 +209,12 @@ export interface AuditEvent {
  * by writing it as the new current body — that creates yet another version
  * in the history, preserving the audit trail.
  *
- * Future (iter-27b): attached files. The current shape supports authored
- * markdown only via `body`. iter-27b will add an optional `attachment` field
- * (file URL + filename + mime) to support uploaded documents alongside.
+ * iter-27b: attached files (markdown body + optional attachments coexist).
+ * An SOP can have authored markdown content AND a list of supporting
+ * uploaded files — e.g. authored setup instructions plus the manufacturer's
+ * PDF manual. Attachments are NOT versioned with body edits; they're a
+ * separate dimension since removing an attachment is a deliberate
+ * file-delete action, not an edit to the words.
  */
 export interface SOP {
   id: string;
@@ -235,6 +240,43 @@ export interface SOP {
    * applying the new content. Capped at last 50 entries.
    */
   versions: SOPVersion[];
+  /**
+   * Uploaded file attachments (iter-27b). Independent of body/version
+   * history — adding or removing attachments doesn't create a version
+   * snapshot. Files live in Supabase Storage under the `sop-files` bucket.
+   */
+  attachments: SOPAttachment[];
+}
+
+/**
+ * Uploaded file attached to an SOP (iter-27b).
+ *
+ * Constraints (enforced at upload):
+ *   - Size: ≤ 1 MB
+ *   - Extensions: .md, .txt, .rtf, .pdf
+ *   - MIME type validated against allowlist (not just extension)
+ *
+ * Storage path in the `sop-files` Supabase bucket:
+ *   <workspaceId>/<sopId>/<timestamp>-<random>-<filename>
+ *
+ * Display behavior:
+ *   - .pdf — inline preview via iframe (toggleable) + open in new tab
+ *   - .md / .txt — open in new tab (browser renders as text)
+ *   - .rtf — download-only (browsers don't render RTF inline)
+ */
+export interface SOPAttachment {
+  id: string;
+  /** Original filename for display, e.g. "FR7-manual.pdf". */
+  filename: string;
+  /** Supabase Storage public URL. */
+  url: string;
+  /** MIME type as reported by browser at upload time. */
+  mimeType: string;
+  sizeBytes: number;
+  /** Initials of the uploader. */
+  uploadedBy: string;
+  /** ISO UTC. */
+  uploadedAt: string;
 }
 
 /**

@@ -16,12 +16,12 @@ import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/loca
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { useAuth, type WorkspaceRole } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
-import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion, SOPAttachment } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working.
 // `Shoot` is a deprecated alias for `Project` (iter-23 rename); both stay
 // exported until every call site is migrated.
-export type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion };
+export type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion, SOPAttachment };
 
 const modeAdapter = localStorageModeAdapter;
 
@@ -1329,6 +1329,15 @@ function useWorkspaceImpl() {
     body: string;
     categories: string[];
     authorInitials: string;
+    /**
+     * Optional explicit id. Used when the caller has already generated
+     * an id for storage-path scoping (e.g. AddSOPModal pre-uploads
+     * attachments to `sop-files/<workspaceId>/<draftSopId>/...`). If
+     * omitted, a fresh id is generated.
+     */
+    id?: string;
+    /** Optional pre-uploaded attachments to seed the SOP with. */
+    attachments?: SOPAttachment[];
   }): string | null => {
     if (isReadOnly) return null;
     // Anyone Crew+ can create SOPs. role is null in demo mode (allowed).
@@ -1336,7 +1345,7 @@ function useWorkspaceImpl() {
     if (role === "viewer") return null;
 
     const now = new Date().toISOString();
-    const id = `sop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = args.id ?? `sop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const sop: SOP = {
       id,
@@ -1350,6 +1359,9 @@ function useWorkspaceImpl() {
       // No initial version snapshot — the SOP at createdAt IS the v1.
       // Versions accumulate from subsequent edits.
       versions: [],
+      // iter-27b: empty attachments list at creation. Files are added via
+      // addSOPAttachment AFTER upload completes.
+      attachments: args.attachments ?? [],
     };
 
     updateUserData(d => appendEvent(
@@ -1447,6 +1459,88 @@ function useWorkspaceImpl() {
     const captured = snapshot;
     return () => updateUserData(() => appendEvent(captured, "sop_created", `Restored deleted SOP`,
       { actor: deleterInitials }));
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /**
+   * Add an attachment to an SOP (iter-27b).
+   *
+   * Permission rules match updateSOP:
+   *   - Owner+Manager can add to any SOP
+   *   - Crew can add only to their own
+   *   - Viewer cannot
+   *
+   * The actual file upload happens BEFORE this is called — the caller
+   * uploads via uploadSOPFile, gets back URL+metadata, then calls this
+   * to attach the record. This separation lets the UI show upload
+   * progress and handle network errors independently from state updates.
+   *
+   * Returns true on success, false on permission denial or SOP-not-found.
+   */
+  const addSOPAttachment = useCallback((
+    sopId: string,
+    attachment: SOPAttachment,
+    actorInitials: string,
+  ): boolean => {
+    if (isReadOnly) return false;
+    const role = auth.currentRole;
+    if (role === "viewer") return false;
+
+    let allowed = false;
+    updateUserData(d => {
+      const sop = d.sops.find(s => s.id === sopId);
+      if (!sop) return d;
+      if (role === "crew" && sop.createdBy !== actorInitials) return d;
+      allowed = true;
+
+      const updated: SOP = {
+        ...sop,
+        attachments: [...sop.attachments, attachment],
+      };
+      const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
+      return appendEvent(next, "sop_attachment_added",
+        `Added attachment to SOP: ${sop.title}`,
+        { actor: actorInitials, detail: attachment.filename });
+    });
+    return allowed;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /**
+   * Remove an attachment from an SOP. Note: this does NOT delete the file
+   * from Supabase Storage — the file remains accessible by URL until
+   * cleanup (handled in a future iteration). Removing here just unlinks
+   * the attachment from the SOP record.
+   *
+   * Permission: same as addSOPAttachment.
+   */
+  const removeSOPAttachment = useCallback((
+    sopId: string,
+    attachmentId: string,
+    actorInitials: string,
+  ): boolean => {
+    if (isReadOnly) return false;
+    const role = auth.currentRole;
+    if (role === "viewer") return false;
+
+    let allowed = false;
+    updateUserData(d => {
+      const sop = d.sops.find(s => s.id === sopId);
+      if (!sop) return d;
+      if (role === "crew" && sop.createdBy !== actorInitials) return d;
+
+      const target = sop.attachments.find(a => a.id === attachmentId);
+      if (!target) return d;
+      allowed = true;
+
+      const updated: SOP = {
+        ...sop,
+        attachments: sop.attachments.filter(a => a.id !== attachmentId),
+      };
+      const next = { ...d, sops: d.sops.map(s => s.id === sopId ? updated : s) };
+      return appendEvent(next, "sop_attachment_removed",
+        `Removed attachment from SOP: ${sop.title}`,
+        { actor: actorInitials, detail: target.filename });
+    });
+    return allowed;
   }, [isReadOnly, auth.currentRole, updateUserData]);
 
 
@@ -1862,6 +1956,9 @@ function useWorkspaceImpl() {
     addSOP,
     updateSOP,
     deleteSOP,
+    // SOP attachments (iter-27b)
+    addSOPAttachment,
+    removeSOPAttachment,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

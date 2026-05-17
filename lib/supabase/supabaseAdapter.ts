@@ -91,6 +91,7 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
       ...s,
       versions: s.versions ?? [],
       categories: s.categories ?? [],
+      attachments: s.attachments ?? [],
     })),
     orgName: legacy.orgName ?? "Your Org",
     orgLocation: legacy.orgLocation ?? "—",
