@@ -42,6 +42,9 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   filterableFields: ["category", "location"],
   timezone: "auto",
   managerMode: false,
+  // iter-28a
+  watchmanSnoozes: [],
+  aiUsage: { totalScans: 0, totalCostUsd: 0, dailyDate: new Date().toISOString().slice(0, 10), dailyScans: 0 },
 };
 
 // Demo projects use real ISO timestamps. Built dynamically so "today" is always today.
@@ -192,6 +195,9 @@ function buildDemoWorkspace(): WorkspaceData {
     filterableFields: ["category", "make", "location"],
     timezone: "auto",
     managerMode: false,
+    // iter-28a
+    watchmanSnoozes: [],
+    aiUsage: { totalScans: 0, totalCostUsd: 0, dailyDate: new Date().toISOString().slice(0, 10), dailyScans: 0 },
   };
 }
 
@@ -1683,7 +1689,83 @@ function useWorkspaceImpl() {
     return true;
   }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
-  /** Open a new flag on an asset. Reason should be 20+ words (UI enforces). */
+  /**
+   * Snooze a watchman issue for 24 hours (iter-28a).
+   *
+   * Manager+ only. Adds an entry to watchmanSnoozes with `until` 24h
+   * from now. Renderer filters out issues whose id matches an active
+   * (non-expired) snooze.
+   *
+   * Idempotent: re-snoozing an already-snoozed issue extends the snooze
+   * to a fresh 24h. Cleanup of expired snoozes happens lazily on read.
+   */
+  const snoozeWatchmanIssue = useCallback((issueId: string, actorInitials: string): boolean => {
+    if (isReadOnly) return false;
+    const role = auth.currentRole;
+    if (role !== "owner" && role !== "manager") return false;
+
+    const now = new Date();
+    const until = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const snoozedAt = now.toISOString();
+
+    updateUserData(d => {
+      // Remove any existing snooze for this id, then add fresh one.
+      // Also prune any expired snoozes for any issue (cleanup on write).
+      const nowMs = Date.now();
+      const filtered = (d.watchmanSnoozes ?? []).filter(s =>
+        s.issueId !== issueId && new Date(s.until).getTime() > nowMs
+      );
+      const next: WorkspaceData = {
+        ...d,
+        watchmanSnoozes: [...filtered, { issueId, until, by: actorInitials, snoozedAt }],
+      };
+      return appendEvent(next, "watchman_snoozed",
+        `Snoozed watchman issue`,
+        { actor: actorInitials, detail: issueId });
+    });
+    return true;
+  }, [isReadOnly, auth.currentRole, updateUserData]);
+
+  /**
+   * Record an AI scan run (iter-28a). Increments counters atomically:
+   *   - aiUsage.totalScans + 1
+   *   - aiUsage.totalCostUsd + costUsd
+   *   - aiUsage.dailyScans + 1 (or reset to 1 if dailyDate rolled)
+   *   - aiUsage.dailyDate = today (UTC)
+   *
+   * Writes an audit entry summarizing the scan. The actual scan result
+   * (findings) is NOT stored — it's returned to the caller for the
+   * current session only. We don't want stale findings sitting in the
+   * data layer after the underlying SOPs/entities change.
+   */
+  const recordAIScan = useCallback((args: {
+    scansRun: number;
+    costUsd: number;
+    findingsCount: number;
+    actorInitials: string;
+  }): void => {
+    if (isReadOnly) return;
+    updateUserData(d => {
+      const todayUTC = new Date().toISOString().slice(0, 10);
+      const existing = d.aiUsage ?? {
+        totalScans: 0, totalCostUsd: 0,
+        dailyDate: todayUTC, dailyScans: 0,
+      };
+      const dailyRolled = existing.dailyDate !== todayUTC;
+      const nextUsage = {
+        totalScans: existing.totalScans + 1,
+        totalCostUsd: existing.totalCostUsd + args.costUsd,
+        dailyDate: todayUTC,
+        dailyScans: dailyRolled ? 1 : existing.dailyScans + 1,
+      };
+      const next: WorkspaceData = { ...d, aiUsage: nextUsage };
+      return appendEvent(next, "ai_scan_run",
+        `AI scan: ${args.scansRun} SOPs, ${args.findingsCount} finding${args.findingsCount === 1 ? "" : "s"}`,
+        { actor: args.actorInitials, detail: `$${args.costUsd.toFixed(4)} cost` });
+    });
+  }, [isReadOnly, updateUserData]);
+
+
   const flagAsset = useCallback((args: {
     assetId: string;
     severity: FlagSeverity;
@@ -2101,6 +2183,9 @@ function useWorkspaceImpl() {
     // SOP linking (iter-27c)
     linkSOP,
     unlinkSOP,
+    // Watchman + AI (iter-28a)
+    snoozeWatchmanIssue,
+    recordAIScan,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

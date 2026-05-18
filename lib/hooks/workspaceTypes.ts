@@ -138,7 +138,9 @@ export type AuditCategory =
   | "sop_attachment_added"
   | "sop_attachment_removed"
   | "sop_linked"
-  | "sop_unlinked";
+  | "sop_unlinked"
+  | "watchman_snoozed"
+  | "ai_scan_run";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -359,4 +361,60 @@ export interface WorkspaceData {
   timezone: string;
   /** Has the current user opted into manager mode. v1 has no auth, so this is just a UI flag. */
   managerMode: boolean;
+  /**
+   * Logistics watchman snoozes (iter-28a). When a Manager+ dismisses a
+   * watchman issue, the snooze is stored here with a 24-hour expiry.
+   * Issue ids are stable across renders for the same logical issue
+   * (e.g. "crew-double-book:alice:project-123:project-456") so snooze
+   * persists until the underlying condition changes or 24h pass.
+   *
+   * Watchman renderer filters out issues whose id is in here with an
+   * `until` date in the future. Cleanup of expired snoozes happens on
+   * read — no background job needed.
+   */
+  watchmanSnoozes: WatchmanSnooze[];
+  /**
+   * AI usage tracking (iter-28a). Counters incremented when a Manager+
+   * runs an opt-in AI scan. Surfaced in Settings for Owner visibility
+   * so they can see what their workspace is spending tokens on. We track
+   * total scans and a daily counter (resets at UTC midnight) for the
+   * rate limit (20 scans / day / workspace).
+   *
+   * Cost is approximate — calculated from prompt+completion tokens
+   * returned by Anthropic at the configured per-million rate.
+   */
+  aiUsage: AIUsage;
+}
+
+/**
+ * Logistics watchman snooze record (iter-28a). A Manager+ can hide a
+ * watchman issue for 24 hours; afterward it re-surfaces if the
+ * underlying condition still holds.
+ */
+export interface WatchmanSnooze {
+  /** Stable issue id (matches WatchmanIssue.id from lib/watchman.ts). */
+  issueId: string;
+  /** ISO UTC — when the snooze expires and the issue re-surfaces. */
+  until: string;
+  /** Initials of the user who snoozed. For audit visibility. */
+  by: string;
+  /** ISO UTC — when the snooze was created. */
+  snoozedAt: string;
+}
+
+/**
+ * AI usage counters (iter-28a). Both lifetime and daily tallies so the
+ * rate limit can be enforced (daily) and totals can be displayed
+ * (lifetime). Daily count resets at UTC midnight (compared via
+ * date-only string match on `dailyDate`).
+ */
+export interface AIUsage {
+  /** Lifetime SOP-contradiction scans run. */
+  totalScans: number;
+  /** Approximate lifetime API cost in USD. */
+  totalCostUsd: number;
+  /** Last UTC date string (YYYY-MM-DD) the daily counter was active. */
+  dailyDate: string;
+  /** Scans run on `dailyDate`. Resets when date rolls over. */
+  dailyScans: number;
 }

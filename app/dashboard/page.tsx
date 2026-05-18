@@ -17,6 +17,7 @@ import MembersCard from "@/components/shared/MembersCard";
 import CalendarExportCard from "@/components/shared/CalendarExportCard";
 import PasscodesCard from "@/components/shared/PasscodesCard";
 import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
+import WatchmanWidget from "@/components/dashboard/WatchmanWidget";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -367,6 +368,15 @@ export default function DashboardPage() {
 
           {!isEmpty && (activeKey === "cage" || activeKey === "checkouts") && (
             <>
+              {/*
+               * iter-28a: Logistics Watchman widget. Renders ABOVE the stats
+               * grid when there's something to surface. The widget is
+               * self-gated to Manager+ only and returns null for Crew/Viewer
+               * or when there are no active issues + no AI findings + no
+               * snoozed items to report on. So it costs nothing when the
+               * workspace is calm.
+               */}
+              <WatchmanWidget />
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 8 : 10, marginBottom: 16 }}>
                 {[
                   { label: "Checked in", value: stats.checkedIn, sub: `of ${stats.totalAssets}`, color: "var(--green)" },

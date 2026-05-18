@@ -83,6 +83,15 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
     filterableFields: legacy.filterableFields ?? ["category", "location"],
     timezone: legacy.timezone ?? "auto",
     managerMode: legacy.managerMode ?? false,
+    // iter-28a: logistics watchman snoozes + AI usage tracking. Default
+    // to empty/zero on legacy reads.
+    watchmanSnoozes: legacy.watchmanSnoozes ?? [],
+    aiUsage: legacy.aiUsage ?? {
+      totalScans: 0,
+      totalCostUsd: 0,
+      dailyDate: new Date().toISOString().slice(0, 10),
+      dailyScans: 0,
+    },
   };
 }
 

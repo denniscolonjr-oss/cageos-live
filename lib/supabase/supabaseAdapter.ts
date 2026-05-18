@@ -34,6 +34,14 @@ const EMPTY: WorkspaceData = {
   filterableFields: ["category", "location"],
   timezone: "auto",
   managerMode: false,
+  // iter-28a
+  watchmanSnoozes: [],
+  aiUsage: {
+    totalScans: 0,
+    totalCostUsd: 0,
+    dailyDate: new Date().toISOString().slice(0, 10),
+    dailyScans: 0,
+  },
 };
 
 function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): WorkspaceData {
@@ -102,6 +110,15 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
     filterableFields: legacy.filterableFields ?? ["category", "location"],
     timezone: legacy.timezone ?? "auto",
     managerMode: legacy.managerMode ?? false,
+    // iter-28a: logistics watchman + AI usage. Default to empty/zero
+    // on legacy reads so older workspaces hydrate cleanly.
+    watchmanSnoozes: legacy.watchmanSnoozes ?? [],
+    aiUsage: legacy.aiUsage ?? {
+      totalScans: 0,
+      totalCostUsd: 0,
+      dailyDate: new Date().toISOString().slice(0, 10),
+      dailyScans: 0,
+    },
   };
 }
 
