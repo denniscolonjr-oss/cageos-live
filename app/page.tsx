@@ -20,16 +20,12 @@
  * by hand rather than using a real captured image — gives precise control
  * over content (we can show ideal data) and stays sharp at any resolution.
  *
- * Industry tiles, problem strip, feature blocks, how-it-works, pricing,
- * FAQ, footer all live in this single page for v1.
+ * Industry tiles, problem strip, feature blocks, how-it-works, FAQ,
+ * footer all live in this single page for v1.
  */
 
 import Link from "next/link";
 import { useAuth } from "@/lib/supabase/AuthContext";
-import {
-  FREE_TIER_OWNED_WORKSPACE_CAP,
-  FREE_TIER_MEMBER_CAP,
-} from "@/lib/supabase/membership";
 
 const CALENDLY_URL = "https://calendly.com/denniscolonjr/30min";
 
@@ -66,7 +62,6 @@ export default function LandingPage() {
       <FeatureSection />
       <IndustriesSection />
       <HowItWorks />
-      <Pricing />
       <FAQ />
       <FinalCTA isSignedIn={isSignedIn} />
       <Footer />
@@ -104,7 +99,6 @@ function Header({ isSignedIn }: { isSignedIn: boolean }) {
         <nav style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <a href="#features" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Features</a>
           <a href="#industries" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Industries</a>
-          <a href="#pricing" onClick={smoothScrollToId} style={navLinkStyle} className="landing-nav-link">Pricing</a>
 
           {isSignedIn ? (
             <Link href="/dashboard" style={primaryButtonStyle}>
@@ -985,155 +979,8 @@ function HowItWorks() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Pricing
+// CheckIcon
 // ──────────────────────────────────────────────────────────────────────────
-
-function Pricing() {
-  return (
-    <section id="pricing" style={{
-      padding: "100px 24px",
-      background: "var(--s1)",
-      borderTop: "1px solid var(--b1)",
-      borderBottom: "1px solid var(--b1)",
-    }}>
-      <div style={{ maxWidth: 980, margin: "0 auto" }}>
-        <SectionHeader
-          eyebrow="Pricing"
-          title="Start free. Pay when your team outgrows it."
-          subtitle="No credit card to sign up. No surprise charges. Real pricing when you're ready for it."
-        />
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 18,
-          marginTop: 48,
-        }}>
-          {/* Free tier */}
-          <div style={{
-            background: "var(--bg)",
-            border: "1px solid var(--b1)",
-            borderRadius: 12,
-            padding: "30px 28px",
-          }}>
-            <div style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 11,
-              color: "var(--t3)", letterSpacing: "0.1em",
-              textTransform: "uppercase", marginBottom: 10,
-            }}>Free</div>
-            <div style={{
-              fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 700,
-              color: "var(--t1)", marginBottom: 4, letterSpacing: "-0.02em",
-            }}>$0</div>
-            <div style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: 13,
-              color: "var(--t2)", marginBottom: 22, lineHeight: 1.5,
-            }}>Everything you need to get started.</div>
-
-            <Link href="/signup" style={{
-              ...primaryButtonStyle,
-              display: "block", textAlign: "center",
-              padding: "12px",
-              marginBottom: 22,
-            }}>
-              Sign up free
-            </Link>
-
-            <div style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 10,
-              color: "var(--t3)", letterSpacing: "0.06em",
-              marginBottom: 10, textTransform: "uppercase",
-            }}>Included</div>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {[
-                `${FREE_TIER_OWNED_WORKSPACE_CAP} workspace`,
-                `Up to ${FREE_TIER_MEMBER_CAP} team members`,
-                "Unlimited assets and kits",
-                "Self-service kiosk",
-                "Audit trail and service flags",
-                "Comments and @mentions",
-                "Email support",
-              ].map((feat, i) => (
-                <li key={i} style={{
-                  fontFamily: "'DM Sans', sans-serif", fontSize: 13.5,
-                  color: "var(--t1)", marginBottom: 9,
-                  display: "flex", alignItems: "flex-start", gap: 9,
-                }}>
-                  <CheckIcon /> {feat}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Enterprise tier */}
-          <div style={{
-            background: "var(--bg)",
-            border: "1px solid rgba(236,255,112,0.3)",
-            borderRadius: 12,
-            padding: "30px 28px",
-            position: "relative",
-          }}>
-            <div style={{
-              position: "absolute", top: -10, right: 22,
-              background: "var(--acc)", color: "var(--bg)",
-              fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700,
-              padding: "3px 9px", borderRadius: 3,
-              letterSpacing: "0.08em",
-            }}>FOR BIGGER TEAMS</div>
-
-            <div style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 11,
-              color: "var(--acc)", letterSpacing: "0.1em",
-              textTransform: "uppercase", marginBottom: 10,
-            }}>Enterprise</div>
-            <div style={{
-              fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 700,
-              color: "var(--t1)", marginBottom: 4, letterSpacing: "-0.02em",
-            }}>Let&apos;s talk</div>
-            <div style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: 13,
-              color: "var(--t2)", marginBottom: 22, lineHeight: 1.5,
-            }}>For teams managing real volume.</div>
-
-            <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" style={{
-              ...primaryButtonStyle,
-              display: "block", textAlign: "center",
-              padding: "12px",
-              marginBottom: 22,
-            }}>
-              Schedule a demo
-            </a>
-
-            <div style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 10,
-              color: "var(--t3)", letterSpacing: "0.06em",
-              marginBottom: 10, textTransform: "uppercase",
-            }}>Everything in Free, plus</div>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {[
-                "Unlimited team members",
-                "Multiple workspaces",
-                "Priority support",
-                "Custom onboarding",
-                "Data export and integrations",
-                "SSO and advanced security",
-                "SLA available",
-              ].map((feat, i) => (
-                <li key={i} style={{
-                  fontFamily: "'DM Sans', sans-serif", fontSize: 13.5,
-                  color: "var(--t1)", marginBottom: 9,
-                  display: "flex", alignItems: "flex-start", gap: 9,
-                }}>
-                  <CheckIcon accent /> {feat}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function CheckIcon({ accent }: { accent?: boolean }) {
   return (
@@ -1152,7 +999,6 @@ function CheckIcon({ accent }: { accent?: boolean }) {
 
 function FAQ() {
   const faqs = [
-    { q: "Is it really free?", a: "Yes. The free tier is genuinely free — one workspace, up to three team members, all features. No credit card, no trial timer. When you need more, that's when we talk pricing." },
     { q: "How is this different from a spreadsheet?", a: "Spreadsheets don't enforce checkout state, don't keep audit trails, don't notify when something's broken, and don't have a kiosk mode. They're fine until they aren't. We're built for the 'aren't' part." },
     { q: "Do I need to install anything?", a: "No. CageOS runs in any modern browser, on any device — desktop, tablet, phone. The kiosk mode is just a browser tab on a tablet by the door." },
     { q: "Can my team use it without accounts?", a: "Yes for kiosk mode — set up a passcode and crew can check gear in and out without individual accounts. For comments, audit attribution, and admin actions, accounts are needed." },
