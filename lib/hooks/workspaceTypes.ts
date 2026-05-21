@@ -100,6 +100,54 @@ export interface ActiveCheckout {
   returnPhotoUrls?: string[];
   /** Self-reported condition at return. */
   returnCondition?: "excellent" | "good" | "fair" | "damaged" | "broken";
+  /**
+   * Kit composition snapshot at checkout time (iter-28e). Frozen at
+   * checkout. Used by the Revert path on return — "Revert" means
+   * "restore the kit definition to what it was when we took it out."
+   *
+   * Keyed by kit id. Each value is the array of component asset ids
+   * that were in the kit's definition at the moment of checkout.
+   *
+   * Optional for backwards compatibility — checkouts that predate
+   * iter-28e have this undefined. The return flow falls back to "Keep
+   * current composition" behavior if no snapshot exists.
+   */
+  kitCompositionSnapshots?: Record<string, string[]>;
+  /**
+   * Kit composition LIVE during this checkout (iter-28e). Mutates as
+   * the crew adds or removes assets via the active-checkouts page.
+   * On return, the user picks one of three resolution paths to apply
+   * this composition (Revert / Keep / Save as new kit).
+   *
+   * Keyed by kit id. When undefined for a kit id, treat as identical
+   * to kitCompositionSnapshots[kitId] — no mutations yet.
+   */
+  kitCompositionLive?: Record<string, string[]>;
+  /**
+   * Log of composition edits during this checkout (iter-28e). Used by
+   * the audit log and the return resolution UI so the user can see
+   * exactly what changed before picking a resolution path.
+   */
+  compositionLog?: CompositionEdit[];
+}
+
+/**
+ * A single mutation to a kit's composition during a checkout (iter-28e).
+ */
+export interface CompositionEdit {
+  /** ISO UTC timestamp of the edit */
+  atISO: string;
+  /** Initials of who made the edit */
+  by: string;
+  /** Which kit was edited */
+  kitId: string;
+  /** add or remove */
+  action: "add" | "remove";
+  /** The asset that was added or removed */
+  assetId: string;
+  /** Display snapshot of the asset name + barcode (for audit readability if asset is deleted later) */
+  assetName: string;
+  assetBarcode: string;
 }
 
 export type AuditCategory =
@@ -143,7 +191,11 @@ export type AuditCategory =
   | "ai_scan_run"
   | "csv_import"
   | "csv_import_deleted"
-  | "inventory_reset";
+  | "inventory_reset"
+  | "checkout_kit_modified"
+  | "checkout_kit_reverted"
+  | "checkout_kit_composition_kept"
+  | "checkout_kit_saved_as_new";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =

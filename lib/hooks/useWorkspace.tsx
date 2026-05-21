@@ -16,7 +16,7 @@ import { localStorageAdapter, localStorageModeAdapter } from "@/lib/storage/loca
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { useAuth, type WorkspaceRole } from "@/lib/supabase/AuthContext";
 import { createSupabaseAdapter } from "@/lib/supabase/supabaseAdapter";
-import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion, SOPAttachment } from "./workspaceTypes";
+import type { WorkspaceData, WorkspaceMode, Project, Shoot, ActiveCheckout, AuditEvent, AuditCategory, ServiceFlag, RepairNote, FlagStatus, FlagSeverity, DeleteResult, SOP, SOPVersion, SOPAttachment, CompositionEdit } from "./workspaceTypes";
 
 // Re-export types so existing imports from useWorkspace keep working.
 // `Shoot` is a deprecated alias for `Project` (iter-23 rename); both stay
@@ -2047,6 +2047,330 @@ function useWorkspaceImpl() {
     return summary;
   }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
+  // ──────────────────────────────────────────────────────────────────
+  // iter-28e: kit mutation during checkout
+  // ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Add an asset to a kit that's currently checked out.
+   *
+   * Safety checks (run BEFORE mutating state):
+   *   1. The checkout must exist and be active (or overdue)
+   *   2. The kit must be in this checkout's kitIds
+   *   3. The asset must exist, not be archived
+   *   4. The asset must NOT already be in ANY kit (kitId === null required)
+   *   5. The asset must NOT already be checked out elsewhere (status !== "out")
+   *   6. The asset must NOT have a critical-severity service flag
+   *
+   * On success:
+   *   - kit composition (live) gains the asset id
+   *   - the asset's status flips to "out"
+   *   - the asset gets kitId = this kit's id (so it counts as in-use for
+   *     other guards like batch import delete)
+   *   - composition log gets a new "add" entry
+   *   - audit log records the action
+   *
+   * Returns a result object — `{ok: true}` or `{ok: false, reason}` so
+   * the UI can show a clear message about why an add failed.
+   */
+  const addAssetToCheckoutKit = useCallback((args: {
+    checkoutId: string;
+    kitId: string;
+    assetId: string;
+    actorInitials: string;
+  }): { ok: true } | { ok: false; reason: string } => {
+    if (isReadOnly) return { ok: false, reason: "Read-only mode." };
+
+    const checkout = userData.checkouts.find(c =>
+      "checkedOutAtISO" in c && c.id === args.checkoutId
+    ) as ActiveCheckout | undefined;
+    if (!checkout) return { ok: false, reason: "Checkout not found." };
+    if (checkout.status !== "active" && checkout.status !== "overdue") {
+      return { ok: false, reason: "This checkout isn't active." };
+    }
+    if (!checkout.kitIds.includes(args.kitId)) {
+      return { ok: false, reason: "That kit isn't part of this checkout." };
+    }
+
+    const asset = userData.assets.find(a => a.id === args.assetId);
+    if (!asset) return { ok: false, reason: "Asset not found." };
+    if (asset.archivedAt) return { ok: false, reason: "Asset is archived." };
+
+    // Safety check: asset must not be in another kit
+    if (asset.kitId && asset.kitId !== args.kitId) {
+      const otherKit = userData.kits.find(k => k.id === asset.kitId);
+      return {
+        ok: false,
+        reason: `Asset is in kit "${otherKit?.name ?? "(unknown)"}". Remove it from that kit first, or pick a different asset.`,
+      };
+    }
+    // Safety check: asset must not be checked out elsewhere
+    if (asset.status === "out") {
+      const otherCheckout = userData.checkouts.find(c =>
+        "checkedOutAtISO" in c
+        && (c.status === "active" || c.status === "overdue")
+        && c.id !== args.checkoutId
+        && c.assetIds.includes(args.assetId)
+      ) as ActiveCheckout | undefined;
+      if (otherCheckout) {
+        return {
+          ok: false,
+          reason: `Asset is checked out by ${otherCheckout.user} until ${otherCheckout.dueBackLabel}.`,
+        };
+      }
+      // Status says "out" but no other checkout claims it — data drift.
+      // Surface a useful error but don't block the universe.
+      return { ok: false, reason: "Asset status is 'out' but no checkout claims it. Investigate." };
+    }
+    // Safety check: critical flag blocks
+    if (asset.serviceFlag && asset.serviceFlag.severity === "critical") {
+      return { ok: false, reason: `Asset has a critical service flag: ${asset.serviceFlag.reason}` };
+    }
+
+    updateUserData(d => {
+      const updatedCheckouts = d.checkouts.map(c => {
+        if (!("checkedOutAtISO" in c)) return c;
+        if (c.id !== args.checkoutId) return c;
+        const live = { ...(c.kitCompositionLive ?? c.kitCompositionSnapshots ?? {}) };
+        const currentList = live[args.kitId] ?? [];
+        if (currentList.includes(args.assetId)) {
+          // Already there — no-op
+          return c;
+        }
+        live[args.kitId] = [...currentList, args.assetId];
+        const newLogEntry: CompositionEdit = {
+          atISO: new Date().toISOString(),
+          by: args.actorInitials,
+          kitId: args.kitId,
+          action: "add",
+          assetId: args.assetId,
+          assetName: asset.name,
+          assetBarcode: asset.barcode,
+        };
+        return {
+          ...c,
+          kitCompositionLive: live,
+          assetIds: c.assetIds.includes(args.assetId) ? c.assetIds : [...c.assetIds, args.assetId],
+          compositionLog: [...(c.compositionLog ?? []), newLogEntry],
+        };
+      });
+
+      // Update asset: flip to "out" and set kitId
+      const updatedAssets = d.assets.map(a => a.id === args.assetId
+        ? { ...a, status: "out" as const, kitId: args.kitId, lastUser: checkout.user, lastUpdated: new Date().toISOString() }
+        : a
+      );
+
+      const next = { ...d, checkouts: updatedCheckouts, assets: updatedAssets };
+      return appendEvent(next, "checkout_kit_modified",
+        `Added "${asset.name}" to checked-out kit`,
+        {
+          actor: args.actorInitials,
+          detail: `Kit: ${userData.kits.find(k => k.id === args.kitId)?.name ?? args.kitId}, Asset barcode: ${asset.barcode}`,
+        });
+    });
+
+    return { ok: true };
+  }, [isReadOnly, userData, updateUserData]);
+
+  /**
+   * Remove an asset from a kit that's currently checked out.
+   *
+   * Safety checks (run BEFORE mutating state):
+   *   1. Checkout must exist and be active/overdue
+   *   2. Kit must be in checkout
+   *   3. Asset must currently be in the LIVE composition of this kit
+   *
+   * On success:
+   *   - kit composition (live) loses the asset id
+   *   - asset's status flips back to "in"
+   *   - asset's kitId cleared
+   *   - composition log gets a new "remove" entry
+   *   - audit log records
+   *
+   * Note: removing an asset here doesn't permanently remove it from the
+   * kit DEFINITION. The kit's `componentIds` is unchanged until the
+   * user picks "Keep" on return. If they pick "Revert" the snapshot
+   * wins. This is the heart of the iter-28e design.
+   */
+  const removeAssetFromCheckoutKit = useCallback((args: {
+    checkoutId: string;
+    kitId: string;
+    assetId: string;
+    actorInitials: string;
+  }): { ok: true } | { ok: false; reason: string } => {
+    if (isReadOnly) return { ok: false, reason: "Read-only mode." };
+
+    const checkout = userData.checkouts.find(c =>
+      "checkedOutAtISO" in c && c.id === args.checkoutId
+    ) as ActiveCheckout | undefined;
+    if (!checkout) return { ok: false, reason: "Checkout not found." };
+    if (checkout.status !== "active" && checkout.status !== "overdue") {
+      return { ok: false, reason: "This checkout isn't active." };
+    }
+
+    const liveComp = checkout.kitCompositionLive ?? checkout.kitCompositionSnapshots ?? {};
+    const currentList = liveComp[args.kitId] ?? [];
+    if (!currentList.includes(args.assetId)) {
+      return { ok: false, reason: "Asset isn't in this kit's current composition." };
+    }
+
+    const asset = userData.assets.find(a => a.id === args.assetId);
+    if (!asset) return { ok: false, reason: "Asset not found." };
+
+    updateUserData(d => {
+      const updatedCheckouts = d.checkouts.map(c => {
+        if (!("checkedOutAtISO" in c)) return c;
+        if (c.id !== args.checkoutId) return c;
+        const live = { ...(c.kitCompositionLive ?? c.kitCompositionSnapshots ?? {}) };
+        live[args.kitId] = (live[args.kitId] ?? []).filter(id => id !== args.assetId);
+        const newLogEntry: CompositionEdit = {
+          atISO: new Date().toISOString(),
+          by: args.actorInitials,
+          kitId: args.kitId,
+          action: "remove",
+          assetId: args.assetId,
+          assetName: asset.name,
+          assetBarcode: asset.barcode,
+        };
+        return {
+          ...c,
+          kitCompositionLive: live,
+          assetIds: c.assetIds.filter(id => id !== args.assetId),
+          compositionLog: [...(c.compositionLog ?? []), newLogEntry],
+        };
+      });
+
+      // Update asset: flip to "in" and clear kitId
+      const updatedAssets = d.assets.map(a => a.id === args.assetId
+        ? { ...a, status: "in" as const, kitId: null, lastUpdated: new Date().toISOString() }
+        : a
+      );
+
+      const next = { ...d, checkouts: updatedCheckouts, assets: updatedAssets };
+      return appendEvent(next, "checkout_kit_modified",
+        `Removed "${asset.name}" from checked-out kit`,
+        {
+          actor: args.actorInitials,
+          detail: `Kit: ${userData.kits.find(k => k.id === args.kitId)?.name ?? args.kitId}, Asset barcode: ${asset.barcode}`,
+        });
+    });
+
+    return { ok: true };
+  }, [isReadOnly, userData, updateUserData]);
+
+  /**
+   * Resolve a mutated kit checkout at return time. Three paths:
+   *   - "revert": restore kit.componentIds to the snapshot (checkout-time
+   *     composition). Removed assets that came BACK get put back into
+   *     the original kit; added assets that went OUT get freed (kitId
+   *     cleared, status returned to "in").
+   *   - "keep": kit.componentIds becomes the live composition. Future
+   *     checkouts of this kit will use this new definition.
+   *   - "save_as_new": original kit unchanged. A new Kit is created from
+   *     the live composition with a new barcode, the user's chosen name,
+   *     and inheriting location + (we'd need to choose) any SOP links.
+   *
+   * This is meant to be called as PART OF the return flow — the existing
+   * returnCheckout mutator handles return mechanics; THIS mutator
+   * resolves the composition decision separately so the return UI can
+   * show a 3-button picker after photos but before final commit.
+   *
+   * Returns { ok: true, newKitId? } where newKitId is set when path is
+   * "save_as_new".
+   */
+  const resolveCheckoutComposition = useCallback((args: {
+    checkoutId: string;
+    kitId: string;
+    path: "revert" | "keep" | "save_as_new";
+    newKitName?: string; // required for save_as_new
+    actorInitials: string;
+  }): { ok: true; newKitId?: string } | { ok: false; reason: string } => {
+    if (isReadOnly) return { ok: false, reason: "Read-only mode." };
+
+    const checkout = userData.checkouts.find(c =>
+      "checkedOutAtISO" in c && c.id === args.checkoutId
+    ) as ActiveCheckout | undefined;
+    if (!checkout) return { ok: false, reason: "Checkout not found." };
+
+    const kit = userData.kits.find(k => k.id === args.kitId);
+    if (!kit) return { ok: false, reason: "Kit not found." };
+
+    const snapshot = checkout.kitCompositionSnapshots?.[args.kitId];
+    const live = checkout.kitCompositionLive?.[args.kitId];
+
+    // If no live composition exists, nothing was mutated — nothing to resolve.
+    if (!live || !snapshot) {
+      return { ok: true };
+    }
+
+    // Detect if there were actually any mutations to this kit
+    const mutated = JSON.stringify([...snapshot].sort()) !== JSON.stringify([...live].sort());
+    if (!mutated) return { ok: true };
+
+    let newKitId: string | undefined;
+
+    if (args.path === "save_as_new" && !args.newKitName?.trim()) {
+      return { ok: false, reason: "Provide a name for the new kit." };
+    }
+
+    updateUserData(d => {
+      let updatedKits = d.kits;
+
+      if (args.path === "revert") {
+        // Kit definition stays as snapshot (which equals the live before
+        // mutations, so kit.componentIds was already this — typically.)
+        // What needs to happen: live → snapshot.
+        // BUT: the kit.componentIds might have been edited externally
+        // during checkout. We respect the snapshot, per design.
+        updatedKits = d.kits.map(k => k.id === args.kitId
+          ? { ...k, componentIds: [...snapshot] }
+          : k
+        );
+      } else if (args.path === "keep") {
+        // The live composition becomes the new kit definition
+        updatedKits = d.kits.map(k => k.id === args.kitId
+          ? { ...k, componentIds: [...live] }
+          : k
+        );
+      } else if (args.path === "save_as_new") {
+        // Original kit's componentIds revert to snapshot
+        updatedKits = d.kits.map(k => k.id === args.kitId
+          ? { ...k, componentIds: [...snapshot] }
+          : k
+        );
+        // Create a new kit with the live composition
+        newKitId = `kit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const newKitBarcode = `KIT-${Date.now().toString().slice(-6)}`;
+        const newKit = {
+          id: newKitId,
+          name: args.newKitName!.trim(),
+          barcode: newKitBarcode,
+          status: "available" as const,
+          location: kit.location, // inherit location
+          componentIds: [...live],
+        };
+        updatedKits = [...updatedKits, newKit];
+      }
+
+      // Audit category specific to the path
+      const category = args.path === "revert" ? "checkout_kit_reverted"
+                     : args.path === "keep" ? "checkout_kit_composition_kept"
+                     : "checkout_kit_saved_as_new";
+      const summary = args.path === "revert" ? `Reverted "${kit.name}" composition on return`
+                    : args.path === "keep" ? `Kept new "${kit.name}" composition`
+                    : `Saved new kit "${args.newKitName}" from modified composition`;
+
+      const next = { ...d, kits: updatedKits };
+      return appendEvent(next, category, summary, {
+        actor: args.actorInitials,
+        detail: `Checkout ${checkout.id}, original kit ${kit.name}`,
+      });
+    });
+
+    return { ok: true, newKitId };
+  }, [isReadOnly, userData, updateUserData]);
+
   const flagAsset = useCallback((args: {
     assetId: string;
     severity: FlagSeverity;
@@ -2219,6 +2543,13 @@ function useWorkspaceImpl() {
 
       const allComponentIds = targetKits.flatMap(k => k.componentIds);
 
+      // iter-28e: snapshot each kit's composition at checkout time.
+      // This is the baseline "Revert" returns to.
+      const kitCompositionSnapshots: Record<string, string[]> = {};
+      for (const k of targetKits) {
+        kitCompositionSnapshots[k.id] = [...k.componentIds];
+      }
+
       const checkout: ActiveCheckout = {
         id: `co-${now.getTime()}`,
         checkedOutAtISO: now.toISOString(),
@@ -2237,6 +2568,9 @@ function useWorkspaceImpl() {
         isGuest: args.user.isGuest,
         intakePhotoUrls: args.intakePhotoUrls && args.intakePhotoUrls.length > 0 ? args.intakePhotoUrls : undefined,
         intakeCondition: args.intakeCondition,
+        kitCompositionSnapshots,
+        kitCompositionLive: kitCompositionSnapshots, // starts identical to snapshot
+        compositionLog: [],
       };
       createdCheckout = checkout;
 
@@ -2472,6 +2806,10 @@ function useWorkspaceImpl() {
     deleteCSVImport,
     // Inventory reset (iter-28d-fix)
     resetInventory,
+    // Kit mutation during checkout (iter-28e)
+    addAssetToCheckoutKit,
+    removeAssetFromCheckoutKit,
+    resolveCheckoutComposition,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

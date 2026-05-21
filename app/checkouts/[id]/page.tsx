@@ -32,6 +32,8 @@ import CommentsThread from "@/components/shared/CommentsThread";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import KitCompositionEditModal from "@/components/checkouts/KitCompositionEditModal";
+import CompositionResolutionModal from "@/components/checkouts/CompositionResolutionModal";
 import { toast } from "@/components/ui/Toast";
 import type { ActiveCheckout, Project } from "@/lib/hooks/workspaceTypes";
 import { formatShootRange } from "@/lib/timezone";
@@ -110,6 +112,11 @@ function CheckoutDetailBody({
   const auth = useAuth();
   const { data, returnCheckout, addNote } = useWorkspace();
 
+  // iter-28e: which kit (if any) is being edited via the composition modal
+  const [editingKitId, setEditingKitId] = useState<string | null>(null);
+  // iter-28e: queue of kit ids that need composition resolution before return
+  const [resolutionQueue, setResolutionQueue] = useState<string[]>([]);
+
   // Resolve relations.
   // - Person: lookup profile by initials (profiles don't always have a userId)
   
@@ -130,11 +137,49 @@ function CheckoutDetailBody({
   const canReturn = !isReturned && (auth.currentRole === "owner" || auth.currentRole === "manager" || auth.currentRole === "crew");
 
   function handleMarkReturned() {
+    // iter-28e: detect kits with composition drift. If any, queue them
+    // for resolution modals BEFORE completing the return. The actual
+    // return commits when the queue is empty.
     if (!confirm("Mark this checkout as returned?\n\nAll kits and assets will move back to available status.")) return;
+
+    const driftedKitIds: string[] = [];
+    for (const kitId of checkout.kitIds) {
+      const snapshot = checkout.kitCompositionSnapshots?.[kitId];
+      const live = checkout.kitCompositionLive?.[kitId];
+      if (!snapshot || !live) continue;
+      const drift = snapshot.length !== live.length
+        || live.some(id => !snapshot.includes(id))
+        || snapshot.some(id => !live.includes(id));
+      if (drift) driftedKitIds.push(kitId);
+    }
+
+    if (driftedKitIds.length > 0) {
+      // Queue resolution modals. The actual return runs when queue empties.
+      setResolutionQueue(driftedKitIds);
+      return;
+    }
+
+    // No drift — return immediately
     returnCheckout(checkout.id);
     toast("Marked as returned", { detail: `${checkout.kits.join(" · ")}` });
-    // Stay on the detail page so the user sees the new state. The status
-    // pills + photos remain visible — this is a historical record now.
+  }
+
+  /**
+   * Called by CompositionResolutionModal when one kit is resolved.
+   * Pops the kit off the queue. When queue is empty, completes the return.
+   */
+  function handleResolutionComplete() {
+    setResolutionQueue(prev => {
+      const next = prev.slice(1);
+      if (next.length === 0) {
+        // All resolutions done — execute the return
+        setTimeout(() => {
+          returnCheckout(checkout.id);
+          toast("Marked as returned", { detail: `${checkout.kits.join(" · ")}` });
+        }, 100);
+      }
+      return next;
+    });
   }
 
   function handleSendReminder() {
@@ -341,41 +386,84 @@ function CheckoutDetailBody({
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {kits.map(kit => {
-                      const components = data.assets.filter(a => kit.componentIds.includes(a.id));
+                      // iter-28e: when this checkout is active, show the LIVE
+                      // composition (which may include added items not in the
+                      // base kit definition). For returned checkouts, fall
+                      // back to the snapshot — that's what was out.
+                      const isActive = checkout.status === "active" || checkout.status === "overdue";
+                      const compositionIds = isActive
+                        ? (checkout.kitCompositionLive?.[kit.id] ?? checkout.kitCompositionSnapshots?.[kit.id] ?? kit.componentIds)
+                        : (checkout.kitCompositionSnapshots?.[kit.id] ?? kit.componentIds);
+                      const components = compositionIds
+                        .map(id => data.assets.find(a => a.id === id))
+                        .filter((a): a is NonNullable<typeof a> => !!a);
+                      const snapshotIds = checkout.kitCompositionSnapshots?.[kit.id] ?? kit.componentIds;
+                      const hasDrift = isActive && (
+                        compositionIds.length !== snapshotIds.length
+                        || compositionIds.some(id => !snapshotIds.includes(id))
+                      );
                       return (
                         <div key={kit.id}>
-                          <Link href={`/kit/${encodeURIComponent(kit.id)}`} style={{
-                            display: "flex", alignItems: "baseline", gap: 8,
-                            textDecoration: "none",
-                            marginBottom: 4,
-                          }}>
-                            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: "var(--t1)" }}>
-                              {kit.name}
-                            </span>
-                            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
-                              {kit.barcode}
-                            </span>
-                            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--acc)" }}>
-                              → open
-                            </span>
-                          </Link>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                            <Link href={`/kit/${encodeURIComponent(kit.id)}`} style={{
+                              display: "flex", alignItems: "baseline", gap: 8,
+                              textDecoration: "none",
+                            }}>
+                              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: "var(--t1)" }}>
+                                {kit.name}
+                              </span>
+                              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
+                                {kit.barcode}
+                              </span>
+                              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--acc)" }}>
+                                → open
+                              </span>
+                            </Link>
+                            {hasDrift && (
+                              <span style={{
+                                fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+                                padding: "2px 6px", borderRadius: 3,
+                                background: "color-mix(in srgb, var(--amber, #f59e0b) 12%, transparent)",
+                                color: "var(--amber, #f59e0b)",
+                                letterSpacing: "0.05em", textTransform: "uppercase",
+                              }}>
+                                modified
+                              </span>
+                            )}
+                            {isActive && (
+                              <button
+                                onClick={() => setEditingKitId(kit.id)}
+                                style={{
+                                  padding: "3px 9px", borderRadius: 4,
+                                  background: "transparent", border: "1px solid var(--b1)",
+                                  color: "var(--t2)", fontFamily: "'DM Mono',monospace", fontSize: 10,
+                                  cursor: "pointer", minHeight: 24,
+                                }}
+                              >
+                                Edit composition
+                              </button>
+                            )}
+                          </div>
                           {components.length > 0 && (
                             <div style={{
                               marginLeft: 4, paddingLeft: 10,
                               borderLeft: "1px solid var(--b1)",
                               display: "flex", flexDirection: "column", gap: 3,
                             }}>
-                              {components.map(c => (
-                                <Link key={c.id} href={`/asset/${encodeURIComponent(c.id)}`} style={{
-                                  fontFamily: "'DM Mono',monospace", fontSize: 11,
-                                  color: "var(--t2)", textDecoration: "none",
-                                  display: "flex", gap: 6, alignItems: "center",
-                                }}>
-                                  <span style={{ color: "var(--t3)" }}>·</span>
-                                  <span>{c.name}</span>
-                                  <span style={{ color: "var(--t3)", fontSize: 10 }}>{c.barcode}</span>
-                                </Link>
-                              ))}
+                              {components.map(c => {
+                                const wasAdded = isActive && !snapshotIds.includes(c.id);
+                                return (
+                                  <Link key={c.id} href={`/asset/${encodeURIComponent(c.id)}`} style={{
+                                    fontFamily: "'DM Mono',monospace", fontSize: 11,
+                                    color: "var(--t2)", textDecoration: "none",
+                                    display: "flex", gap: 6, alignItems: "center",
+                                  }}>
+                                    <span style={{ color: wasAdded ? "var(--green, #16a34a)" : "var(--t3)" }}>{wasAdded ? "+" : "·"}</span>
+                                    <span>{c.name}</span>
+                                    <span style={{ color: "var(--t3)", fontSize: 10 }}>{c.barcode}</span>
+                                  </Link>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -482,6 +570,27 @@ function CheckoutDetailBody({
           </div>
         </div>
       </div>
+
+      {/* iter-28e: kit composition editor */}
+      {editingKitId && (
+        <KitCompositionEditModal
+          open={!!editingKitId}
+          onClose={() => setEditingKitId(null)}
+          checkoutId={checkout.id}
+          kitId={editingKitId}
+        />
+      )}
+
+      {/* iter-28e: composition resolution at return time. Shows when queue is non-empty. */}
+      {resolutionQueue.length > 0 && (
+        <CompositionResolutionModal
+          open={resolutionQueue.length > 0}
+          onClose={() => setResolutionQueue([])}
+          onResolved={handleResolutionComplete}
+          checkoutId={checkout.id}
+          kitId={resolutionQueue[0]}
+        />
+      )}
 
       {/* Lightbox — fullscreen image viewer when a photo is tapped. */}
       {lightbox && (
