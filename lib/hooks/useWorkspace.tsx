@@ -1803,8 +1803,23 @@ function useWorkspaceImpl() {
     const importId = `csv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const nowISO = new Date().toISOString();
 
-    // Stamp each new asset with the import id, and capture their final ids
-    const stampedNew = args.newAssets.map(a => ({ ...a, csvImportId: importId }));
+    // Stamp each new asset with the import id AND capture an immutable
+    // baseline of its values for the audit score (iter-28d).
+    const stampedNew = args.newAssets.map(a => ({
+      ...a,
+      csvImportId: importId,
+      csvBaseline: {
+        name: a.name,
+        category: a.category,
+        barcode: a.barcode,
+        make: a.make,
+        model: a.model,
+        location: a.location,
+        serialNumber: a.serialNumber ?? "",
+        cost: a.cost,
+        eolDate: a.eolDate,
+      },
+    }));
     const newAssetIds = stampedNew.map(a => a.id);
 
     const importRecord: import("@/lib/hooks/workspaceTypes").CSVImport = {

@@ -19,6 +19,7 @@ import PasscodesCard from "@/components/shared/PasscodesCard";
 import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import WatchmanWidget from "@/components/dashboard/WatchmanWidget";
 import CSVImportsCard from "@/components/settings/CSVImportsCard";
+import AuditCard from "@/components/settings/AuditCard";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -1278,6 +1279,15 @@ export default function DashboardPage() {
                * checkouts are preserved by the delete logic.
                */}
               {!isReadOnly && <CSVImportsCard />}
+
+              {/*
+               * Audit export (iter-28d) — workspace inventory audit with
+               * completeness scoring vs CSV-import baseline. Manager+ only.
+               * Manual-add assets and pre-baseline assets are noted in the
+               * export but excluded from the score. Outputs CSV download +
+               * browser print (Save-as-PDF).
+               */}
+              {!isReadOnly && <AuditCard />}
 
               {/*
                * Danger Zone — Delete the entire workspace.

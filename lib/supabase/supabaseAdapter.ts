@@ -78,7 +78,27 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
   }) as WorkspaceData["checkouts"];
 
   return {
-    assets: legacy.assets ?? [],
+    // iter-28d: backfill csvBaseline for legacy CSV-imported assets that
+    // lack a baseline. See localStorageAdapter for full rationale.
+    assets: (legacy.assets ?? []).map(a => {
+      if (a.csvImportId && !a.csvBaseline) {
+        return {
+          ...a,
+          csvBaseline: {
+            name: a.name,
+            category: a.category,
+            barcode: a.barcode,
+            make: a.make,
+            model: a.model,
+            location: a.location,
+            serialNumber: a.serialNumber ?? "",
+            cost: a.cost,
+            eolDate: a.eolDate,
+          },
+        };
+      }
+      return a;
+    }),
     kits: legacy.kits ?? [],
     checkouts: migratedCheckouts,
     alerts: legacy.alerts ?? [],

@@ -39,6 +39,46 @@ export interface Asset {
    * stays as an audit trail.
    */
   csvImportId?: string;
+  /**
+   * iter-28d: original CSV upload values for this asset, captured at
+   * import time. Used by the audit export to compute a completeness
+   * score (how close is the asset's current state to its original
+   * upload?).
+   *
+   * Populated ONLY when an asset is created via CSV import. Manual-add
+   * assets have this undefined — they appear in audit exports marked
+   * "no baseline" and are excluded from the workspace-wide score.
+   *
+   * For assets created BEFORE iter-28d shipped, the migration shim
+   * populates this from the asset's current state on first read. That
+   * means historical assets read 100% match until something drifts —
+   * acceptable trade-off since we never captured original data.
+   *
+   * The fields stored here are EXACTLY what the score compares against.
+   * If we add more scored fields in a future iteration, this shape
+   * grows and we re-baseline.
+   */
+  csvBaseline?: AssetCSVBaseline;
+}
+
+/**
+ * Snapshot of an asset's CSV-upload values (iter-28d). The score in the
+ * audit export is: count of fields where (current === baseline) divided
+ * by count of fields where baseline is non-empty.
+ *
+ * If a field was empty in the original CSV, it doesn't count toward the
+ * score either way — there's no truth to compare against.
+ */
+export interface AssetCSVBaseline {
+  name: string;
+  category: string;
+  barcode: string;
+  make: string;
+  model: string;
+  location: string;
+  serialNumber: string;
+  cost: number | null;
+  eolDate: string | null;
 }
 
 export interface Kit {
