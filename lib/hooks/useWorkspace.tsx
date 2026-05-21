@@ -1955,6 +1955,97 @@ function useWorkspaceImpl() {
     return summary;
   }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
+  /**
+   * Reset INVENTORY only — iter-28d-fix.
+   *
+   * Wipes assets, kits, CSV import records. Auto-returns any active or
+   * overdue checkouts before the wipe so we don't leave hanging
+   * references to deleted assets. Preserves: team members, profiles,
+   * projects (they lose their assignedKits but keep date/client/lead),
+   * SOPs, audit log, workspace settings (org name, location, barcode
+   * prefix, timezone, manager mode, watchman snoozes, AI usage).
+   *
+   * Owner-only. Destructive and irreversible.
+   *
+   * Returns a summary so the UI can confirm what happened:
+   *   - assetsRemoved: count of assets wiped
+   *   - kitsRemoved: count of kits wiped
+   *   - csvImportsRemoved: count of import records wiped
+   *   - checkoutsAutoReturned: count of active checkouts force-returned
+   */
+  const resetInventory = useCallback((actorInitials: string): {
+    assetsRemoved: number;
+    kitsRemoved: number;
+    csvImportsRemoved: number;
+    checkoutsAutoReturned: number;
+  } | null => {
+    if (isReadOnly) return null;
+    if (auth.currentRole !== "owner") return null;
+
+    const summary = {
+      assetsRemoved: userData.assets.length,
+      kitsRemoved: userData.kits.length,
+      csvImportsRemoved: (userData.csvImports ?? []).length,
+      checkoutsAutoReturned: 0,
+    };
+
+    const nowISO = new Date().toISOString();
+
+    updateUserData(d => {
+      // Auto-return active and overdue checkouts. They become historical
+      // records with returnedAtISO=now. The audit log captures this so
+      // the team can see "this kit was auto-returned during inventory
+      // reset" rather than just vanishing.
+      const returnedCheckouts = d.checkouts.map(c => {
+        if (!("checkedOutAtISO" in c)) return c;
+        if (c.status !== "active" && c.status !== "overdue") return c;
+        summary.checkoutsAutoReturned++;
+        return {
+          ...c,
+          status: "returned" as const,
+          returnedAtISO: nowISO,
+        };
+      });
+
+      // Project assignedKits lists point to kits that are about to vanish.
+      // Clear the arrays to avoid dangling references.
+      const cleanedProjects = d.projects.map(p =>
+        p.assignedKits.length === 0 ? p : { ...p, assignedKits: [] }
+      );
+
+      // SOP linkedAssetIds and linkedKitIds may reference doomed entities.
+      // Clear the affected arrays. SOPs themselves survive — they're
+      // documentation, not asset data.
+      const cleanedSOPs = d.sops.map(s => ({
+        ...s,
+        linkedAssetIds: [],
+        linkedKitIds: [],
+      }));
+
+      // Alerts referencing assets are now meaningless. Clear them.
+      const next: WorkspaceData = {
+        ...d,
+        assets: [],
+        kits: [],
+        checkouts: returnedCheckouts,
+        alerts: [],
+        projects: cleanedProjects,
+        sops: cleanedSOPs,
+        csvImports: [],
+      };
+
+      return appendEvent(next, "inventory_reset",
+        `Inventory reset: ${summary.assetsRemoved} assets, ${summary.kitsRemoved} kits wiped`,
+        {
+          actor: actorInitials,
+          detail: summary.checkoutsAutoReturned > 0
+            ? `${summary.checkoutsAutoReturned} active checkout${summary.checkoutsAutoReturned === 1 ? "" : "s"} auto-returned · ${summary.csvImportsRemoved} import record${summary.csvImportsRemoved === 1 ? "" : "s"} cleared`
+            : `${summary.csvImportsRemoved} import record${summary.csvImportsRemoved === 1 ? "" : "s"} cleared`,
+        });
+    });
+
+    return summary;
+  }, [isReadOnly, auth.currentRole, userData, updateUserData]);
 
   const flagAsset = useCallback((args: {
     assetId: string;
@@ -2379,6 +2470,8 @@ function useWorkspaceImpl() {
     // CSV import tracking + safe batch delete (iter-28c)
     recordCSVImport,
     deleteCSVImport,
+    // Inventory reset (iter-28d-fix)
+    resetInventory,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

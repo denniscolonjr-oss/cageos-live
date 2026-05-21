@@ -142,7 +142,8 @@ export type AuditCategory =
   | "watchman_snoozed"
   | "ai_scan_run"
   | "csv_import"
-  | "csv_import_deleted";
+  | "csv_import_deleted"
+  | "inventory_reset";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =

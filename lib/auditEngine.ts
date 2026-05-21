@@ -77,6 +77,14 @@ export interface WorkspaceAudit {
   /** Per-asset rows. Includes ALL assets (archived + manual + CSV-imported). */
   rows: AssetAuditRow[];
   /**
+   * Per-kit rows (iter-28d-fix). One row per kit, sorted worst-first
+   * by kit score. Kit score is presence/expected — if a 5-component
+   * kit has 5 components present, it's 100%; missing 1 = 80%; etc.
+   * Drift in individual component fields belongs in the asset score,
+   * not the kit score.
+   */
+  kits: KitAuditRow[];
+  /**
    * Workspace-wide completeness score (0-100).
    * Computed from auditable assets only (active + has baseline).
    * Null if no auditable assets exist.
@@ -94,8 +102,43 @@ export interface WorkspaceAudit {
   driftedAssets: number;
   /** Asset count with active flags. */
   flaggedAssets: number;
+  /** Total kits in the workspace (excludes archived). */
+  totalKits: number;
+  /** Kits at 100% (all expected components present). */
+  completeKits: number;
+  /** Kits missing at least one component. */
+  incompleteKits: number;
   /** When this audit was generated (ISO). */
   generatedAt: string;
+}
+
+/**
+ * Per-kit audit row (iter-28d-fix). Kit score is component presence:
+ * present components ÷ expected components × 100. A kit definition lists
+ * componentIds; a component is "missing" if its asset has been archived
+ * (or no longer exists). Out checkouts don't count as missing — gear
+ * out in the field is still part of the kit.
+ */
+export interface KitAuditRow {
+  kitId: string;
+  name: string;
+  barcode: string;
+  /** Kit's storage location, if set. */
+  location: string;
+  /** Expected component count from kit definition. */
+  expectedCount: number;
+  /** Actually-present component count (non-archived, asset still exists). */
+  presentCount: number;
+  /** Missing components — archived or deleted since being added to kit. */
+  missing: Array<{ assetId: string; name: string; barcode: string; reason: "archived" | "deleted" }>;
+  /** Components currently checked out (still part of the kit, just away). */
+  outCount: number;
+  /** Kit-level score: presentCount / expectedCount * 100. 100% if expectedCount=0. */
+  score: number;
+  /** Component asset ids for cross-referencing with the assets section. */
+  componentAssetIds: string[];
+  /** True if this kit is archived. */
+  archived: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -114,9 +157,6 @@ export function runAudit(workspace: WorkspaceData, nowMs: number = Date.now()): 
     if (row.archived) continue;
     if (row.noBaseline) continue;
     auditableCount++;
-    // Reconstruct the (matched, scorable) counts from the row's score
-    // — we stored a percentage, but for aggregation we need the raw
-    // counts. Recompute here to avoid carrying extra state.
     const asset = workspace.assets.find(a => a.id === row.assetId);
     if (!asset || !asset.csvBaseline) continue;
     const { matched, scorable } = countFieldMatches(asset, asset.csvBaseline);
@@ -127,8 +167,14 @@ export function runAudit(workspace: WorkspaceData, nowMs: number = Date.now()): 
     ? Math.round((totalMatched / totalScorable) * 1000) / 10
     : null;
 
+  // Kits section (iter-28d-fix). One row per kit, sorted worst-first.
+  const kitRows = workspace.kits.map(k => buildKitRow(k, workspace));
+  const completeKits = kitRows.filter(k => !k.archived && k.score === 100).length;
+  const incompleteKits = kitRows.filter(k => !k.archived && k.score < 100).length;
+
   return {
     rows,
+    kits: kitRows,
     workspaceScore,
     totalAssets: rows.length,
     auditableAssets: auditableCount,
@@ -136,7 +182,67 @@ export function runAudit(workspace: WorkspaceData, nowMs: number = Date.now()): 
     archivedAssets: rows.filter(r => r.archived).length,
     driftedAssets: rows.filter(r => r.drift.length > 0).length,
     flaggedAssets: rows.filter(r => r.flagSummary !== null).length,
+    totalKits: kitRows.filter(k => !k.archived).length,
+    completeKits,
+    incompleteKits,
     generatedAt: new Date(nowMs).toISOString(),
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Per-kit row construction (iter-28d-fix)
+// ──────────────────────────────────────────────────────────────────────
+
+function buildKitRow(kit: import("@/lib/data").Kit, workspace: WorkspaceData): KitAuditRow {
+  const assetById = new Map(workspace.assets.map(a => [a.id, a]));
+
+  const missing: KitAuditRow["missing"] = [];
+  let presentCount = 0;
+  let outCount = 0;
+
+  for (const componentId of kit.componentIds) {
+    const asset = assetById.get(componentId);
+    if (!asset) {
+      // Component was deleted from the workspace entirely
+      missing.push({
+        assetId: componentId,
+        name: "(deleted asset)",
+        barcode: componentId,
+        reason: "deleted",
+      });
+      continue;
+    }
+    if (asset.archivedAt) {
+      missing.push({
+        assetId: asset.id,
+        name: asset.name,
+        barcode: asset.barcode,
+        reason: "archived",
+      });
+      continue;
+    }
+    presentCount++;
+    if (asset.status === "out") outCount++;
+  }
+
+  const expectedCount = kit.componentIds.length;
+  // Empty-kit definition gets 100% — there's nothing to be missing.
+  const score = expectedCount === 0
+    ? 100
+    : Math.round((presentCount / expectedCount) * 1000) / 10;
+
+  return {
+    kitId: kit.id,
+    name: kit.name,
+    barcode: kit.barcode,
+    location: kit.location ?? "",
+    expectedCount,
+    presentCount,
+    missing,
+    outCount,
+    score,
+    componentAssetIds: kit.componentIds,
+    archived: !!kit.archivedAt,
   };
 }
 
@@ -293,21 +399,22 @@ function normalize(s: string | null | undefined): string {
 /**
  * Build a CSV string representing the audit. Header row + one row per
  * asset. Drift detail is collapsed to a single semicolon-separated
- * column ("field: baseline → current; ...").
+ * column ("field: baseline -> current; ...").
+ *
+ * Kits get a separate section below assets with their own header row.
  *
  * Fields are properly quoted: any value containing a comma, quote, or
  * newline gets wrapped in double quotes with internal quotes doubled.
+ *
+ * Note: uses ASCII hyphen everywhere instead of em-dash to avoid Excel
+ * mojibake when the BOM is absent. The caller should ALSO prepend a
+ * UTF-8 BOM before saving the file for full safety.
  */
 export function auditToCSV(audit: WorkspaceAudit, workspaceName: string): string {
-  const header = [
-    "Asset ID", "Name", "Barcode", "Category", "Current Location",
-    "Status", "Lifecycle", "Last Used", "Last Used By",
-    "Service Flag", "Score (%)", "Drift", "Notes",
-  ];
-
   const lines: string[] = [];
-  // Metadata banner — non-data lines at the top
-  lines.push(`# Audit export — ${workspaceName}`);
+
+  // Metadata banner — uses ASCII hyphen, no em-dash
+  lines.push(`# Audit export - ${workspaceName}`);
   lines.push(`# Generated: ${audit.generatedAt}`);
   lines.push(`# Total assets: ${audit.totalAssets}`);
   lines.push(`# Auditable (has baseline): ${audit.auditableAssets}`);
@@ -315,15 +422,49 @@ export function auditToCSV(audit: WorkspaceAudit, workspaceName: string): string
   lines.push(`# Archived: ${audit.archivedAssets}`);
   lines.push(`# Drifted: ${audit.driftedAssets}`);
   lines.push(`# Flagged for service: ${audit.flaggedAssets}`);
+  lines.push(`# Total kits: ${audit.totalKits}`);
+  lines.push(`# Kits complete: ${audit.completeKits}`);
+  lines.push(`# Kits incomplete: ${audit.incompleteKits}`);
   lines.push(`# Workspace score: ${audit.workspaceScore === null ? "N/A" : audit.workspaceScore + "%"}`);
   lines.push("");
-  lines.push(header.map(csvCell).join(","));
+
+  // ── KITS SECTION ──
+  lines.push("# === KITS ===");
+  const kitHeader = [
+    "Kit ID", "Name", "Barcode", "Location",
+    "Expected Components", "Present Components", "Components Out",
+    "Score (%)", "Missing Components", "Notes",
+  ];
+  lines.push(kitHeader.map(csvCell).join(","));
+  for (const kit of audit.kits) {
+    const missingStr = kit.missing.length === 0
+      ? ""
+      : kit.missing.map(m => `${m.name} (${m.barcode}, ${m.reason})`).join("; ");
+    const notes = kit.archived ? "Archived" : "";
+    lines.push([
+      kit.kitId, kit.name, kit.barcode, kit.location,
+      kit.expectedCount, kit.presentCount, kit.outCount,
+      kit.score, missingStr, notes,
+    ].map(csvCell).join(","));
+  }
+
+  lines.push("");
+
+  // ── ASSETS SECTION ──
+  lines.push("# === ASSETS ===");
+  const assetHeader = [
+    "Asset ID", "Name", "Barcode", "Category", "Current Location",
+    "Status", "Lifecycle", "Last Used", "Last Used By",
+    "Service Flag", "Score (%)", "Drift", "Notes",
+  ];
+  lines.push(assetHeader.map(csvCell).join(","));
 
   for (const row of audit.rows) {
     const driftStr = row.drift.length === 0
       ? ""
       : row.drift
-          .map(d => `${d.field}: "${d.baselineValue}" → "${d.currentValue}"`)
+          // ASCII arrow, no em-dash
+          .map(d => `${d.field}: "${d.baselineValue}" -> "${d.currentValue}"`)
           .join("; ");
     const notes = row.noBaseline
       ? "No baseline (manual-add)"

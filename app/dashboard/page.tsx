@@ -20,6 +20,7 @@ import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import WatchmanWidget from "@/components/dashboard/WatchmanWidget";
 import CSVImportsCard from "@/components/settings/CSVImportsCard";
 import AuditCard from "@/components/settings/AuditCard";
+import ResetInventoryCard from "@/components/settings/ResetInventoryCard";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -1288,6 +1289,15 @@ export default function DashboardPage() {
                * browser print (Save-as-PDF).
                */}
               {!isReadOnly && <AuditCard />}
+
+              {/*
+               * Reset inventory (iter-28d-fix) — wipes assets, kits, and
+               * CSV import records. Auto-returns active checkouts.
+               * Preserves team members, projects, SOPs, audit log, and
+               * workspace settings. Owner only. Different from Reset
+               * Workspace (which also wipes team members).
+               */}
+              {mode === "user" && <ResetInventoryCard />}
 
               {/*
                * Danger Zone — Delete the entire workspace.
