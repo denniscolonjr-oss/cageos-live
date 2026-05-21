@@ -157,15 +157,120 @@ function PickFileStage({ onFile, parseError, fileInputRef, onFileInput }: {
   onFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); setIsDragging(false);
     const file = e.dataTransfer.files[0]; if (file) onFile(file);
   }
+
+  function downloadTemplate() {
+    const csv = buildCSVTemplate();
+    // BOM for Excel encoding safety (same trick as audit export)
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cageos-asset-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Intro line — short, no longer trying to list every column */}
       <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "var(--t2)", lineHeight: 1.6 }}>
-        Upload a CSV with one asset per row. Required columns: <strong style={{ color: "var(--t1)" }}>name</strong>, <strong style={{ color: "var(--t1)" }}>category</strong>. Other supported columns: barcode, make, model, location, serialNumber, cost, eolDate, notes. Duplicates against existing assets will be flagged for review before commit.
+        Upload a CSV with one asset per row. Required columns: <strong style={{ color: "var(--t1)" }}>name</strong> and <strong style={{ color: "var(--t1)" }}>category</strong>. Common header names like &quot;Item Name&quot; or &quot;Asset Type&quot; are recognized automatically.
       </div>
+
+      {/* Format guide bar with template download */}
+      <div style={{
+        padding: "10px 12px",
+        background: "var(--s2)",
+        border: "1px solid var(--b1)",
+        borderRadius: 6,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        gap: 10, flexWrap: "wrap",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            onClick={() => setGuideOpen(o => !o)}
+            style={{
+              background: "transparent", border: "none", padding: 0,
+              color: "var(--acc)", cursor: "pointer",
+              fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {guideOpen ? "▾ Hide column guide" : "▸ See all supported columns"}
+          </button>
+        </div>
+        <button
+          onClick={downloadTemplate}
+          style={{
+            padding: "5px 11px", borderRadius: 4,
+            background: "transparent", border: "1px solid var(--b1)",
+            color: "var(--t1)", cursor: "pointer",
+            fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.04em", minHeight: 27,
+          }}
+        >
+          ↓ Download template
+        </button>
+      </div>
+
+      {/* Expandable column reference */}
+      {guideOpen && (
+        <div style={{
+          border: "1px solid var(--b1)",
+          borderRadius: 6,
+          overflow: "hidden",
+          maxHeight: 280, overflowY: "auto",
+        }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead style={{ background: "var(--s2)", position: "sticky", top: 0 }}>
+              <tr>
+                <th style={tableHeaderStyle()}>Field</th>
+                <th style={tableHeaderStyle()}>Required?</th>
+                <th style={tableHeaderStyle()}>Accepted header names</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.keys(COLUMN_SYNONYMS) as Array<keyof typeof COLUMN_SYNONYMS>).map((field, i) => {
+                const required = field === "name" || field === "category";
+                return (
+                  <tr key={field} style={{
+                    borderTop: i === 0 ? "none" : "1px solid var(--b1)",
+                  }}>
+                    <td style={{
+                      padding: "8px 10px",
+                      fontFamily: "'DM Mono',monospace", fontSize: 11,
+                      color: "var(--t1)", fontWeight: 700,
+                      verticalAlign: "top",
+                    }}>{field}</td>
+                    <td style={{
+                      padding: "8px 10px",
+                      fontFamily: "'DM Mono',monospace", fontSize: 10,
+                      color: required ? "var(--red)" : "var(--t3)",
+                      verticalAlign: "top",
+                    }}>{required ? "required" : "optional"}</td>
+                    <td style={{
+                      padding: "8px 10px",
+                      fontFamily: "'DM Sans',sans-serif", fontSize: 11,
+                      color: "var(--t2)", lineHeight: 1.5,
+                      verticalAlign: "top",
+                    }}>{COLUMN_SYNONYMS[field].join(", ")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Dropzone */}
       <div
         onDrop={onDrop}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -185,16 +290,42 @@ function PickFileStage({ onFile, parseError, fileInputRef, onFileInput }: {
         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>.csv files only</div>
         <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={onFileInput} style={{ display: "none" }} />
       </div>
+
+      {/* Parse error display */}
       {parseError && (
         <div style={{
-          padding: "10px 12px",
+          padding: "12px 14px",
           background: "color-mix(in srgb, var(--red) 8%, var(--s2))",
           border: "1px solid var(--red)", borderRadius: 6,
-          fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--red)",
-        }}>{parseError}</div>
+          fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "var(--t1)",
+          lineHeight: 1.6,
+        }}>
+          <div style={{
+            fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+            color: "var(--red)", letterSpacing: "0.1em", textTransform: "uppercase",
+            marginBottom: 4,
+          }}>
+            Couldn&apos;t parse this CSV
+          </div>
+          {parseError}
+          <div style={{ marginTop: 8, fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>
+            Tip: download the template above to see the expected format, or click &quot;See all supported columns&quot; to find which header name to rename.
+          </div>
+        </div>
       )}
     </div>
   );
+}
+
+function tableHeaderStyle(): React.CSSProperties {
+  return {
+    padding: "8px 10px",
+    textAlign: "left",
+    fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+    color: "var(--t3)", letterSpacing: "0.1em", textTransform: "uppercase",
+    borderBottom: "1px solid var(--b1)",
+    background: "var(--s2)",
+  };
 }
 
 function PreviewStage({ filename, analysis, decisions, stagedCounts, onSetRowDecision, onApplyAll, onBack, onNext }: {
@@ -403,25 +534,57 @@ function DoneStage({ summary, onClose }: {
 function parseCSV(text: string): ParsedRow[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lines.length === 0) return [];
-  const headerCells = lines[0].split(",").map(h => h.trim().toLowerCase());
+  const rawHeaders = lines[0].split(",").map(h => h.trim());
+  const normalizedHeaders = rawHeaders.map(normalizeHeader);
   const headerMap = new Map<string, number>();
-  headerCells.forEach((h, i) => headerMap.set(h, i));
-  const idxOf = (...keys: string[]): number => {
-    for (const k of keys) { const i = headerMap.get(k); if (i !== undefined) return i; }
+  normalizedHeaders.forEach((h, i) => {
+    // First occurrence wins — if the user has two columns that normalize
+    // to the same key, ignore the second (parseable but ambiguous; we
+    // prefer the leftmost).
+    if (!headerMap.has(h)) headerMap.set(h, i);
+  });
+
+  /**
+   * Find the first synonym that maps to a column index. Returns -1
+   * if none of the synonyms match a header in the file.
+   */
+  const idxOfSynonyms = (synonyms: readonly string[]): number => {
+    for (const syn of synonyms) {
+      const i = headerMap.get(normalizeHeader(syn));
+      if (i !== undefined) return i;
+    }
     return -1;
   };
-  const iName = idxOf("name");
-  const iCategory = idxOf("category");
-  if (iName === -1) throw new Error("CSV missing 'name' column.");
-  if (iCategory === -1) throw new Error("CSV missing 'category' column.");
-  const iBarcode = idxOf("barcode");
-  const iMake = idxOf("make");
-  const iModel = idxOf("model");
-  const iLocation = idxOf("location");
-  const iSerial = idxOf("serialnumber", "serial", "serial_number");
-  const iCost = idxOf("cost", "price");
-  const iEol = idxOf("eoldate", "eol_date", "eol", "end_of_life");
-  const iNotes = idxOf("notes", "note", "description");
+
+  const iName = idxOfSynonyms(COLUMN_SYNONYMS.name);
+  const iCategory = idxOfSynonyms(COLUMN_SYNONYMS.category);
+  if (iName === -1) {
+    throw new Error(
+      `We couldn't find a "name" column. Looked for: ${COLUMN_SYNONYMS.name.join(", ")}. ` +
+      `Found these columns in your file: ${rawHeaders.join(", ") || "(none)"}.`
+    );
+  }
+  if (iCategory === -1) {
+    throw new Error(
+      `We couldn't find a "category" column. Looked for: ${COLUMN_SYNONYMS.category.join(", ")}. ` +
+      `Found these columns in your file: ${rawHeaders.join(", ") || "(none)"}.`
+    );
+  }
+  const iBarcode = idxOfSynonyms(COLUMN_SYNONYMS.barcode);
+  const iMake = idxOfSynonyms(COLUMN_SYNONYMS.make);
+  const iModel = idxOfSynonyms(COLUMN_SYNONYMS.model);
+  const iLocation = idxOfSynonyms(COLUMN_SYNONYMS.location);
+  const iSerial = idxOfSynonyms(COLUMN_SYNONYMS.serialNumber);
+  const iCost = idxOfSynonyms(COLUMN_SYNONYMS.cost);
+  const iEol = idxOfSynonyms(COLUMN_SYNONYMS.eolDate);
+  // Special-case `notes`: if "description" is being used as the NAME
+  // column (no other name match), don't ALSO map it to notes — that
+  // would duplicate the text. If iName matched a "description"-flavored
+  // header, exclude that column index from the notes search.
+  const iNotes = idxOfSynonyms(COLUMN_SYNONYMS.notes.filter(syn => {
+    const synIdx = headerMap.get(normalizeHeader(syn));
+    return synIdx !== iName; // skip if this synonym is what's serving as name
+  }));
 
   const rows: ParsedRow[] = [];
   for (let li = 1; li < lines.length; li++) {
@@ -444,6 +607,61 @@ function parseCSV(text: string): ParsedRow[] {
     });
   }
   return rows;
+}
+
+/**
+ * Normalize a header name for matching: lowercase, trim, strip spaces,
+ * underscores, dashes, hashes, slashes, and parentheses. "Item Name" →
+ * "itemname". "Model #" → "model". "Serial / Number" → "serialnumber".
+ * "S/N" → "sn".
+ */
+function normalizeHeader(s: string): string {
+  return s.toLowerCase().replace(/[\s_\-#/()]/g, "");
+}
+
+/**
+ * Header-name synonyms per field. First match wins when multiple
+ * columns could map to the same field (leftmost in the CSV).
+ *
+ * Synonyms are matched via normalizeHeader, so "Item Name", "item_name",
+ * "ITEM-NAME", "item name " all match "item name".
+ */
+const COLUMN_SYNONYMS = {
+  name: ["name", "item name", "asset name", "title", "item"],
+  category: ["category", "type", "asset type", "gear type", "kind", "classification"],
+  barcode: ["barcode", "sku", "tag", "asset tag", "asset id", "id", "code", "qr"],
+  make: ["make", "manufacturer", "brand", "vendor"],
+  model: ["model", "model number", "model #"],
+  location: ["location", "where", "room", "shelf", "storage", "location label"],
+  serialNumber: ["serial number", "serial", "serial #", "sn", "s/n", "serialnumber"],
+  cost: ["cost", "price", "value", "replacement cost", "msrp"],
+  eolDate: ["eol date", "eol", "end of life", "retire by", "retirement date"],
+  // "description" appears in both name and notes synonyms intentionally —
+  // parser logic above gives name priority when both exist.
+  notes: ["notes", "note", "description", "comments", "remarks"],
+} as const;
+
+/**
+ * Build a downloadable example CSV. Used by the "Download template" button
+ * in the upload modal. Three realistic broadcast-production rows with all
+ * supported columns populated to varying degrees (one row has minimal data
+ * to show optional fields are OK).
+ */
+export function buildCSVTemplate(): string {
+  const header = [
+    "Item Name", "Category", "Barcode", "Make", "Model",
+    "Location", "Serial Number", "Cost", "EOL Date", "Notes",
+  ];
+  const rows = [
+    ["Sony FX6 Camera", "Video", "MMG-1001", "Sony", "ILME-FX6",
+     "Cage A Shelf 3", "SN-FX6-001", "5999", "2030", "Primary docs camera"],
+    ["Sennheiser MKE 600", "Audio", "MMG-1002", "Sennheiser", "MKE 600",
+     "Audio Drawer 2", "", "479", "", "Boom mic"],
+    ["Aputure 300X", "Lighting", "MMG-1003", "Aputure", "300X Bi-Color",
+     "Light Rack B", "A300X-2024-44", "1099", "", ""],
+  ];
+  const csvCell = (v: string) => /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  return [header, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
 }
 
 function rowToAsset(row: ParsedRow, nowISO: string): Asset {
