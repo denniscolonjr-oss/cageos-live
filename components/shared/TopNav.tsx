@@ -65,9 +65,17 @@ export default function TopNav() {
 
   return (
     <nav style={{
-      display: "flex",
+      /*
+       * iter-28-layout: 3-column grid with auto-sized center. Replaces the
+       * previous space-between flex which let the tabs drift wherever the
+       * left/right items happened to push them. Now: left column (logo) +
+       * right column (bell, switcher, account) get equal 1fr widths so
+       * the auto-width center column (tabs pill) lands EXACTLY in the
+       * viewport center, regardless of how many items are on the right.
+       */
+      display: "grid",
+      gridTemplateColumns: "1fr auto 1fr",
       alignItems: "center",
-      justifyContent: "space-between",
       height: 50,
       padding: `0 ${isMobile ? 12 : 20}px`,
       paddingLeft: `max(${isMobile ? 12 : 20}px, var(--safe-left))`,
@@ -78,13 +86,15 @@ export default function TopNav() {
       zIndex: 50,
       gap: 8,
     }}>
-      {/* Logo */}
-      <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-        <div style={{ width: 28, height: 28, background: "var(--acc)", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 500, color: "var(--bg)" }}>CO</div>
-        {!isMobile && (
-          <span style={{ fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 800, letterSpacing: -0.5, color: "var(--t1)" }}>CageOS</span>
-        )}
-      </Link>
+      {/* LEFT COLUMN: logo, left-aligned within its 1fr cell */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+          <div style={{ width: 28, height: 28, background: "var(--acc)", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 500, color: "var(--bg)" }}>CO</div>
+          {!isMobile && (
+            <span style={{ fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 800, letterSpacing: -0.5, color: "var(--t1)" }}>CageOS</span>
+          )}
+        </Link>
+      </div>
 
       {/*
        * Tabs container. On mobile, allows horizontal scroll AND shrink so it
@@ -126,6 +136,9 @@ export default function TopNav() {
           );
         })}
       </div>
+
+      {/* RIGHT COLUMN: bell + workspace switcher + account menu, right-aligned within their 1fr cell */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
 
       {/*
        * Inbox bell — shows count of unread @mentions.
@@ -385,6 +398,7 @@ export default function TopNav() {
           }}
         />
       )}
+      </div>
     </nav>
   );
 }

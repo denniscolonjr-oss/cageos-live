@@ -319,13 +319,23 @@ export default function DashboardPage() {
 
       <div style={{ display: isMobile ? "block" : "grid", gridTemplateColumns: isMobile ? "none" : "210px 1fr", flex: 1, overflow: "hidden" }}>
         {!isMobile && (
-          <aside style={{ borderRight: "1px solid var(--b1)", padding: "16px 0", overflowY: "auto", background: "var(--bg)" }}>
+          <aside style={{
+            borderRight: "1px solid var(--b1)",
+            // iter-28-layout: left padding matches TopNav logo's 20px indent so
+            // section headers and items align with the logo above them. Right
+            // padding lets a slight gap before the dividing border.
+            padding: "16px 16px 16px 20px",
+            overflowY: "auto",
+            background: "var(--bg)",
+          }}>
             {sidebarContent}
           </aside>
         )}
 
         <main style={{
-          padding: isMobile ? "16px 12px" : "24px 28px",
+          // iter-28-layout: dropped to 24px horizontal so main content's left
+          // edge sits 24px from the sidebar divider — consistent gutter.
+          padding: isMobile ? "16px 12px" : "24px 24px",
           paddingBottom: `max(${isMobile ? 16 : 24}px, var(--safe-bottom))`,
           overflowY: "auto", background: "var(--bg)", height: "100%",
         }} className="animate-fade-up">
