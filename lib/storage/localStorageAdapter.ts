@@ -92,6 +92,8 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
       dailyDate: new Date().toISOString().slice(0, 10),
       dailyScans: 0,
     },
+    // iter-28c
+    csvImports: legacy.csvImports ?? [],
   };
 }
 

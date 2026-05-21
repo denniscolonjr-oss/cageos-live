@@ -42,6 +42,7 @@ const EMPTY: WorkspaceData = {
     dailyDate: new Date().toISOString().slice(0, 10),
     dailyScans: 0,
   },
+  csvImports: [],
 };
 
 function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): WorkspaceData {
@@ -119,6 +120,7 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
       dailyDate: new Date().toISOString().slice(0, 10),
       dailyScans: 0,
     },
+    csvImports: legacy.csvImports ?? [],
   };
 }
 

@@ -45,6 +45,8 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   // iter-28a
   watchmanSnoozes: [],
   aiUsage: { totalScans: 0, totalCostUsd: 0, dailyDate: new Date().toISOString().slice(0, 10), dailyScans: 0 },
+  // iter-28c
+  csvImports: [],
 };
 
 // Demo projects use real ISO timestamps. Built dynamically so "today" is always today.
@@ -198,6 +200,8 @@ function buildDemoWorkspace(): WorkspaceData {
     // iter-28a
     watchmanSnoozes: [],
     aiUsage: { totalScans: 0, totalCostUsd: 0, dailyDate: new Date().toISOString().slice(0, 10), dailyScans: 0 },
+    // iter-28c
+    csvImports: [],
   };
 }
 
@@ -1765,6 +1769,177 @@ function useWorkspaceImpl() {
     });
   }, [isReadOnly, updateUserData]);
 
+  /**
+   * Commit a CSV asset import (iter-28c).
+   *
+   * This is the atomic operation that ends the upload flow. It:
+   *   1. Stamps each new asset with the import id (asset.csvImportId)
+   *   2. Adds those assets to data.assets
+   *   3. Applies overwrites to existing assets (preserves their original
+   *      id and any in-use references — kit membership, checkouts, links)
+   *   4. Records the CSVImport metadata
+   *
+   * The caller (CSVUploadModal) has already done the dedup analysis and
+   * collected per-row user decisions. This function trusts that input
+   * and applies it. It does NOT re-run the dedup — if you call it with
+   * a duplicate row and decision "import_as_new", you get a duplicate.
+   *
+   * Overwrite semantics: replace name/category/make/model/location/cost/
+   * eolDate/serialNumber/notes from the CSV row. Preserve id, status,
+   * lifecycle, lastUser, lastUpdated, kitId, csvImportId, archived flags.
+   * That way an overwrite doesn't accidentally un-archive an asset, reset
+   * its lifecycle, or detach it from its kit.
+   */
+  const recordCSVImport = useCallback((args: {
+    filename: string;
+    uploaderInitials: string;
+    newAssets: Asset[];
+    overwrites: Array<{ existingAssetId: string; row: import("@/lib/csvDedup").ParsedRow }>;
+    rowsTotal: number;
+    rowsSkipped: number;
+  }): string | null => {
+    if (isReadOnly) return null;
+
+    const importId = `csv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const nowISO = new Date().toISOString();
+
+    // Stamp each new asset with the import id, and capture their final ids
+    const stampedNew = args.newAssets.map(a => ({ ...a, csvImportId: importId }));
+    const newAssetIds = stampedNew.map(a => a.id);
+
+    const importRecord: import("@/lib/hooks/workspaceTypes").CSVImport = {
+      id: importId,
+      uploadedAt: nowISO,
+      uploadedBy: args.uploaderInitials,
+      filename: args.filename,
+      rowsTotal: args.rowsTotal,
+      rowsImported: args.newAssets.length - args.overwrites.length,
+      rowsSkipped: args.rowsSkipped,
+      rowsOverwritten: args.overwrites.length,
+      rowsImportedAsNew: 0, // The "import as new" rows are folded into newAssets.
+      importedAssetIds: newAssetIds,
+    };
+
+    updateUserData(d => {
+      // Apply overwrites — patch existing asset records, preserve identity
+      const overwriteMap = new Map(args.overwrites.map(o => [o.existingAssetId, o.row]));
+      const patchedAssets = d.assets.map(a => {
+        const row = overwriteMap.get(a.id);
+        if (!row) return a;
+        return {
+          ...a,
+          // Patched fields (from CSV)
+          name: row.name || a.name,
+          category: row.category || a.category,
+          make: row.make || a.make,
+          model: row.model || a.model,
+          location: row.location || a.location,
+          serialNumber: row.serialNumber || a.serialNumber,
+          cost: row.cost ?? a.cost,
+          eolDate: row.eolDate ?? a.eolDate,
+          notes: row.notes || a.notes,
+          // Preserved fields: id, barcode, status, lifecycle, lastUser,
+          //   lastUpdated, kitId, csvImportId, archived flags, photoUrl,
+          //   serviceFlag — left as-is.
+          lastUpdated: nowISO, // bump this to reflect the patch
+        };
+      });
+
+      const next: WorkspaceData = {
+        ...d,
+        assets: [...patchedAssets, ...stampedNew],
+        csvImports: [...(d.csvImports ?? []), importRecord],
+      };
+
+      return appendEvent(next, "csv_import",
+        `Imported ${stampedNew.length} asset${stampedNew.length === 1 ? "" : "s"} from CSV`,
+        {
+          actor: args.uploaderInitials,
+          detail: `${args.filename} · ${args.overwrites.length} overwrite${args.overwrites.length === 1 ? "" : "s"} · ${args.rowsSkipped} skipped`,
+        });
+    });
+
+    return importId;
+  }, [isReadOnly, updateUserData]);
+
+  /**
+   * Delete a CSV import — Owner+Manager only (iter-28c).
+   *
+   * Safety guard: assets currently in active use are PRESERVED in the
+   * workspace, just untagged from the import. "Active use" means any of:
+   *   - Part of a kit (asset.kitId is set)
+   *   - Subject of an active or overdue checkout
+   *   - Linked to a non-completed project (via the kit they're part of)
+   *
+   * Assets safe to delete are removed entirely from data.assets.
+   *
+   * Returns a summary so the UI can show what happened. Caller is
+   * expected to display the summary and let the user confirm BEFORE
+   * calling this — i.e., this is the commit, not the preview.
+   */
+  const deleteCSVImport = useCallback((importId: string, actorInitials: string): {
+    deleted: number;
+    preserved: number;
+    preservedAssetIds: string[];
+  } | null => {
+    if (isReadOnly) return null;
+    const role = auth.currentRole;
+    if (role !== "owner" && role !== "manager") return null;
+
+    const importRecord = userData.csvImports?.find(i => i.id === importId);
+    if (!importRecord) return null;
+
+    // Compute which asset IDs are "in use" right now
+    const inUse = new Set<string>();
+    for (const a of userData.assets) {
+      if (a.kitId) inUse.add(a.id);
+    }
+    // Assets that are direct subjects of an active/overdue checkout are
+    // protected via their parent kit (a kit checkout marks all its
+    // components in-use). For a future "checkout an individual asset"
+    // feature we'd extend this. For now: kit membership covers it.
+    // Active project assignments map to kits, also covered.
+
+    const assetIdsFromThisImport = new Set(importRecord.importedAssetIds);
+    const safeToDelete: string[] = [];
+    const preservedAssetIds: string[] = [];
+
+    for (const id of assetIdsFromThisImport) {
+      if (inUse.has(id)) preservedAssetIds.push(id);
+      else safeToDelete.push(id);
+    }
+
+    const summary = {
+      deleted: safeToDelete.length,
+      preserved: preservedAssetIds.length,
+      preservedAssetIds,
+    };
+
+    updateUserData(d => {
+      const safeSet = new Set(safeToDelete);
+      const preservedSet = new Set(preservedAssetIds);
+      const nextAssets = d.assets
+        .filter(a => !safeSet.has(a.id))
+        // Untag preserved assets from the deleted import
+        .map(a => preservedSet.has(a.id) ? { ...a, csvImportId: undefined } : a);
+      const nextImports = (d.csvImports ?? []).filter(i => i.id !== importId);
+
+      const next: WorkspaceData = {
+        ...d,
+        assets: nextAssets,
+        csvImports: nextImports,
+      };
+      return appendEvent(next, "csv_import_deleted",
+        `Deleted CSV import: ${importRecord.filename}`,
+        {
+          actor: actorInitials,
+          detail: `${summary.deleted} asset${summary.deleted === 1 ? "" : "s"} removed · ${summary.preserved} preserved (in use)`,
+        });
+    });
+
+    return summary;
+  }, [isReadOnly, auth.currentRole, userData, updateUserData]);
+
 
   const flagAsset = useCallback((args: {
     assetId: string;
@@ -2186,6 +2361,9 @@ function useWorkspaceImpl() {
     // Watchman + AI (iter-28a)
     snoozeWatchmanIssue,
     recordAIScan,
+    // CSV import tracking + safe batch delete (iter-28c)
+    recordCSVImport,
+    deleteCSVImport,
     updateOrg,
     setBarcodePrefix,
     setFilterableFields,

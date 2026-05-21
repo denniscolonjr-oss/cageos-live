@@ -1,435 +1,493 @@
 "use client";
-import { useState, useRef } from "react";
+
+/**
+ * CSVUploadModal — bulk import assets via CSV with dedup preview (iter-28c).
+ *
+ * Three-screen flow:
+ *   1. PICK FILE — drag/drop or file picker. Parses on selection.
+ *   2. PREVIEW + DECISIONS — shows summary ("X new, Y duplicates") and a
+ *      per-row decision UI for each duplicate (Skip / Overwrite / Import
+ *      as new). Mass-action buttons apply a default to all duplicates.
+ *   3. CONFIRM — final review with counts. Commits via recordCSVImport.
+ *
+ * Dedup uses lib/csvDedup.ts — barcode-primary with make+model+serial
+ * fallback when barcode is missing.
+ */
+
+import { useState, useMemo, useCallback, useRef } from "react";
 import Modal from "@/components/ui/Modal";
-import { useWorkspace, nextBarcode } from "@/lib/hooks/useWorkspace";
+import { useWorkspace } from "@/lib/hooks/useWorkspace";
+import { useAuth } from "@/lib/supabase/AuthContext";
 import { toast } from "@/components/ui/Toast";
+import { analyzeDuplicates } from "@/lib/csvDedup";
+import type { ParsedRow, DedupDecision, DuplicateMatch } from "@/lib/csvDedup";
 import type { Asset } from "@/lib/data";
 
-interface ParsedRow {
-  [key: string]: string;
-}
+type Stage = "pick" | "preview" | "confirm" | "done";
 
-const TARGET_FIELDS = [
-  { key: "name", label: "Asset name", required: true },
-  { key: "barcode", label: "Barcode", required: false },
-  { key: "category", label: "Category", required: false },
-  { key: "make", label: "Make", required: false },
-  { key: "model", label: "Model", required: false },
-  { key: "location", label: "Location", required: false },
-  { key: "serial", label: "Serial number", required: false },
-  { key: "cost", label: "Cost", required: false },
-];
+export default function CSVUploadModal({ open, onClose }: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const auth = useAuth();
+  const { data, recordCSVImport } = useWorkspace();
 
-// Smart auto-detect mapping based on common column names
-function autoMap(columns: string[]): Record<string, string> {
-  const mapping: Record<string, string> = {};
-  const normalized = columns.map(c => c.toLowerCase().replace(/[_\s-]/g, ""));
+  const [stage, setStage] = useState<Stage>("pick");
+  const [filename, setFilename] = useState("");
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<Map<number, DedupDecision>>(new Map());
+  const [committing, setCommitting] = useState(false);
+  const [summary, setSummary] = useState<{ created: number; overwritten: number; skipped: number } | null>(null);
 
-  const patterns: Record<string, string[]> = {
-    name: ["name", "itemname", "assetname", "description", "item", "asset"],
-    barcode: ["barcode", "tag", "tagid", "id", "assetid", "sku"],
-    category: ["category", "type", "class", "group"],
-    make: ["make", "brand", "manufacturer"],
-    model: ["model", "modelnumber"],
-    location: ["location", "loc", "where", "room", "building"],
-    serial: ["serial", "serialnumber", "sn"],
-    cost: ["cost", "price", "value", "amount"],
-  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  for (const [field, keywords] of Object.entries(patterns)) {
-    for (let i = 0; i < normalized.length; i++) {
-      if (keywords.some(k => normalized[i] === k || normalized[i].includes(k))) {
-        mapping[field] = columns[i];
-        break;
-      }
-    }
+  const uploaderInitials = useMemo(() => {
+    if (!auth.user) return "—";
+    const profile = data.profiles.find(p => p.email === auth.user?.email);
+    return profile?.initials ?? "—";
+  }, [auth.user, data.profiles]);
+
+  const analysis = useMemo(() => {
+    if (parsedRows.length === 0) return { unique: [] as ParsedRow[], duplicates: [] as DuplicateMatch[] };
+    return analyzeDuplicates(parsedRows, data.assets);
+  }, [parsedRows, data.assets]);
+
+  function resetAll() {
+    setStage("pick"); setFilename(""); setParsedRows([]); setParseError(null);
+    setDecisions(new Map()); setCommitting(false); setSummary(null);
   }
-  return mapping;
-}
-
-// Simple CSV parser — handles quoted fields with commas
-function parseCSV(text: string): { headers: string[]; rows: ParsedRow[] } {
-  const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim());
-  if (lines.length < 2) return { headers: [], rows: [] };
-
-  function splitRow(line: string): string[] {
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (c === "," && !inQuotes) {
-        result.push(current); current = "";
-      } else {
-        current += c;
-      }
-    }
-    result.push(current);
-    return result.map(s => s.trim());
+  function handleClose() {
+    if (committing) return;
+    resetAll();
+    onClose();
   }
 
-  const headers = splitRow(lines[0]);
-  const rows = lines.slice(1).map(line => {
-    const values = splitRow(line);
-    const row: ParsedRow = {};
-    headers.forEach((h, i) => { row[h] = values[i] || ""; });
-    return row;
-  });
-
-  return { headers, rows };
-}
-
-type Stage = "upload" | "map" | "preview" | "filters" | "done";
-
-const FILTER_OPTIONS: { key: string; label: string }[] = [
-  { key: "category", label: "Category" },
-  { key: "make", label: "Make" },
-  { key: "model", label: "Model" },
-  { key: "location", label: "Location" },
-  { key: "status", label: "Status" },
-];
-
-export default function CSVUploadModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { addAssets, data, setFilterableFields } = useWorkspace();
-  const [stage, setStage] = useState<Stage>("upload");
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [importedCount, setImportedCount] = useState(0);
-  const [chosenFilters, setChosenFilters] = useState<Set<string>>(new Set(data.filterableFields));
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  function reset() {
-    setStage("upload"); setHeaders([]); setRows([]); setMapping({}); setError(null); setImportedCount(0);
-    setChosenFilters(new Set(data.filterableFields));
-  }
-
-  function handleClose() { reset(); onClose(); }
-
-  function processFile(file: File) {
-    setError(null);
-    if (!file.name.toLowerCase().endsWith(".csv") && !file.name.toLowerCase().endsWith(".tsv") && !file.type.includes("text") && !file.type.includes("csv")) {
-      setError("Please upload a CSV or TSV file. If you have an Excel file, save it as CSV first.");
+  const handleFile = useCallback(async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setParseError("File must be a .csv");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const parsed = parseCSV(text);
-        if (parsed.headers.length === 0) {
-          setError("Couldn't read any columns. Make sure your file has a header row.");
-          return;
-        }
-        if (parsed.rows.length === 0) {
-          setError("No data rows found. The file appears to only have headers.");
-          return;
-        }
-        setHeaders(parsed.headers);
-        setRows(parsed.rows);
-        setMapping(autoMap(parsed.headers));
-        setStage("map");
-      } catch (err) {
-        setError("Failed to parse the file. Make sure it's valid CSV.");
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault(); setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  }
-
-  function commitImport() {
-    const nameCol = mapping["name"];
-    if (!nameCol) { setError("You must map at least the 'Asset name' field."); return; }
-
-    const prefix = data.barcodePrefix || "AST";
-    const existingBarcodes = new Set(data.assets.map(a => a.barcode));
-    const newAssets: Asset[] = [];
-
-    // Seed the next-number using the existing nextBarcode helper, then increment locally
-    let seedBarcode = nextBarcode(data.assets, prefix);
-    let nextNum = parseInt(seedBarcode.split("-")[1] ?? "1", 10);
-
-    for (const row of rows) {
-      const name = (row[nameCol] || "").trim();
-      if (!name) continue;
-
-      let barcode = mapping["barcode"] ? (row[mapping["barcode"]] || "").trim() : "";
-      if (!barcode || existingBarcodes.has(barcode)) {
-        barcode = `${prefix}-${String(nextNum++).padStart(7, "0")}`;
-      }
-      existingBarcodes.add(barcode);
-
-      const cost = mapping["cost"] ? parseFloat((row[mapping["cost"]] || "").replace(/[$,]/g, "")) : null;
-
-      newAssets.push({
-        id: barcode,
-        name,
-        barcode,
-        category: mapping["category"] ? (row[mapping["category"]] || "Misc Prod").trim() : "Misc Prod",
-        make: mapping["make"] ? (row[mapping["make"]] || "").trim() : "",
-        model: mapping["model"] ? (row[mapping["model"]] || "").trim() : "",
-        location: mapping["location"] ? (row[mapping["location"]] || "").trim() : "",
-        kitId: null,
-        status: "in",
-        lifecycle: "active",
-        lastUser: null,
-        lastUpdated: null,
-        cost: isNaN(cost as number) ? null : cost,
-        eolDate: null,
-        serialNumber: mapping["serial"] ? (row[mapping["serial"]] || "").trim() : null,
-        serviceFlag: null,
-      });
-      // Suppress unused seedBarcode warning
-      void seedBarcode;
+    setFilename(file.name);
+    setParseError(null);
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (rows.length === 0) { setParseError("CSV is empty or has no data rows."); return; }
+      setParsedRows(rows);
+      const init = new Map<number, DedupDecision>();
+      const a = analyzeDuplicates(rows, data.assets);
+      for (const dup of a.duplicates) init.set(dup.row.rowIndex, "skip");
+      setDecisions(init);
+      setStage("preview");
+    } catch (e) {
+      setParseError(e instanceof Error ? e.message : "Couldn't parse the CSV.");
     }
+  }, [data.assets]);
 
-    addAssets(newAssets);
-    setImportedCount(newAssets.length);
-    setStage("filters");
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = "";
   }
 
-  function commitFilters() {
-    setFilterableFields(Array.from(chosenFilters));
-    setStage("done");
-    toast(`${importedCount} asset${importedCount === 1 ? "" : "s"} imported`, {
-      detail: chosenFilters.size > 0 ? `Filters: ${Array.from(chosenFilters).join(", ")}` : undefined,
+  function setRowDecision(rowIndex: number, d: DedupDecision) {
+    setDecisions(prev => { const next = new Map(prev); next.set(rowIndex, d); return next; });
+  }
+  function applyAll(d: DedupDecision) {
+    setDecisions(prev => {
+      const next = new Map(prev);
+      for (const dup of analysis.duplicates) next.set(dup.row.rowIndex, d);
+      return next;
     });
   }
 
-  function toggleFilter(key: string) {
-    const next = new Set(chosenFilters);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    setChosenFilters(next);
+  const stagedCounts = useMemo(() => {
+    let skipped = 0, overwrites = 0, importedAsNew = 0;
+    for (const dup of analysis.duplicates) {
+      const dec = decisions.get(dup.row.rowIndex) ?? "skip";
+      if (dec === "skip") skipped++;
+      else if (dec === "overwrite") overwrites++;
+      else importedAsNew++;
+    }
+    const newRows = analysis.unique.length + importedAsNew;
+    return { newRows, skipped, overwrites, importedAsNew };
+  }, [analysis, decisions]);
+
+  function handleCommit() {
+    setCommitting(true);
+    const toCreate: Asset[] = [];
+    const nowISO = new Date().toISOString();
+    for (const row of analysis.unique) toCreate.push(rowToAsset(row, nowISO));
+    const overwrites: Array<{ existingAssetId: string; row: ParsedRow }> = [];
+    for (const dup of analysis.duplicates) {
+      const dec = decisions.get(dup.row.rowIndex) ?? "skip";
+      if (dec === "skip") continue;
+      if (dec === "import_as_new") toCreate.push(rowToAsset(dup.row, nowISO));
+      else if (dec === "overwrite") overwrites.push({ existingAssetId: dup.matchedAsset.id, row: dup.row });
+    }
+    const importId = recordCSVImport({
+      filename, uploaderInitials,
+      newAssets: toCreate, overwrites,
+      rowsTotal: parsedRows.length, rowsSkipped: stagedCounts.skipped,
+    });
+    setCommitting(false);
+    if (!importId) {
+      toast("Couldn't commit import", { variant: "error", detail: "Read-only or permission denied." });
+      return;
+    }
+    setSummary({ created: toCreate.length, overwritten: overwrites.length, skipped: stagedCounts.skipped });
+    setStage("done");
+    toast(`Imported ${toCreate.length} asset${toCreate.length === 1 ? "" : "s"}`);
   }
 
-  const inputStyle = {
-    width: "100%", background: "var(--s2)", border: "1px solid var(--b1)",
-    borderRadius: 7, padding: "10px 12px",
-    color: "var(--t1)", outline: "none",
-    fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44,
-  };
-  const labelStyle = {
-    fontFamily: "'DM Mono',monospace", fontSize: 10,
-    color: "var(--t3)", letterSpacing: "0.08em",
-    textTransform: "uppercase" as const, marginBottom: 6, display: "block",
-  };
-
   return (
-    <Modal open={open} onClose={handleClose} title="Upload assets from CSV" maxWidth={620}>
-      {stage === "upload" && (
-        <div>
-          <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.5, marginBottom: 14 }}>
-            Drop a CSV or TSV file with your inventory. We&apos;ll auto-detect columns and let you confirm before importing. Excel users: save as CSV first.
-          </div>
-          <div
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-            style={{
-              border: `2px dashed ${dragOver ? "var(--acc)" : "var(--b2)"}`,
-              borderRadius: 12,
-              padding: "40px 20px",
-              textAlign: "center",
-              cursor: "pointer",
-              background: dragOver ? "rgba(236,255,112,0.04)" : "var(--s2)",
-              transition: "all 0.15s",
-            }}>
-            <div style={{ fontSize: 32, marginBottom: 10, opacity: 0.6 }}>⬡</div>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Drop CSV here</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)" }}>or tap to browse</div>
-            <input ref={fileRef} type="file" accept=".csv,.tsv,text/csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && processFile(e.target.files[0])} />
-          </div>
-          {error && (
-            <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(255,122,122,0.08)", border: "1px solid rgba(255,122,122,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)", fontFamily: "'DM Mono',monospace" }}>
-              {error}
-            </div>
-          )}
-          <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--s2)", borderRadius: 7, fontSize: 11, color: "var(--t2)", fontFamily: "'DM Mono',monospace", lineHeight: 1.5 }}>
-            <strong style={{ color: "var(--t1)" }}>Suggested columns:</strong> Name, Barcode, Category, Make, Model, Location, Serial, Cost
-          </div>
-        </div>
-      )}
-
-      {stage === "map" && (
-        <div>
-          <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.5, marginBottom: 14 }}>
-            Found <strong style={{ color: "var(--t1)" }}>{rows.length} rows</strong> and <strong style={{ color: "var(--t1)" }}>{headers.length} columns</strong>. Map your columns to CageOS fields.
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-            {TARGET_FIELDS.map(field => (
-              <div key={field.key} style={{ display: "grid", gridTemplateColumns: "1fr 20px 1.4fr", gap: 8, alignItems: "center" }}>
-                <div style={{ fontSize: 13, color: "var(--t1)" }}>
-                  {field.label}
-                  {field.required && <span style={{ color: "var(--red)", marginLeft: 4 }}>*</span>}
-                </div>
-                <div style={{ textAlign: "center", color: "var(--t3)", fontSize: 12 }}>←</div>
-                <select
-                  value={mapping[field.key] || ""}
-                  onChange={e => setMapping({ ...mapping, [field.key]: e.target.value })}
-                  style={inputStyle}
-                >
-                  <option value="">— Skip this field —</option>
-                  {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
-          {error && (
-            <div style={{ marginBottom: 12, padding: "10px 12px", background: "rgba(255,122,122,0.08)", border: "1px solid rgba(255,122,122,0.25)", borderRadius: 7, fontSize: 12, color: "var(--red)" }}>
-              {error}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
-            <button onClick={() => setStage("upload")} style={{
-              flex: 1, padding: "12px 18px", borderRadius: 7,
-              background: "transparent", border: "1px solid var(--b1)",
-              color: "var(--t2)", cursor: "pointer",
-              fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44,
-            }}>← Back</button>
-            <button onClick={() => setStage("preview")} disabled={!mapping["name"]} style={{
-              flex: 2, padding: "12px 18px", borderRadius: 7,
-              background: mapping["name"] ? "var(--acc)" : "var(--s3)",
-              border: "none",
-              color: mapping["name"] ? "var(--bg)" : "var(--t3)",
-              cursor: mapping["name"] ? "pointer" : "not-allowed",
-              fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 700, minHeight: 44,
-            }}>
-              Preview {rows.length} rows →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stage === "preview" && (
-        <div>
-          <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.5, marginBottom: 14 }}>
-            Review the first few rows. Click import to add all <strong style={{ color: "var(--t1)" }}>{rows.length} assets</strong> to your workspace.
-          </div>
-          <div style={{ background: "var(--s2)", border: "1px solid var(--b1)", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
-            <div className="scroll-x" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
-                <thead>
-                  <tr style={{ background: "var(--s1)" }}>
-                    <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t3)", borderBottom: "1px solid var(--b1)", whiteSpace: "nowrap" }}>Name</th>
-                    <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t3)", borderBottom: "1px solid var(--b1)", whiteSpace: "nowrap" }}>Barcode</th>
-                    <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t3)", borderBottom: "1px solid var(--b1)", whiteSpace: "nowrap" }}>Category</th>
-                    <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontFamily: "'DM Mono',monospace", color: "var(--t3)", borderBottom: "1px solid var(--b1)", whiteSpace: "nowrap" }}>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 5).map((r, i) => (
-                    <tr key={i} style={{ borderBottom: i < 4 ? "1px solid var(--b1)" : "none" }}>
-                      <td style={{ padding: "8px 12px", fontSize: 12 }}>{(mapping.name && r[mapping.name]) || "—"}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 11, fontFamily: "'DM Mono',monospace", color: "var(--t2)" }}>{(mapping.barcode && r[mapping.barcode]) || "auto"}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--t2)" }}>{(mapping.category && r[mapping.category]) || "Misc Prod"}</td>
-                      <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--t2)" }}>{(mapping.location && r[mapping.location]) || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {rows.length > 5 && (
-              <div style={{ padding: "8px 12px", borderTop: "1px solid var(--b1)", fontSize: 11, fontFamily: "'DM Mono',monospace", color: "var(--t3)", textAlign: "center" }}>
-                + {rows.length - 5} more rows
-              </div>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
-            <button onClick={() => setStage("map")} style={{
-              flex: 1, padding: "12px 18px", borderRadius: 7,
-              background: "transparent", border: "1px solid var(--b1)",
-              color: "var(--t2)", cursor: "pointer",
-              fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44,
-            }}>← Back</button>
-            <button onClick={commitImport} style={{
-              flex: 2, padding: "12px 18px", borderRadius: 7,
-              background: "var(--acc)", border: "none", color: "var(--bg)",
-              cursor: "pointer", fontFamily: "'Syne',sans-serif",
-              fontSize: 14, fontWeight: 700, minHeight: 44,
-            }}>
-              Import {rows.length} assets
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stage === "filters" && (
-        <div>
-          <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.5, marginBottom: 6 }}>
-            Almost done. Which fields should be <strong style={{ color: "var(--t1)" }}>sortable filters</strong> on the assets page?
-          </div>
-          <div style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginBottom: 14 }}>
-            Pick the columns your team will want to slice by. You can change this later in Settings.
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
-            {FILTER_OPTIONS.map(opt => {
-              const active = chosenFilters.has(opt.key);
-              return (
-                <label key={opt.key} onClick={() => toggleFilter(opt.key)} style={{
-                  padding: "12px 14px",
-                  background: active ? "rgba(236,255,112,0.06)" : "var(--s2)",
-                  border: `1px solid ${active ? "var(--acc)" : "var(--b1)"}`,
-                  borderRadius: 7,
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 10,
-                  minHeight: 44,
-                }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    border: `1.5px solid ${active ? "var(--acc)" : "var(--b2)"}`,
-                    background: active ? "var(--acc)" : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0,
-                    color: "var(--bg)", fontSize: 11, fontWeight: 700,
-                  }}>{active && "✓"}</div>
-                  <div style={{ fontSize: 13, color: "var(--t1)" }}>{opt.label}</div>
-                </label>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--b1)" }}>
-            <button onClick={() => { setChosenFilters(new Set()); commitFilters(); }} style={{
-              flex: 1, padding: "12px 18px", borderRadius: 7,
-              background: "transparent", border: "1px solid var(--b1)",
-              color: "var(--t2)", cursor: "pointer",
-              fontFamily: "'DM Sans',sans-serif", fontSize: 14, minHeight: 44,
-            }}>Skip</button>
-            <button onClick={commitFilters} style={{
-              flex: 2, padding: "12px 18px", borderRadius: 7,
-              background: "var(--acc)", border: "none", color: "var(--bg)",
-              cursor: "pointer", fontFamily: "'Syne',sans-serif",
-              fontSize: 14, fontWeight: 700, minHeight: 44,
-            }}>
-              Save filters{chosenFilters.size > 0 ? ` (${chosenFilters.size})` : ""}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stage === "done" && (
-        <div style={{ textAlign: "center", padding: "16px 0" }}>
-          <div className="animate-pop" style={{ width: 64, height: 64, background: "rgba(109,238,159,0.1)", border: "1px solid var(--green)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 14px" }}>✓</div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Imported {importedCount} assets</div>
-          <div style={{ fontSize: 13, color: "var(--t2)", marginBottom: 18 }}>Your workspace now has {data.assets.length} total assets.</div>
-          <button onClick={handleClose} style={{
-            padding: "12px 28px", borderRadius: 7,
-            background: "var(--acc)", border: "none", color: "var(--bg)",
-            cursor: "pointer", fontFamily: "'Syne',sans-serif",
-            fontSize: 14, fontWeight: 700, minHeight: 44,
-          }}>Done</button>
-        </div>
-      )}
+    <Modal open={open} onClose={handleClose} title={stage === "done" ? "Import complete" : "Import assets from CSV"} maxWidth={800}>
+      {stage === "pick" && <PickFileStage onFile={handleFile} parseError={parseError} fileInputRef={fileInputRef} onFileInput={onFileInput} />}
+      {stage === "preview" && <PreviewStage filename={filename} analysis={analysis} decisions={decisions} stagedCounts={stagedCounts} onSetRowDecision={setRowDecision} onApplyAll={applyAll} onBack={() => setStage("pick")} onNext={() => setStage("confirm")} />}
+      {stage === "confirm" && <ConfirmStage filename={filename} stagedCounts={stagedCounts} onBack={() => setStage("preview")} onCommit={handleCommit} committing={committing} />}
+      {stage === "done" && summary && <DoneStage summary={summary} onClose={handleClose} />}
     </Modal>
   );
+}
+
+function PickFileStage({ onFile, parseError, fileInputRef, onFileInput }: {
+  onFile: (f: File) => void; parseError: string | null;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setIsDragging(false);
+    const file = e.dataTransfer.files[0]; if (file) onFile(file);
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "var(--t2)", lineHeight: 1.6 }}>
+        Upload a CSV with one asset per row. Required columns: <strong style={{ color: "var(--t1)" }}>name</strong>, <strong style={{ color: "var(--t1)" }}>category</strong>. Other supported columns: barcode, make, model, location, serialNumber, cost, eolDate, notes. Duplicates against existing assets will be flagged for review before commit.
+      </div>
+      <div
+        onDrop={onDrop}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          padding: "40px 20px",
+          background: isDragging ? "color-mix(in srgb, var(--acc) 8%, var(--s2))" : "var(--s2)",
+          border: `1px dashed ${isDragging ? "var(--acc)" : "var(--b1)"}`,
+          borderRadius: 8, textAlign: "center", cursor: "pointer",
+          transition: "background 0.12s, border-color 0.12s",
+        }}
+      >
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "var(--t1)", marginBottom: 4 }}>
+          {isDragging ? "Drop your CSV" : "Drop CSV here or click to select"}
+        </div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)" }}>.csv files only</div>
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={onFileInput} style={{ display: "none" }} />
+      </div>
+      {parseError && (
+        <div style={{
+          padding: "10px 12px",
+          background: "color-mix(in srgb, var(--red) 8%, var(--s2))",
+          border: "1px solid var(--red)", borderRadius: 6,
+          fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--red)",
+        }}>{parseError}</div>
+      )}
+    </div>
+  );
+}
+
+function PreviewStage({ filename, analysis, decisions, stagedCounts, onSetRowDecision, onApplyAll, onBack, onNext }: {
+  filename: string;
+  analysis: { unique: ParsedRow[]; duplicates: DuplicateMatch[] };
+  decisions: Map<number, DedupDecision>;
+  stagedCounts: { newRows: number; skipped: number; overwrites: number; importedAsNew: number };
+  onSetRowDecision: (rowIndex: number, d: DedupDecision) => void;
+  onApplyAll: (d: DedupDecision) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{
+        padding: "10px 12px", background: "var(--s2)",
+        border: "1px solid var(--b1)", borderRadius: 6,
+        fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t2)",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ color: "var(--t1)", fontWeight: 600 }}>{filename}</span>
+        <span>{analysis.unique.length + analysis.duplicates.length} rows parsed</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+        <SummaryStat label="New" value={analysis.unique.length} tint="green" />
+        <SummaryStat label="Duplicates" value={analysis.duplicates.length} tint={analysis.duplicates.length > 0 ? "amber" : "neutral"} />
+        <SummaryStat label="Will commit" value={stagedCounts.newRows + stagedCounts.overwrites} tint="acc" />
+      </div>
+      {analysis.duplicates.length > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700, color: "var(--t3)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              Duplicates to review ({analysis.duplicates.length})
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <ApplyAllButton label="Skip all" onClick={() => onApplyAll("skip")} />
+              <ApplyAllButton label="Overwrite all" onClick={() => onApplyAll("overwrite")} />
+              <ApplyAllButton label="Import all as new" onClick={() => onApplyAll("import_as_new")} />
+            </div>
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, border: "1px solid var(--b1)", borderRadius: 6, padding: 8 }}>
+            {analysis.duplicates.map(dup => (
+              <DuplicateRow key={dup.row.rowIndex} dup={dup} decision={decisions.get(dup.row.rowIndex) ?? "skip"} onChange={(d) => onSetRowDecision(dup.row.rowIndex, d)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {analysis.duplicates.length === 0 && (
+        <div style={{
+          padding: "12px 14px",
+          background: "color-mix(in srgb, var(--green, #16a34a) 8%, var(--s2))",
+          border: "1px solid color-mix(in srgb, var(--green, #16a34a) 40%, var(--b1))",
+          borderRadius: 6, fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "var(--t1)",
+        }}>
+          No duplicates detected. All {analysis.unique.length} rows are new — ready to import.
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4 }}>
+        <button onClick={onBack} style={secondaryBtnStyle()}>← Back</button>
+        <button onClick={onNext} disabled={stagedCounts.newRows + stagedCounts.overwrites === 0} style={primaryBtnStyle(stagedCounts.newRows + stagedCounts.overwrites === 0)}>Review and commit →</button>
+      </div>
+    </div>
+  );
+}
+
+function DuplicateRow({ dup, decision, onChange }: {
+  dup: DuplicateMatch; decision: DedupDecision; onChange: (d: DedupDecision) => void;
+}) {
+  const matchLabel = dup.matchType === "barcode" ? "Barcode match" : "Make+Model+Serial match";
+  return (
+    <div style={{
+      padding: "10px 12px", background: "var(--s2)",
+      border: "1px solid var(--b1)", borderRadius: 5,
+      display: "flex", alignItems: "center", gap: 12,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "var(--t1)", fontWeight: 600 }}>
+          {dup.row.name || "(unnamed)"}
+        </div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+          {matchLabel} → existing: {dup.matchedAsset.name} ({dup.matchedAsset.barcode || "no barcode"})
+        </div>
+      </div>
+      <select
+        value={decision}
+        onChange={(e) => onChange(e.target.value as DedupDecision)}
+        style={{
+          padding: "5px 8px", borderRadius: 4,
+          background: "var(--s3)", border: "1px solid var(--b1)",
+          color: "var(--t1)", fontFamily: "'DM Mono',monospace", fontSize: 11,
+          cursor: "pointer", minHeight: 28,
+        }}
+      >
+        <option value="skip">Skip</option>
+        <option value="overwrite">Overwrite existing</option>
+        <option value="import_as_new">Import as new</option>
+      </select>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, tint }: { label: string; value: number; tint: "green" | "amber" | "neutral" | "acc" }) {
+  const color = tint === "green" ? "var(--green, #16a34a)"
+              : tint === "amber" ? "var(--amber, #f59e0b)"
+              : tint === "acc" ? "var(--acc)"
+              : "var(--t2)";
+  return (
+    <div style={{
+      padding: "10px 12px", background: "var(--s2)",
+      border: "1px solid var(--b1)", borderRadius: 6, textAlign: "center",
+    }}>
+      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 24, fontWeight: 700, color, letterSpacing: "-0.01em" }}>{value}</div>
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700, color: "var(--t3)", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function ApplyAllButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "4px 9px", borderRadius: 4,
+      background: "transparent", border: "1px solid var(--b1)",
+      color: "var(--t2)", fontFamily: "'DM Mono',monospace", fontSize: 10,
+      cursor: "pointer", minHeight: 26,
+    }}>{label}</button>
+  );
+}
+
+function ConfirmStage({ filename, stagedCounts, onBack, onCommit, committing }: {
+  filename: string;
+  stagedCounts: { newRows: number; skipped: number; overwrites: number; importedAsNew: number };
+  onBack: () => void; onCommit: () => void; committing: boolean;
+}) {
+  const totalAffected = stagedCounts.newRows + stagedCounts.overwrites;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{
+        padding: "16px 18px", background: "var(--s2)",
+        border: "1px solid var(--b1)", borderRadius: 8,
+      }}>
+        <div style={{
+          fontFamily: "'DM Mono',monospace", fontSize: 9, fontWeight: 700,
+          color: "var(--t3)", letterSpacing: "0.1em", textTransform: "uppercase",
+          marginBottom: 8,
+        }}>Final review</div>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 16, color: "var(--t1)", fontWeight: 700, marginBottom: 12 }}>
+          Ready to import {totalAffected} asset{totalAffected === 1 ? "" : "s"}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <SummaryLine label="New assets" value={stagedCounts.newRows} />
+          <SummaryLine label="Overwriting existing" value={stagedCounts.overwrites} />
+          <SummaryLine label="Skipping" value={stagedCounts.skipped} muted />
+        </div>
+      </div>
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--t3)", lineHeight: 1.6 }}>
+        This import will be saved as a single batch under <strong style={{ color: "var(--t2)" }}>{filename}</strong>. You can roll it back from Settings → Imports if anything goes wrong. Assets in active kits or checkouts will be preserved on rollback.
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4 }}>
+        <button onClick={onBack} disabled={committing} style={secondaryBtnStyle(committing)}>← Back</button>
+        <button onClick={onCommit} disabled={committing || totalAffected === 0} style={primaryBtnStyle(committing || totalAffected === 0)}>
+          {committing ? "Importing..." : "Confirm import"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryLine({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between",
+      fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+      color: muted ? "var(--t3)" : "var(--t1)",
+    }}>
+      <span>{label}</span>
+      <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>{value}</span>
+    </div>
+  );
+}
+
+function DoneStage({ summary, onClose }: {
+  summary: { created: number; overwritten: number; skipped: number };
+  onClose: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center", padding: "10px 20px 4px" }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 28,
+        background: "color-mix(in srgb, var(--green, #16a34a) 12%, var(--s2))",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'Syne',sans-serif", fontSize: 28, color: "var(--green, #16a34a)",
+      }}>✓</div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 18, fontWeight: 700, color: "var(--t1)" }}>Import complete</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "var(--t3)", marginTop: 4 }}>
+          {summary.created} created
+          {summary.overwritten > 0 && ` · ${summary.overwritten} overwritten`}
+          {summary.skipped > 0 && ` · ${summary.skipped} skipped`}
+        </div>
+      </div>
+      <button onClick={onClose} style={{ ...primaryBtnStyle(false), marginTop: 8 }}>Close</button>
+    </div>
+  );
+}
+
+function parseCSV(text: string): ParsedRow[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return [];
+  const headerCells = lines[0].split(",").map(h => h.trim().toLowerCase());
+  const headerMap = new Map<string, number>();
+  headerCells.forEach((h, i) => headerMap.set(h, i));
+  const idxOf = (...keys: string[]): number => {
+    for (const k of keys) { const i = headerMap.get(k); if (i !== undefined) return i; }
+    return -1;
+  };
+  const iName = idxOf("name");
+  const iCategory = idxOf("category");
+  if (iName === -1) throw new Error("CSV missing 'name' column.");
+  if (iCategory === -1) throw new Error("CSV missing 'category' column.");
+  const iBarcode = idxOf("barcode");
+  const iMake = idxOf("make");
+  const iModel = idxOf("model");
+  const iLocation = idxOf("location");
+  const iSerial = idxOf("serialnumber", "serial", "serial_number");
+  const iCost = idxOf("cost", "price");
+  const iEol = idxOf("eoldate", "eol_date", "eol", "end_of_life");
+  const iNotes = idxOf("notes", "note", "description");
+
+  const rows: ParsedRow[] = [];
+  for (let li = 1; li < lines.length; li++) {
+    const cells = lines[li].split(",").map(c => c.trim());
+    const name = (cells[iName] ?? "").trim();
+    const category = (cells[iCategory] ?? "").trim();
+    if (!name && !category) continue;
+    const costRaw = iCost >= 0 ? (cells[iCost] ?? "").replace(/[$,]/g, "").trim() : "";
+    const cost = costRaw ? parseFloat(costRaw) : null;
+    rows.push({
+      rowIndex: li, name, category,
+      barcode: iBarcode >= 0 ? (cells[iBarcode] ?? "").trim() : "",
+      make: iMake >= 0 ? (cells[iMake] ?? "").trim() : "",
+      model: iModel >= 0 ? (cells[iModel] ?? "").trim() : "",
+      location: iLocation >= 0 ? (cells[iLocation] ?? "").trim() : "",
+      serialNumber: iSerial >= 0 ? (cells[iSerial] ?? "").trim() : "",
+      cost: cost !== null && !Number.isNaN(cost) ? cost : null,
+      eolDate: iEol >= 0 ? (cells[iEol] ?? "").trim() || null : null,
+      notes: iNotes >= 0 ? (cells[iNotes] ?? "").trim() : "",
+    });
+  }
+  return rows;
+}
+
+function rowToAsset(row: ParsedRow, nowISO: string): Asset {
+  const id = `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${row.rowIndex}`;
+  return {
+    id,
+    name: row.name,
+    barcode: row.barcode || `AUTO-${id.slice(-8).toUpperCase()}`,
+    category: row.category || "Uncategorized",
+    make: row.make,
+    model: row.model,
+    location: row.location,
+    kitId: null,
+    status: "in",
+    lifecycle: "active",
+    lastUser: null,
+    lastUpdated: nowISO,
+    cost: row.cost,
+    eolDate: row.eolDate,
+    serialNumber: row.serialNumber || null,
+    serviceFlag: null,
+    notes: row.notes || undefined,
+  };
+}
+
+function primaryBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: "10px 18px", borderRadius: 6,
+    background: disabled ? "var(--s3)" : "var(--acc)",
+    color: disabled ? "var(--t3)" : "var(--bg)",
+    border: "none",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily: "'Syne',sans-serif", fontSize: 13, fontWeight: 700,
+    minHeight: 40,
+  };
+}
+
+function secondaryBtnStyle(disabled?: boolean): React.CSSProperties {
+  return {
+    padding: "10px 16px", borderRadius: 6,
+    background: "transparent", border: "1px solid var(--b2)",
+    color: disabled ? "var(--t3)" : "var(--t1)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+    minHeight: 40,
+  };
 }

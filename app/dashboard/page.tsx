@@ -18,6 +18,7 @@ import CalendarExportCard from "@/components/shared/CalendarExportCard";
 import PasscodesCard from "@/components/shared/PasscodesCard";
 import FirstTimeProfileModal from "@/components/shared/FirstTimeProfileModal";
 import WatchmanWidget from "@/components/dashboard/WatchmanWidget";
+import CSVImportsCard from "@/components/settings/CSVImportsCard";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 import { useAuth } from "@/lib/supabase/AuthContext";
@@ -1269,6 +1270,14 @@ export default function DashboardPage() {
                * tokens.
                */}
               {mode === "user" && <CalendarExportCard />}
+
+              {/*
+               * CSV imports history (iter-28c) — past asset uploads with safe
+               * rollback. Manager+ sees a list of every CSV upload and can
+               * delete entire batches. Assets currently in active kits or
+               * checkouts are preserved by the delete logic.
+               */}
+              {!isReadOnly && <CSVImportsCard />}
 
               {/*
                * Danger Zone — Delete the entire workspace.

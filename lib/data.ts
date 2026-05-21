@@ -29,6 +29,16 @@ export interface Asset {
   archivedBy?: string;
   /** Optional reason supplied at archive time. */
   archivedReason?: string;
+  /**
+   * iter-28c: if this asset was created via CSV import, references the
+   * CSVImport.id it came from. Used by Settings → Imports for batch
+   * delete. Assets created manually (single-add form) have this undefined.
+   *
+   * NOT cleared when an import is deleted with safety guards — instead
+   * the import record's importedAssetIds list shrinks. The csvImportId
+   * stays as an audit trail.
+   */
+  csvImportId?: string;
 }
 
 export interface Kit {

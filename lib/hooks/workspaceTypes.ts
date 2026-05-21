@@ -140,7 +140,9 @@ export type AuditCategory =
   | "sop_linked"
   | "sop_unlinked"
   | "watchman_snoozed"
-  | "ai_scan_run";
+  | "ai_scan_run"
+  | "csv_import"
+  | "csv_import_deleted";
 
 /** Result returned by deleteAsset / deleteKit to communicate what happened. */
 export type DeleteResult =
@@ -384,6 +386,19 @@ export interface WorkspaceData {
    * returned by Anthropic at the configured per-million rate.
    */
   aiUsage: AIUsage;
+  /**
+   * CSV import history (iter-28c). Each entry records a single CSV upload
+   * session — when, who, what file, how many rows, what happened. Used by
+   * Settings → Imports to surface a list of past uploads and let owners
+   * batch-delete an entire import if it was a mistake.
+   *
+   * Each imported asset references its source import via Asset.csvImportId.
+   * That cross-reference is what makes batch deletion possible: look up
+   * the import's importedAssetIds, then delete those assets (with
+   * in-use protection — assets currently in active kits/checkouts/projects
+   * are preserved, just untagged from the import).
+   */
+  csvImports: CSVImport[];
 }
 
 /**
@@ -417,4 +432,49 @@ export interface AIUsage {
   dailyDate: string;
   /** Scans run on `dailyDate`. Resets when date rolls over. */
   dailyScans: number;
+}
+
+/**
+ * CSV import session record (iter-28c).
+ *
+ * Created at the end of every successful CSV asset upload. Captures
+ * metadata about the import (when, who, what file) and a list of asset
+ * IDs the import created. This list is what powers batch delete — the
+ * Settings → Imports UI iterates over importedAssetIds to identify
+ * assets safe to remove.
+ *
+ * Note: rowsTotal might not equal rowsImported + rowsSkipped +
+ * rowsOverwritten if the user chose "import as new" on duplicates AND
+ * other rows. The accounting is:
+ *   rowsImported     = unique new assets created
+ *   rowsSkipped      = duplicates user chose to skip
+ *   rowsOverwritten  = duplicates user chose to overwrite (existing asset updated)
+ *   rowsImportedAsNew = duplicates user chose to import-as-new anyway
+ *   rowsTotal        = rowsImported + rowsSkipped + rowsOverwritten + rowsImportedAsNew
+ *
+ * importedAssetIds contains ONLY assets newly created (rowsImported +
+ * rowsImportedAsNew). Overwrites mutate existing assets — those existing
+ * IDs are NOT in importedAssetIds because deleting them later would
+ * surprise the user (they predated this import).
+ */
+export interface CSVImport {
+  id: string;
+  /** ISO UTC. */
+  uploadedAt: string;
+  /** Initials of the uploader. */
+  uploadedBy: string;
+  /** Original filename. For display only — we don't store the file itself. */
+  filename: string;
+  /** Total rows parsed from the CSV. */
+  rowsTotal: number;
+  /** New assets created by this import. */
+  rowsImported: number;
+  /** Duplicates the user chose to skip. */
+  rowsSkipped: number;
+  /** Duplicates the user chose to overwrite (existing assets updated). */
+  rowsOverwritten: number;
+  /** Duplicates the user chose to import as new assets anyway. */
+  rowsImportedAsNew: number;
+  /** Asset ids created by this import (excludes overwrites of existing). */
+  importedAssetIds: string[];
 }
