@@ -77,35 +77,40 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
     return c;
   }) as WorkspaceData["checkouts"];
 
+  // iter-28e-fix: orphan flag cleanup. See localStorageAdapter for rationale.
+  const migratedAssets = (legacy.assets ?? []).map(a => {
+    if (a.csvImportId && !a.csvBaseline) {
+      return {
+        ...a,
+        csvBaseline: {
+          name: a.name,
+          category: a.category,
+          barcode: a.barcode,
+          make: a.make,
+          model: a.model,
+          location: a.location,
+          serialNumber: a.serialNumber ?? "",
+          cost: a.cost,
+          eolDate: a.eolDate,
+        },
+      };
+    }
+    return a;
+  });
+  const validAssetIds = new Set(migratedAssets.map(a => a.id));
+  const cleanedFlags = (legacy.flags ?? []).filter(f =>
+    f.assetId && validAssetIds.has(f.assetId)
+  );
+
   return {
-    // iter-28d: backfill csvBaseline for legacy CSV-imported assets that
-    // lack a baseline. See localStorageAdapter for full rationale.
-    assets: (legacy.assets ?? []).map(a => {
-      if (a.csvImportId && !a.csvBaseline) {
-        return {
-          ...a,
-          csvBaseline: {
-            name: a.name,
-            category: a.category,
-            barcode: a.barcode,
-            make: a.make,
-            model: a.model,
-            location: a.location,
-            serialNumber: a.serialNumber ?? "",
-            cost: a.cost,
-            eolDate: a.eolDate,
-          },
-        };
-      }
-      return a;
-    }),
+    assets: migratedAssets,
     kits: legacy.kits ?? [],
     checkouts: migratedCheckouts,
     alerts: legacy.alerts ?? [],
     profiles: legacy.profiles ?? [],
     projects: projectsFromLegacy,
     events: legacy.events ?? [],
-    flags: legacy.flags ?? [],
+    flags: cleanedFlags,
     // Notes added in iter-17. iter-18a added readBy field; migrate legacy
     // notes without it so the inbox view doesn't crash on undefined.
     notes: (legacy.notes ?? []).map(n => ({

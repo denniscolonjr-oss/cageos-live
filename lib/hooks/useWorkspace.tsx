@@ -2022,13 +2022,16 @@ function useWorkspaceImpl() {
         linkedKitIds: [],
       }));
 
-      // Alerts referencing assets are now meaningless. Clear them.
+      // Alerts and flags reference assets that are now gone. Clear them.
+      // (iter-28e-fix: flags WERE NOT being cleared, leaving orphaned
+      // "Unknown asset" entries the user couldn't dismiss.)
       const next: WorkspaceData = {
         ...d,
         assets: [],
         kits: [],
         checkouts: returnedCheckouts,
         alerts: [],
+        flags: [],
         projects: cleanedProjects,
         sops: cleanedSOPs,
         csvImports: [],

@@ -48,38 +48,45 @@ function migrate(legacy: Partial<WorkspaceData> & { shoots?: unknown[] }): Works
     return c;
   }) as WorkspaceData["checkouts"];
 
+  // iter-28e-fix: orphaned flag cleanup. Migrate assets first to get
+  // their id set, then drop any flag whose assetId doesn't match.
+  const migratedAssets = (legacy.assets ?? []).map(a => {
+    if (a.csvImportId && !a.csvBaseline) {
+      return {
+        ...a,
+        csvBaseline: {
+          name: a.name,
+          category: a.category,
+          barcode: a.barcode,
+          make: a.make,
+          model: a.model,
+          location: a.location,
+          serialNumber: a.serialNumber ?? "",
+          cost: a.cost,
+          eolDate: a.eolDate,
+        },
+      };
+    }
+    return a;
+  });
+  const validAssetIds = new Set(migratedAssets.map(a => a.id));
+  // Drop any flag whose referenced asset doesn't exist anymore.
+  // Pre-iter-28e-fix data may have orphaned flags from inventory resets
+  // that didn't clear them. This shim filters them out on every read,
+  // so the orphan disappears on next page load — no user action needed.
+  const cleanedFlags = (legacy.flags ?? []).filter(f =>
+    f.assetId && validAssetIds.has(f.assetId)
+  );
+
   return {
-    // iter-28d: backfill csvBaseline for assets that came from CSV
-    // imports but lack a baseline (created before this iteration shipped).
-    // Best-effort: their baseline becomes "current state at first read,"
-    // meaning their score reads 100% until something drifts. Pure-manual
-    // assets stay without baseline and are excluded from the score.
-    assets: (legacy.assets ?? []).map(a => {
-      if (a.csvImportId && !a.csvBaseline) {
-        return {
-          ...a,
-          csvBaseline: {
-            name: a.name,
-            category: a.category,
-            barcode: a.barcode,
-            make: a.make,
-            model: a.model,
-            location: a.location,
-            serialNumber: a.serialNumber ?? "",
-            cost: a.cost,
-            eolDate: a.eolDate,
-          },
-        };
-      }
-      return a;
-    }),
+    assets: migratedAssets,
     kits: legacy.kits ?? [],
     checkouts: migratedCheckouts,
     alerts: legacy.alerts ?? [],
     profiles: legacy.profiles ?? [],
     projects: projectsFromLegacy,
     events: legacy.events ?? [],
-    flags: legacy.flags ?? [],
+    flags: cleanedFlags,
     // Notes added in iter-17. iter-18a added readBy field; migrate legacy
     // notes without it so the inbox view doesn't crash on undefined.
     notes: (legacy.notes ?? []).map(n => ({
