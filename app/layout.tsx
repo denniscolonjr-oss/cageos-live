@@ -5,8 +5,72 @@ import { WorkspaceProvider } from "@/lib/hooks/useWorkspace";
 import { AuthProvider } from "@/lib/supabase/AuthContext";
 
 export const metadata: Metadata = {
-  title: "CageOS — Production Equipment Tracking",
-  description: "Badge-first kiosk checkout for production shops",
+  metadataBase: new URL("https://cageos.app"),
+  title: {
+    default: "CageOS — Built for crews that move gear",
+    template: "%s · CageOS",
+  },
+  description:
+    "Replaces your spreadsheet, your group chat, and the \"who has the 50mm lens?\" problem. CageOS is checkout, tracking, and audit-trail software for production crews, contractors, and any team that lives out of a gear cage.",
+  keywords: [
+    "equipment checkout software",
+    "gear tracking",
+    "production inventory management",
+    "asset checkout system",
+    "barcode equipment tracking",
+    "kit management software",
+    "av equipment inventory",
+    "construction tool tracking",
+  ],
+  authors: [{ name: "CageOS" }],
+  creator: "CageOS",
+  publisher: "CageOS",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: "https://cageos.app",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://cageos.app",
+    siteName: "CageOS",
+    title: "CageOS — Built for crews that move gear",
+    description:
+      "Replaces your spreadsheet, your group chat, and the \"who has the 50mm lens?\" problem. Checkout, tracking, and audit-trail software for crews that can't afford to lose their gear.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "CageOS dashboard preview — equipment operations for production crews",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CageOS — Built for crews that move gear",
+    description:
+      "Replaces your spreadsheet, your group chat, and the \"who has the 50mm lens?\" problem.",
+    images: ["/og-image.png"],
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/apple-icon.png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

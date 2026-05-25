@@ -213,7 +213,7 @@ function Hero({ isSignedIn }: { isSignedIn: boolean }) {
         borderRadius: 999,
         marginBottom: 22,
       }}>
-        Equipment Operations Software
+        Built for crews that move gear
       </div>
 
       <h1 style={{
@@ -236,9 +236,8 @@ function Hero({ isSignedIn }: { isSignedIn: boolean }) {
         lineHeight: 1.5,
         maxWidth: 640, margin: "0 auto 36px",
       }}>
-        Stop losing gear in group chats. CageOS is checkout, tracking,
-        and audit-trail software for teams that can&apos;t afford to lose
-        their tools.
+        Replaces your spreadsheet, your group chat, and the
+        &ldquo;who has the 50mm lens?&rdquo; problem.
       </p>
 
       <div style={{
@@ -829,10 +828,10 @@ const mockupCardStyle: React.CSSProperties = {
 function IndustriesSection() {
   const industries = [
     { name: "AV & video production", body: "Cameras, lenses, mics, lighting, kit composition across shoots and venues.", icon: <IconCamera /> },
-    { name: "Construction & trades", body: "Power tools, ladders, generators, scaffolding moving across job sites.", icon: <IconHammer /> },
-    { name: "Landscaping & lawn care", body: "Mowers, trimmers, attachments, and trailers in and out daily.", icon: <IconLeaf /> },
-    { name: "Schools & education", body: "Athletic gear, AV carts, lab equipment, instruments — across departments.", icon: <IconBook /> },
     { name: "Theater & live events", body: "Props, costumes, lighting rigs, audio gear across shows and venues.", icon: <IconLight /> },
+    { name: "Construction & trades", body: "Power tools, ladders, generators, scaffolding moving across job sites.", icon: <IconHammer /> },
+    { name: "Schools & education", body: "Athletic gear, AV carts, lab equipment, instruments — across departments.", icon: <IconBook /> },
+    { name: "Landscaping & lawn care", body: "Mowers, trimmers, attachments, and trailers in and out daily.", icon: <IconLeaf /> },
     { name: "Auto repair shops", body: "Diagnostic tools, calibrated equipment, specialty wrenches per bay.", icon: <IconWrench /> },
   ];
 
@@ -999,6 +998,7 @@ function CheckIcon({ accent }: { accent?: boolean }) {
 
 function FAQ() {
   const faqs = [
+    { q: "Is CageOS free?", a: "CageOS is free during open beta. We're working closely with our first crews to make sure the product is genuinely useful before we think about pricing. Sign up, use it, tell us what works." },
     { q: "How is this different from a spreadsheet?", a: "Spreadsheets don't enforce checkout state, don't keep audit trails, don't notify when something's broken, and don't have a kiosk mode. They're fine until they aren't. We're built for the 'aren't' part." },
     { q: "Do I need to install anything?", a: "No. CageOS runs in any modern browser, on any device — desktop, tablet, phone. The kiosk mode is just a browser tab on a tablet by the door." },
     { q: "Can my team use it without accounts?", a: "Yes for kiosk mode — set up a passcode and crew can check gear in and out without individual accounts. For comments, audit attribution, and admin actions, accounts are needed." },
@@ -1128,10 +1128,13 @@ function Footer() {
           Cage<span style={{ color: "var(--acc)" }}>OS</span>
         </div>
         <div style={{
-          display: "flex", gap: 22,
+          display: "flex", gap: 22, alignItems: "center",
           fontFamily: "'DM Mono', monospace", fontSize: 11,
           color: "var(--t3)",
+          flexWrap: "wrap",
         }}>
+          <Link href="/privacy" style={{ color: "var(--t3)", textDecoration: "none" }}>Privacy</Link>
+          <Link href="/terms" style={{ color: "var(--t3)", textDecoration: "none" }}>Terms</Link>
           <a href="mailto:hello@cageos.app" style={{ color: "var(--t3)", textDecoration: "none" }}>hello@cageos.app</a>
           <span>© {new Date().getFullYear()} CageOS</span>
         </div>
