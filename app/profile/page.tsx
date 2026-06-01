@@ -6,6 +6,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/shared/EmptyState";
 import AddTeamMemberModal from "@/components/forms/AddTeamMemberModal";
+import UserAvatar from "@/components/profile/UserAvatar";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useWorkspace } from "@/lib/hooks/useWorkspace";
 
@@ -75,9 +76,7 @@ export default function ProfileIndexPage() {
                   <Card style={{ cursor: "pointer", transition: "all 0.15s" }}>
                     <div style={{ padding: isMobile ? 14 : 18 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-                        <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: p.color, flexShrink: 0 }}>
-                          {p.initials}
-                        </div>
+                        <UserAvatar profile={p} size={48} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
                             <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--t1)" }}>{p.name}</div>

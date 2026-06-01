@@ -175,6 +175,15 @@ export interface UserProfile {
    *  needs the user to complete their setup (real name, initials, photo, etc.).
    *  The dashboard shows a one-time blocking prompt while this is set. */
   pendingSetup?: boolean;
+  /**
+   * User's chosen Y2K avatar (iter-30). One of the keys from
+   * `components/profile/avatarKeys.ts` — e.g., "cinema_camera",
+   * "prime_lens", etc. When set, the UserAvatar component renders this
+   * SVG instead of the initials circle. When unset, the existing
+   * initials-based avatar continues to render unchanged (backward
+   * compatible — pre-iter-30 profiles get `undefined` here naturally).
+   */
+  avatarKey?: string;
 }
 
 /**
