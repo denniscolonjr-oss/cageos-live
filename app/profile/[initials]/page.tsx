@@ -147,20 +147,33 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
   }
 
   /**
-   * Update this profile's chosen Y2K avatar (iter-30, Phase 2).
+   * Update this profile's chosen Y2K avatar (iter-30, Phase 2, fixed).
    *
-   * Mirrors the setColor handler — same gating (isReadOnly), same persistence
-   * path (updateProfile). Passing `null` removes the avatar, falling back to
-   * the initials circle.
+   * Gating: only the logged-in user can change their own avatar. Avatars
+   * are identity, not workspace configuration — admins do not override.
    *
-   * Note: like setColor, this allows anyone with edit access to change any
-   * profile's avatar. If the future brings strict per-user ownership, gate
-   * this on (profile.userId === auth.user?.id || data.managerMode) instead.
-   * The picker UI itself is opened by clicking the hero avatar, which is
-   * already gated on !isReadOnly.
+   * This is the second line of defense; the picker UI itself is gated on
+   * the same condition (the hero avatar isn't clickable when viewing
+   * someone else's profile). This handler also refuses to act when called
+   * out-of-band (e.g., via browser DevTools by a curious user).
+   *
+   * The `auth.supabaseEnabled === false` branch permits editing in
+   * local-only workspaces where there is no concept of "other users."
    */
   function setAvatar(key: AvatarKey | null) {
     if (isReadOnly) return;
+
+    // Ownership check — Supabase-backed workspaces enforce identity match
+    if (auth.supabaseEnabled) {
+      const isOwner =
+        auth.user?.id !== undefined && profile!.userId === auth.user.id;
+      if (!isOwner) {
+        toast("You can only change your own avatar");
+        setAvatarPickerOpen(false);
+        return;
+      }
+    }
+
     updateProfile(profile!.id, { avatarKey: key ?? undefined });
     toast(key ? "Avatar updated" : "Avatar removed");
     setAvatarPickerOpen(false);
@@ -193,62 +206,81 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
             {/*
              * Hero avatar. Renders the user's chosen Y2K avatar if set,
              * else falls back to the initials circle (legacy look). Clicking
-             * opens the avatar picker when not in read-only mode.
+             * opens the avatar picker — but ONLY for the user viewing their
+             * own profile. iter-30 Phase 2 originally allowed anyone with
+             * edit access to change anyone's avatar (matched the existing
+             * setColor pattern); that's wrong for identity. Avatar belongs
+             * to the person, period.
              *
-             * Wrapped in a button (not div) so it gets correct keyboard
-             * accessibility — Enter and Space both trigger the picker.
-             * Border/background styles ride on the button itself; the inner
-             * UserAvatar handles its own size + shape.
+             * Gating logic:
+             *   - Read-only viewer (signed-out demo, etc.) → never editable
+             *   - Auth disabled (pure localStorage workspace) → editable
+             *     (no concept of "other users" in single-device mode)
+             *   - Authenticated, viewing OWN profile → editable
+             *   - Authenticated, viewing SOMEONE ELSE'S profile → not editable
              *
-             * The colored ring around the avatar uses the profile's accent
-             * color at 30% alpha — preserves the pre-iter-30 visual ring
-             * around initials AND looks correct around the new circular
-             * avatars. Hover state added (subtle scale) only when clickable.
+             * The `profile.userId` field links a profile to a Supabase auth
+             * user. When unset (legacy profiles or local-only workspaces)
+             * we fall back to the auth-disabled path, which permits editing.
              */}
-            {!isReadOnly ? (
-              <button
-                onClick={() => setAvatarPickerOpen(true)}
-                aria-label="Change avatar"
-                style={{
-                  padding: 4,
-                  borderRadius: profile.avatarKey ? "50%" : 14,
-                  border: `2px solid ${profile.color}30`,
-                  background: "transparent",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "transform 0.12s ease, border-color 0.12s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = `${profile.color}60`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = `${profile.color}30`;
-                }}
-              >
-                <UserAvatar
-                  profile={profile}
-                  size={isMobile ? 64 : 80}
-                />
-              </button>
-            ) : (
-              <div style={{
-                padding: 4,
-                borderRadius: profile.avatarKey ? "50%" : 14,
-                border: `2px solid ${profile.color}30`,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}>
-                <UserAvatar
-                  profile={profile}
-                  size={isMobile ? 64 : 80}
-                />
-              </div>
-            )}
+            {(() => {
+              const canEditAvatar =
+                !isReadOnly &&
+                (!auth.supabaseEnabled ||
+                  (auth.user?.id !== undefined && profile.userId === auth.user.id));
+
+              if (canEditAvatar) {
+                return (
+                  <button
+                    onClick={() => setAvatarPickerOpen(true)}
+                    aria-label="Change your avatar"
+                    style={{
+                      padding: 4,
+                      borderRadius: profile.avatarKey ? "50%" : 14,
+                      border: `2px solid ${profile.color}30`,
+                      background: "transparent",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "transform 0.12s ease, border-color 0.12s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = `${profile.color}60`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = `${profile.color}30`;
+                    }}
+                  >
+                    <UserAvatar
+                      profile={profile}
+                      size={isMobile ? 64 : 80}
+                    />
+                  </button>
+                );
+              }
+
+              // Not your profile (or read-only) — render as static, no click
+              return (
+                <div
+                  style={{
+                    padding: 4,
+                    borderRadius: profile.avatarKey ? "50%" : 14,
+                    border: `2px solid ${profile.color}30`,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserAvatar
+                    profile={profile}
+                    size={isMobile ? 64 : 80}
+                  />
+                </div>
+              );
+            })()}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                 <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 22 : 28, fontWeight: 800, letterSpacing: -0.5, color: "var(--t1)" }}>{profile.name}</h1>
