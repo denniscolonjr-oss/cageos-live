@@ -11,6 +11,9 @@ import { useAuth } from "@/lib/supabase/AuthContext";
 import { formatShootRange } from "@/lib/timezone";
 import { toast } from "@/components/ui/Toast";
 import AssignToShootModal from "@/components/forms/AssignToShootModal";
+import UserAvatar from "@/components/profile/UserAvatar";
+import AvatarPickerModal from "@/components/profile/AvatarPickerModal";
+import type { AvatarKey } from "@/components/profile/avatarKeys";
 
 const LEVEL_BAR: Record<string, { pct: number; color: string }> = {
   novice: { pct: 25, color: "var(--t3)" },
@@ -31,6 +34,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
   const { data, hydrated, isReadOnly, updateProfile } = useWorkspace();
   const { initials } = use(params);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -142,6 +146,26 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
     toast("Color updated");
   }
 
+  /**
+   * Update this profile's chosen Y2K avatar (iter-30, Phase 2).
+   *
+   * Mirrors the setColor handler — same gating (isReadOnly), same persistence
+   * path (updateProfile). Passing `null` removes the avatar, falling back to
+   * the initials circle.
+   *
+   * Note: like setColor, this allows anyone with edit access to change any
+   * profile's avatar. If the future brings strict per-user ownership, gate
+   * this on (profile.userId === auth.user?.id || data.managerMode) instead.
+   * The picker UI itself is opened by clicking the hero avatar, which is
+   * already gated on !isReadOnly.
+   */
+  function setAvatar(key: AvatarKey | null) {
+    if (isReadOnly) return;
+    updateProfile(profile!.id, { avatarKey: key ?? undefined });
+    toast(key ? "Avatar updated" : "Avatar removed");
+    setAvatarPickerOpen(false);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       <TopNav />
@@ -166,19 +190,65 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
             gap: isMobile ? 14 : 22,
             marginBottom: 24,
           }}>
-            <div style={{
-              width: isMobile ? 64 : 80,
-              height: isMobile ? 64 : 80,
-              borderRadius: 14,
-              background: "var(--s3)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: isMobile ? 22 : 28,
-              fontWeight: 700, fontFamily: "'Syne', sans-serif",
-              color: profile.color, flexShrink: 0,
-              border: `2px solid ${profile.color}30`,
-            }}>
-              {profile.initials}
-            </div>
+            {/*
+             * Hero avatar. Renders the user's chosen Y2K avatar if set,
+             * else falls back to the initials circle (legacy look). Clicking
+             * opens the avatar picker when not in read-only mode.
+             *
+             * Wrapped in a button (not div) so it gets correct keyboard
+             * accessibility — Enter and Space both trigger the picker.
+             * Border/background styles ride on the button itself; the inner
+             * UserAvatar handles its own size + shape.
+             *
+             * The colored ring around the avatar uses the profile's accent
+             * color at 30% alpha — preserves the pre-iter-30 visual ring
+             * around initials AND looks correct around the new circular
+             * avatars. Hover state added (subtle scale) only when clickable.
+             */}
+            {!isReadOnly ? (
+              <button
+                onClick={() => setAvatarPickerOpen(true)}
+                aria-label="Change avatar"
+                style={{
+                  padding: 4,
+                  borderRadius: profile.avatarKey ? "50%" : 14,
+                  border: `2px solid ${profile.color}30`,
+                  background: "transparent",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "transform 0.12s ease, border-color 0.12s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = `${profile.color}60`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = `${profile.color}30`;
+                }}
+              >
+                <UserAvatar
+                  profile={profile}
+                  size={isMobile ? 64 : 80}
+                />
+              </button>
+            ) : (
+              <div style={{
+                padding: 4,
+                borderRadius: profile.avatarKey ? "50%" : 14,
+                border: `2px solid ${profile.color}30`,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}>
+                <UserAvatar
+                  profile={profile}
+                  size={isMobile ? 64 : 80}
+                />
+              </div>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                 <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: isMobile ? 22 : 28, fontWeight: 800, letterSpacing: -0.5, color: "var(--t1)" }}>{profile.name}</h1>
@@ -483,7 +553,19 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
                       return (
                         <Link key={c.name} href={collabProfile ? `/profile/${c.initials}` : "#"} style={{ textDecoration: "none" }}>
                           <div style={{ padding: "12px 14px", borderBottom: i < profile.frequentCollaborators.length - 1 ? "1px solid var(--b1)" : "none", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minHeight: 56 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: c.color }}>{c.initials}</div>
+                            {/*
+                             * Collaborator avatar. Prefers the live collaborator
+                             * profile (which carries the latest avatarKey) and
+                             * falls back to the denormalized c.* fields when no
+                             * matching profile exists (e.g., a collaborator who
+                             * was removed from the workspace).
+                             */}
+                            <UserAvatar
+                              profile={collabProfile}
+                              initials={c.initials}
+                              color={c.color}
+                              size={32}
+                            />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, color: "var(--t1)" }}>{c.name}</div>
                               <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{c.sharedProjects} shared projects</div>
@@ -534,6 +616,12 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ initia
         onClose={() => setAssignOpen(false)}
         profileInitials={profile.initials}
         profileName={profile.name}
+      />
+      <AvatarPickerModal
+        open={avatarPickerOpen}
+        onClose={() => setAvatarPickerOpen(false)}
+        currentKey={profile.avatarKey}
+        onSelect={setAvatar}
       />
     </div>
   );
